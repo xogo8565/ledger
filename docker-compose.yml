@@ -1,0 +1,103 @@
+name: comfortable-ledger
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: comfortable-ledger-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-comfortable_ledger}
+      MYSQL_USER: ${MYSQL_USER:-ledger}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ledgerpass}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+09:00
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --server-id=1
+      - --binlog-expire-logs-seconds=604800
+    volumes:
+      - ./data/db/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  mysql-backup:
+    image: mysql:8.4
+    container_name: comfortable-ledger-mysql-backup
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-comfortable_ledger}
+      MYSQL_USER: ${MYSQL_USER:-ledger}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ledgerpass}
+      BACKUP_INTERVAL_SECONDS: ${MYSQL_BACKUP_INTERVAL_SECONDS:-300}
+      TZ: Asia/Seoul
+    volumes:
+      - ./data/db/backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        mkdir -p /backups
+        while true; do
+          ts=$$(date +%Y%m%d-%H%M%S)
+          dump="/backups/comfortable_ledger-$${ts}.sql"
+          tmp="$${dump}.tmp"
+          if MYSQL_PWD="$${MYSQL_PASSWORD}" mysqldump \
+            --host="$${MYSQL_HOST}" \
+            --user="$${MYSQL_USER}" \
+            --single-transaction \
+            --routines \
+            --triggers \
+            --no-tablespaces \
+            "$${MYSQL_DATABASE}" > "$${tmp}"; then
+            mv "$${tmp}" "$${dump}"
+            cp "$${dump}" /backups/latest.sql
+            find /backups -type f -name "comfortable_ledger-*.sql" -mtime +14 -delete
+            sleep "$${BACKUP_INTERVAL_SECONDS}"
+          else
+            rm -f "$${tmp}"
+            sleep 10
+          fi
+        done
+
+  backend:
+    build:
+      context: ./backend
+    container_name: comfortable-ledger-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-comfortable_ledger}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=utf8&useUnicode=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-ledger}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ledgerpass}
+      APP_DATA_DIR: /data
+      APP_UPLOAD_DIR: /data/uploads
+      APP_LOG_DIR: /data/logs
+      TZ: Asia/Seoul
+    volumes:
+      - ./data/app:/data
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: comfortable-ledger-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
