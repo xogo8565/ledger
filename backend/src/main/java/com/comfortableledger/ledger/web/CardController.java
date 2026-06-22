@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -71,5 +72,10 @@ public class CardController {
     @PostMapping("/payment-schedules/execute")
     public void executePaymentSchedule(@Valid @RequestBody SchedulePaymentRequest request) {
         cardService.executePaymentSchedule(request.scheduleId(), ledgerService);
+    }
+
+    @DeleteMapping("/payment-schedules/{scheduleId}")
+    public void cancelPaymentSchedule(@PathVariable Long scheduleId) {
+        cardService.cancelPaymentSchedule(scheduleId);
     }
 }

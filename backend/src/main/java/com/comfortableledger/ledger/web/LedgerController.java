@@ -118,6 +118,11 @@ public class LedgerController {
         return ledgerService.getTransaction(id);
     }
 
+    @GetMapping("/transactions/installments/{installmentGroupId}")
+    public List<TransactionDto> installmentTransactions(@PathVariable String installmentGroupId) {
+        return ledgerService.installmentTransactions(installmentGroupId);
+    }
+
     @PostMapping("/transactions")
     public TransactionDto createTransaction(@Valid @RequestBody CreateTransactionRequest request) {
         return ledgerService.createTransaction(request);

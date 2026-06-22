@@ -280,6 +280,13 @@ button {
   gap: 10px;
   padding: 10px 17px;
   border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.transaction-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .category-cell {
@@ -325,6 +332,18 @@ button {
   white-space: nowrap;
   color: #919191;
   font-size: 15px;
+}
+
+.installment-chip {
+  width: fit-content;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .transaction-row > b {
@@ -882,8 +901,8 @@ button {
 }
 
 .asset-row {
-  grid-template-columns: 1fr auto 34px;
-  gap: 14px;
+  grid-template-columns: 1fr auto auto 34px;
+  gap: 10px;
   padding: 0 18px;
 }
 
@@ -932,6 +951,17 @@ button {
   background: var(--surface);
   font-size: 24px;
   line-height: 1;
+}
+
+.card-pay-button {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .sms-import {
@@ -1017,7 +1047,11 @@ button {
 
 .entry-screen-form,
 .simple-edit-screen,
+.transaction-detail-screen,
 .category-manager,
+.recurring-manager,
+.card-payment-manager,
+.installment-manager,
 .budget-settings-screen {
   height: 100%;
   min-height: 760px;
@@ -1025,8 +1059,253 @@ button {
   background: var(--surface);
 }
 
+.card-payment-manager {
+  grid-template-rows: auto auto auto 1fr;
+  overflow: hidden;
+}
+
+.card-payment-summary {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-top: 1px solid var(--line);
+  border-bottom: 8px solid var(--surface-soft);
+  background: var(--surface);
+}
+
+.card-payment-summary > strong {
+  font-size: 20px;
+}
+
+.card-payment-summary > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.card-payment-form {
+  display: grid;
+  border-bottom: 8px solid var(--surface-soft);
+  background: var(--surface);
+}
+
+.card-payment-list {
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+.card-payment-list h2 {
+  margin: 0;
+  padding: 16px 18px 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.card-payment-row {
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.card-payment-row.muted {
+  grid-template-columns: 1fr auto;
+  color: var(--muted);
+}
+
+.card-payment-row strong,
+.card-payment-row span {
+  display: block;
+}
+
+.card-payment-row span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.card-payment-row b {
+  white-space: nowrap;
+}
+
+.card-payment-row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.card-payment-row button {
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 900;
+}
+
+.card-payment-row button.secondary {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.installment-manager {
+  grid-template-rows: auto auto 1fr;
+  overflow: hidden;
+}
+
+.installment-summary {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-top: 1px solid var(--line);
+  border-bottom: 8px solid var(--surface-soft);
+  background: var(--surface);
+}
+
+.installment-summary > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 20px;
+}
+
+.installment-summary > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.installment-list {
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+.installment-row {
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.installment-row.active {
+  background: #fff8f6;
+}
+
+.installment-row strong,
+.installment-row span {
+  display: block;
+}
+
+.installment-row span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.installment-row b {
+  white-space: nowrap;
+}
+
 .entry-screen-form {
   grid-template-rows: auto auto 1fr auto;
+}
+
+.transaction-detail-screen {
+  grid-template-rows: auto auto 1fr auto;
+  overflow: hidden;
+}
+
+.transaction-detail-hero {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px 18px 24px;
+  border-top: 1px solid var(--line);
+  border-bottom: 8px solid var(--surface-soft);
+  background: var(--surface);
+}
+
+.transaction-detail-hero span {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  font-size: 24px;
+}
+
+.transaction-detail-hero strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 34px;
+}
+
+.transaction-detail-hero em {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.transaction-detail-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 18px 18px;
+}
+
+.transaction-detail-list .key-value {
+  min-height: 48px;
+  border-bottom: 1px solid var(--line);
+}
+
+.transaction-detail-list .key-value strong {
+  max-width: 68%;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.transaction-detail-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.transaction-detail-actions button {
+  height: 48px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.secondary-action {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.danger-action {
+  border: 0;
+  background: var(--accent);
+  color: white;
+}
+
+.transaction-detail-actions .danger-action:first-child:last-child {
+  grid-column: 1 / -1;
 }
 
 .entry-tabs {
@@ -1258,6 +1537,88 @@ button {
 
 .category-manager {
   grid-template-rows: auto auto auto auto 1fr;
+}
+
+.recurring-manager {
+  grid-template-rows: auto auto auto 1fr;
+  overflow: hidden;
+}
+
+.recurring-form {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+}
+
+.recurring-fields {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.recurring-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  border-bottom: 8px solid var(--surface-soft);
+}
+
+.recurring-actions button {
+  height: 44px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 900;
+}
+
+.recurring-list {
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+.recurring-row {
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: 1fr auto 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.recurring-row > button:first-child {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.recurring-row strong,
+.recurring-row span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recurring-row strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.recurring-row span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.recurring-row b {
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .category-manager-toggle {

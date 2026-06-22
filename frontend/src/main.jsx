@@ -84,12 +84,23 @@ function App() {
   const [panel, setPanel] = useState(null);
   const [editingAsset, setEditingAsset] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [entryExpression, setEntryExpression] = useState('');
   const [form, setForm] = useState(emptyTransactionForm());
   const [assetForm, setAssetForm] = useState(emptyAssetForm());
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm());
   const [categoryType, setCategoryType] = useState('EXPENSE');
   const [budgetSettings, setBudgetSettings] = useState(null);
+  const [recurringRules, setRecurringRules] = useState([]);
+  const [recurringForm, setRecurringForm] = useState(emptyRecurringForm());
+  const [editingRecurringRule, setEditingRecurringRule] = useState(null);
+  const [selectedCard, setSelectedCard] = useState(null);
+  const [cardDetail, setCardDetail] = useState(null);
+  const [cardSchedules, setCardSchedules] = useState([]);
+  const [cardScheduleForm, setCardScheduleForm] = useState(emptyCardScheduleForm());
+  const [installmentSchedule, setInstallmentSchedule] = useState([]);
+  const [selectedInstallment, setSelectedInstallment] = useState(null);
   const [receiptFile, setReceiptFile] = useState(null);
   const [rawText, setRawText] = useState('');
   const [preview, setPreview] = useState(null);
@@ -115,8 +126,25 @@ function App() {
   }
 
   function openEntry(type = 'EXPENSE') {
-    setForm((prev) => ({ ...prev, type }));
-    setEntryExpression(form.amount || '');
+    setEditingTransaction(null);
+    const nextForm = { ...emptyTransactionForm(), type };
+    setForm(nextForm);
+    setEntryExpression('');
+    setReceiptFile(null);
+    setPanel('entry');
+  }
+
+  function openTransactionDetail(transaction) {
+    setSelectedTransaction(transaction);
+    setPanel('transactionDetail');
+  }
+
+  function editTransaction(transaction) {
+    setEditingTransaction(transaction);
+    setSelectedTransaction(null);
+    setForm(transactionToForm(transaction));
+    setEntryExpression(String(Number(transaction.amount || 0) || ''));
+    setReceiptFile(null);
     setPanel('entry');
   }
 
@@ -138,10 +166,40 @@ function App() {
     setPanel('categories');
   }
 
+  async function openRecurringManager() {
+    setEditingRecurringRule(null);
+    setRecurringForm(emptyRecurringForm());
+    await loadRecurringRules();
+    setPanel('recurring');
+  }
+
+  async function openCardPaymentManager(cardAsset) {
+    setSelectedCard(cardAsset);
+    setCardScheduleForm(emptyCardScheduleForm());
+    await loadCardPaymentData(cardAsset.id);
+    setPanel('cardPayments');
+  }
+
+  async function openInstallmentSchedule(transaction) {
+    if (!transaction.installmentGroupId) return;
+    setSelectedInstallment(transaction);
+    const response = await fetch(`${API}/transactions/installments/${transaction.installmentGroupId}`);
+    setInstallmentSchedule(await response.json());
+    setPanel('installments');
+  }
+
   function closePanel() {
     setPanel(null);
+    setEditingTransaction(null);
+    setSelectedTransaction(null);
     setEditingAsset(null);
     setEditingCategory(null);
+    setEditingRecurringRule(null);
+    setSelectedCard(null);
+    setCardDetail(null);
+    setCardSchedules([]);
+    setSelectedInstallment(null);
+    setInstallmentSchedule([]);
   }
 
   function updateForm(key, value) {
@@ -163,21 +221,23 @@ function App() {
       installmentMonths: Number(form.installmentMonths || 0)
     };
 
-    const response = await fetch(`${API}/transactions`, {
-      method: 'POST',
+    const url = editingTransaction ? `${API}/transactions/${editingTransaction.id}` : `${API}/transactions`;
+    const method = editingTransaction ? 'PUT' : 'POST';
+    const response = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     const created = await response.json();
 
-    if (receiptFile) {
+    if (receiptFile && !editingTransaction) {
       const upload = new FormData();
       upload.append('file', receiptFile);
       await fetch(`${API}/transactions/${created.id}/receipts`, { method: 'POST', body: upload });
     }
 
     const fee = Number(form.fee || 0);
-    if (form.type === 'TRANSFER' && fee > 0 && form.fromAssetId) {
+    if (!editingTransaction && form.type === 'TRANSFER' && fee > 0 && form.fromAssetId) {
       await fetch(`${API}/transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -195,6 +255,13 @@ function App() {
     setForm(emptyTransactionForm());
     setEntryExpression('');
     setReceiptFile(null);
+    setEditingTransaction(null);
+    closePanel();
+    await load();
+  }
+
+  async function deleteTransaction(transaction) {
+    await fetch(`${API}/transactions/${transaction.id}`, { method: 'DELETE' });
     closePanel();
     await load();
   }
@@ -260,6 +327,115 @@ function App() {
     await load();
   }
 
+  async function loadRecurringRules() {
+    const response = await fetch(`${API}/recurring-transactions`);
+    setRecurringRules(await response.json());
+  }
+
+  async function saveRecurringRule(event) {
+    event.preventDefault();
+    const amount = Number(recurringForm.amount || 0);
+    if (!amount || amount <= 0 || !recurringForm.startDate || !recurringForm.nextRunDate) return;
+
+    const payload = {
+      ...recurringForm,
+      amount,
+      categoryId: recurringForm.categoryId ? Number(recurringForm.categoryId) : null,
+      assetId: recurringForm.assetId ? Number(recurringForm.assetId) : null,
+      fromAssetId: recurringForm.fromAssetId ? Number(recurringForm.fromAssetId) : null,
+      toAssetId: recurringForm.toAssetId ? Number(recurringForm.toAssetId) : null,
+      intervalValue: Number(recurringForm.intervalValue || 1),
+      installmentMonths: Number(recurringForm.installmentMonths || 0),
+      endDate: recurringForm.endDate || null,
+      nextRunDate: recurringForm.nextRunDate || recurringForm.startDate
+    };
+    const url = editingRecurringRule ? `${API}/recurring-transactions/${editingRecurringRule.id}` : `${API}/recurring-transactions`;
+    const method = editingRecurringRule ? 'PUT' : 'POST';
+    await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    setEditingRecurringRule(null);
+    setRecurringForm(emptyRecurringForm());
+    await loadRecurringRules();
+  }
+
+  async function deleteRecurringRule(rule) {
+    await fetch(`${API}/recurring-transactions/${rule.id}`, { method: 'DELETE' });
+    await loadRecurringRules();
+  }
+
+  async function generateRecurringDue() {
+    await fetch(`${API}/recurring-transactions/generate-due`, { method: 'POST' });
+    await loadRecurringRules();
+    await load();
+  }
+
+  async function loadCardPaymentData(cardAssetId) {
+    const [detailResponse, schedulesResponse] = await Promise.all([
+      fetch(`${API}/cards/${cardAssetId}`),
+      fetch(`${API}/cards/${cardAssetId}/payment-schedules`)
+    ]);
+    setCardDetail(await detailResponse.json());
+    setCardSchedules(await schedulesResponse.json());
+  }
+
+  async function saveCardSchedule(event) {
+    event.preventDefault();
+    if (!selectedCard) return;
+    const amount = Number(cardScheduleForm.amount || 0);
+    if (!amount || amount <= 0 || !cardScheduleForm.scheduledDate) return;
+
+    await fetch(`${API}/cards/${selectedCard.id}/payment-schedules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scheduledDate: cardScheduleForm.scheduledDate,
+        amount
+      })
+    });
+    setCardScheduleForm(emptyCardScheduleForm());
+    await loadCardPaymentData(selectedCard.id);
+  }
+
+  async function executeCardSchedule(schedule) {
+    if (!selectedCard) return;
+    await fetch(`${API}/cards/payment-schedules/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scheduleId: schedule.id })
+    });
+    await loadCardPaymentData(selectedCard.id);
+    await load();
+  }
+
+  async function cancelCardSchedule(schedule) {
+    if (!selectedCard) return;
+    await fetch(`${API}/cards/payment-schedules/${schedule.id}`, { method: 'DELETE' });
+    await loadCardPaymentData(selectedCard.id);
+  }
+
+  function editRecurringRule(rule) {
+    setEditingRecurringRule(rule);
+    setRecurringForm({
+      type: rule.type,
+      amount: String(Number(rule.amount || 0)),
+      categoryId: rule.categoryId || '',
+      assetId: rule.assetId || '',
+      fromAssetId: rule.fromAssetId || '',
+      toAssetId: rule.toAssetId || '',
+      title: rule.title || '',
+      memo: rule.memo || '',
+      installmentMonths: rule.installmentMonths || 0,
+      frequency: rule.frequency || 'MONTHLY',
+      intervalValue: rule.intervalValue || 1,
+      startDate: rule.startDate || today,
+      endDate: rule.endDate || '',
+      nextRunDate: rule.nextRunDate || rule.startDate || today
+    });
+  }
+
   async function parseText() {
     if (!rawText.trim()) return;
     const response = await fetch(`${API}/import/text/parse`, {
@@ -308,6 +484,8 @@ function App() {
             {...screenProps}
             ledgerMode={ledgerMode}
             setLedgerMode={setLedgerMode}
+            openInstallmentSchedule={openInstallmentSchedule}
+            openTransactionDetail={openTransactionDetail}
           />
         )}
         {mainTab === 'stats' && (
@@ -322,6 +500,7 @@ function App() {
           <AssetsScreen
             {...screenProps}
             openAssetForm={openAssetForm}
+            openCardPaymentManager={openCardPaymentManager}
             deleteAsset={deleteAsset}
           />
         )}
@@ -332,6 +511,7 @@ function App() {
             preview={preview}
             parseText={parseText}
             openCategoryManager={openCategoryManager}
+            openRecurringManager={openRecurringManager}
           />
         )}
 
@@ -356,6 +536,16 @@ function App() {
             setReceiptFile={setReceiptFile}
             setExpression={setEntryExpression}
             submitTransaction={submitTransaction}
+            editingTransaction={editingTransaction}
+            onClose={closePanel}
+          />
+        )}
+        {panel === 'transactionDetail' && (
+          <TransactionDetailScreen
+            transaction={selectedTransaction}
+            editTransaction={editTransaction}
+            deleteTransaction={deleteTransaction}
+            openInstallmentSchedule={openInstallmentSchedule}
             onClose={closePanel}
           />
         )}
@@ -396,6 +586,42 @@ function App() {
             onClose={closePanel}
           />
         )}
+        {panel === 'recurring' && (
+          <RecurringManagerScreen
+            rules={recurringRules}
+            form={recurringForm}
+            setForm={setRecurringForm}
+            editingRule={editingRecurringRule}
+            clearEditingRule={() => setEditingRecurringRule(null)}
+            assets={data.assets}
+            categories={data.categories}
+            saveRule={saveRecurringRule}
+            deleteRule={deleteRecurringRule}
+            editRule={editRecurringRule}
+            generateDue={generateRecurringDue}
+            onClose={closePanel}
+          />
+        )}
+        {panel === 'cardPayments' && (
+          <CardPaymentManagerScreen
+            card={selectedCard}
+            detail={cardDetail}
+            schedules={cardSchedules}
+            form={cardScheduleForm}
+            setForm={setCardScheduleForm}
+            saveSchedule={saveCardSchedule}
+            executeSchedule={executeCardSchedule}
+            cancelSchedule={cancelCardSchedule}
+            onClose={closePanel}
+          />
+        )}
+        {panel === 'installments' && (
+          <InstallmentScheduleScreen
+            transaction={selectedInstallment}
+            schedule={installmentSchedule}
+            onClose={closePanel}
+          />
+        )}
       </section>
     </main>
   );
@@ -417,6 +643,22 @@ function emptyTransactionForm() {
   };
 }
 
+function transactionToForm(transaction) {
+  return {
+    type: transaction.type || 'EXPENSE',
+    transactionDate: transaction.transactionDate || today,
+    amount: String(Number(transaction.amount || 0) || ''),
+    fee: '',
+    categoryId: transaction.categoryId ? String(transaction.categoryId) : '',
+    assetId: transaction.assetId ? String(transaction.assetId) : '',
+    fromAssetId: transaction.fromAssetId ? String(transaction.fromAssetId) : '',
+    toAssetId: transaction.toAssetId ? String(transaction.toAssetId) : '',
+    title: transaction.title || '',
+    memo: transaction.memo || '',
+    installmentMonths: Number(transaction.installmentMonths || 0)
+  };
+}
+
 function emptyAssetForm() {
   return {
     type: 'CASH',
@@ -433,6 +675,32 @@ function emptyCategoryForm(type = 'EXPENSE') {
     name: '',
     icon: type === 'INCOME' ? '💰' : '•',
     color: type === 'INCOME' ? '#2189ff' : '#ff625c'
+  };
+}
+
+function emptyRecurringForm() {
+  return {
+    type: 'EXPENSE',
+    amount: '',
+    categoryId: '',
+    assetId: '',
+    fromAssetId: '',
+    toAssetId: '',
+    title: '',
+    memo: '',
+    installmentMonths: 0,
+    frequency: 'MONTHLY',
+    intervalValue: 1,
+    startDate: today,
+    endDate: '',
+    nextRunDate: today
+  };
+}
+
+function emptyCardScheduleForm() {
+  return {
+    scheduledDate: today,
+    amount: ''
   };
 }
 
@@ -462,7 +730,7 @@ function IconButton({ label, children, onClick }) {
   );
 }
 
-function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, loading }) {
+function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, loading, openInstallmentSchedule, openTransactionDetail }) {
   const summary = data.summary || {};
   const tabs = [
     ['daily', '일일'],
@@ -491,11 +759,11 @@ function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, loadin
         <EmptyState label="불러오는 중입니다." />
       ) : (
         <>
-          {ledgerMode === 'daily' && <DailyLedger transactions={data.transactions} />}
+          {ledgerMode === 'daily' && <DailyLedger transactions={data.transactions} openInstallmentSchedule={openInstallmentSchedule} openTransactionDetail={openTransactionDetail} />}
           {ledgerMode === 'calendar' && <CalendarLedger transactions={data.transactions} month={month} />}
           {ledgerMode === 'monthly' && <MonthlyLedger summary={summary} month={month} />}
           {ledgerMode === 'summary' && <LedgerSummary summary={summary} transactions={data.transactions} />}
-          {ledgerMode === 'memo' && <MemoLedger transactions={data.transactions} />}
+          {ledgerMode === 'memo' && <MemoLedger transactions={data.transactions} openInstallmentSchedule={openInstallmentSchedule} openTransactionDetail={openTransactionDetail} />}
         </>
       )}
     </div>
@@ -534,7 +802,7 @@ function Metric({ label, value, tone }) {
   );
 }
 
-function DailyLedger({ transactions }) {
+function DailyLedger({ transactions, openInstallmentSchedule, openTransactionDetail }) {
   const groups = useMemo(() => {
     const next = new Map();
     transactions.forEach((item) => {
@@ -566,7 +834,7 @@ function DailyLedger({ transactions }) {
                 <span className="expense">{money(expense)}</span>
               </div>
             </header>
-            {items.map((item) => <TransactionRow item={item} key={item.id} />)}
+            {items.map((item) => <TransactionRow item={item} key={item.id} openInstallmentSchedule={openInstallmentSchedule} openTransactionDetail={openTransactionDetail} />)}
           </article>
         );
       })}
@@ -574,9 +842,18 @@ function DailyLedger({ transactions }) {
   );
 }
 
-function TransactionRow({ item }) {
+function TransactionRow({ item, openInstallmentSchedule, openTransactionDetail }) {
+  const hasInstallment = item.installmentGroupId && item.installmentMonths > 1;
   return (
-    <div className="transaction-row">
+    <div
+      className={`transaction-row ${hasInstallment ? 'has-installment' : ''}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => openTransactionDetail?.(item)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') openTransactionDetail?.(item);
+      }}
+    >
       <div className="category-cell">
         <span>{item.categoryIcon || iconForType(item.type)}</span>
         <em>{item.categoryName || typeLabels[item.type]}</em>
@@ -584,6 +861,14 @@ function TransactionRow({ item }) {
       <div className="transaction-main">
         <strong>{item.title || item.categoryName || typeLabels[item.type]}</strong>
         <span>{item.assetName || transferLabel(item) || '자산 미지정'}</span>
+        {hasInstallment && (
+          <button className="installment-chip" type="button" onClick={(event) => {
+            event.stopPropagation();
+            openInstallmentSchedule(item);
+          }}>
+            {item.installmentIndex}/{item.installmentMonths} 할부
+          </button>
+        )}
       </div>
       <b className={transactionTone(item.type)}>{money(item.amount)}</b>
     </div>
@@ -708,7 +993,7 @@ function KeyValue({ label, value }) {
   );
 }
 
-function MemoLedger({ transactions }) {
+function MemoLedger({ transactions, openInstallmentSchedule, openTransactionDetail }) {
   const memoTransactions = transactions.filter((item) => item.memo);
   if (!memoTransactions.length) {
     return <EmptyState icon="▤" label="데이터가 없습니다." />;
@@ -717,7 +1002,7 @@ function MemoLedger({ transactions }) {
     <section className="plain-list">
       {memoTransactions.map((item) => (
         <article className="memo-row" key={item.id}>
-          <TransactionRow item={item} />
+          <TransactionRow item={item} openInstallmentSchedule={openInstallmentSchedule} openTransactionDetail={openTransactionDetail} />
           <p>{item.memo}</p>
         </article>
       ))}
@@ -900,7 +1185,7 @@ function ProgressBar({ value, marker }) {
   );
 }
 
-function AssetsScreen({ data, loading, openAssetForm, deleteAsset }) {
+function AssetsScreen({ data, loading, openAssetForm, openCardPaymentManager, deleteAsset }) {
   const summary = data.summary || {};
   const groups = useMemo(() => {
     const next = new Map();
@@ -944,6 +1229,11 @@ function AssetsScreen({ data, loading, openAssetForm, deleteAsset }) {
                       <span>{assetTypeLabels[asset.type] || asset.type}</span>
                     </button>
                     <b className={asset.type === 'CARD' || asset.type === 'DEBT' ? 'expense' : 'income'}>{money(asset.balance)}</b>
+                    {asset.type === 'CARD' && (
+                      <button className="card-pay-button" type="button" onClick={() => openCardPaymentManager(asset)} aria-label={`${asset.name} 결제 관리`}>
+                        결제
+                      </button>
+                    )}
                     <button className="row-delete" type="button" aria-label={`${asset.name} 삭제`} onClick={() => deleteAsset(asset)}>−</button>
                   </div>
                 ))}
@@ -956,7 +1246,95 @@ function AssetsScreen({ data, loading, openAssetForm, deleteAsset }) {
   );
 }
 
-function MoreScreen({ rawText, setRawText, preview, parseText, openCategoryManager }) {
+function CardPaymentManagerScreen({ card, detail, schedules, form, setForm, saveSchedule, executeSchedule, cancelSchedule, onClose }) {
+  const scheduled = schedules.filter((schedule) => schedule.status === 'SCHEDULED');
+  const completed = schedules.filter((schedule) => schedule.status !== 'SCHEDULED');
+
+  return (
+    <div className="full-panel">
+      <section className="card-payment-manager">
+        <AppHeader title="카드 결제" left={<BackButton label="자산" onClick={onClose} />} />
+        <section className="card-payment-summary">
+          <strong>{card?.name || detail?.name || '카드'}</strong>
+          <div>
+            <Metric label="미결제" value={money(detail?.unpaidAmount)} tone="expense" />
+            <Metric label="예정" value={money(detail?.paymentScheduleAmount)} tone="total" />
+          </div>
+        </section>
+        <form className="card-payment-form" onSubmit={saveSchedule}>
+          <LineField label="결제일">
+            <input type="date" value={form.scheduledDate} onChange={(event) => setForm((prev) => ({ ...prev, scheduledDate: event.target.value }))} required />
+          </LineField>
+          <LineField label="금액">
+            <input inputMode="numeric" type="number" min="1" step="1" value={form.amount} onChange={(event) => setForm((prev) => ({ ...prev, amount: event.target.value }))} placeholder="0" required />
+          </LineField>
+          <button className="wide-save-button" type="submit">예약 추가</button>
+        </form>
+        <section className="card-payment-list">
+          <h2>결제 예약</h2>
+          {scheduled.map((schedule) => (
+            <div className="card-payment-row" key={schedule.id}>
+              <div>
+                <strong>{schedule.scheduledDate}</strong>
+                <span>{schedule.status}</span>
+              </div>
+              <b>{money(schedule.amount)}</b>
+              <div className="card-payment-row-actions">
+                <button type="button" onClick={() => executeSchedule(schedule)}>실행</button>
+                <button className="secondary" type="button" onClick={() => cancelSchedule(schedule)}>취소</button>
+              </div>
+            </div>
+          ))}
+          {!scheduled.length && <EmptyState label="예약된 결제가 없습니다." compact />}
+          {!!completed.length && <h2>처리 내역</h2>}
+          {completed.map((schedule) => (
+            <div className="card-payment-row muted" key={schedule.id}>
+              <div>
+                <strong>{schedule.scheduledDate}</strong>
+                <span>{schedule.status}</span>
+              </div>
+              <b>{money(schedule.amount)}</b>
+            </div>
+          ))}
+        </section>
+      </section>
+    </div>
+  );
+}
+
+function InstallmentScheduleScreen({ transaction, schedule, onClose }) {
+  const total = schedule.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const title = transaction?.title || transaction?.categoryName || '할부 거래';
+
+  return (
+    <div className="full-panel">
+      <section className="installment-manager">
+        <AppHeader title="할부 일정" left={<BackButton label="가계부" onClick={onClose} />} />
+        <section className="installment-summary">
+          <strong>{title}</strong>
+          <div>
+            <Metric label="총액" value={money(total)} tone="expense" />
+            <Metric label="개월" value={`${schedule.length || transaction?.installmentMonths || 0}`} tone="total" />
+          </div>
+        </section>
+        <section className="installment-list">
+          {schedule.map((item) => (
+            <div className={item.id === transaction?.id ? 'installment-row active' : 'installment-row'} key={item.id}>
+              <div>
+                <strong>{item.installmentIndex}/{item.installmentMonths}</strong>
+                <span>{item.transactionDate}</span>
+              </div>
+              <b>{money(item.amount)}</b>
+            </div>
+          ))}
+          {!schedule.length && <EmptyState label="할부 일정이 없습니다." compact />}
+        </section>
+      </section>
+    </div>
+  );
+}
+
+function MoreScreen({ rawText, setRawText, preview, parseText, openCategoryManager, openRecurringManager }) {
   return (
     <div className="screen more-screen">
       <AppHeader title="더보기" />
@@ -978,6 +1356,7 @@ function MoreScreen({ rawText, setRawText, preview, parseText, openCategoryManag
 
       <section className="more-list">
         <button type="button" onClick={openCategoryManager}>카테고리 관리<span>›</span></button>
+        <button type="button" onClick={openRecurringManager}>반복 거래<span>›</span></button>
         <button type="button">영수증 사진<span>›</span></button>
         <button type="button">백업 및 내보내기<span>›</span></button>
       </section>
@@ -985,19 +1364,188 @@ function MoreScreen({ rawText, setRawText, preview, parseText, openCategoryManag
   );
 }
 
-function EntryScreen({ form, expression, assets, categories, receiptFile, updateForm, setReceiptFile, setExpression, submitTransaction, onClose }) {
+function RecurringManagerScreen({ rules, form, setForm, editingRule, clearEditingRule, assets, categories, saveRule, deleteRule, editRule, generateDue, onClose }) {
+  const selectedCategories = categories.filter((category) => category.type === form.type);
+
+  function updateField(key, value) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function setType(type) {
+    setForm((prev) => ({
+      ...prev,
+      type,
+      categoryId: '',
+      assetId: type === 'TRANSFER' ? '' : prev.assetId,
+      installmentMonths: type === 'EXPENSE' ? prev.installmentMonths : 0
+    }));
+  }
+
+  return (
+    <div className="full-panel">
+      <section className="recurring-manager">
+        <AppHeader title="반복 거래" left={<BackButton label="더보기" onClick={onClose} />} />
+        <form className="recurring-form" onSubmit={saveRule}>
+          <nav className="entry-tabs compact">
+            {['INCOME', 'EXPENSE', 'TRANSFER'].map((type) => (
+              <button key={type} type="button" className={`${form.type === type ? 'active' : ''} ${type.toLowerCase()}`} onClick={() => setType(type)}>
+                {typeLabels[type]}
+              </button>
+            ))}
+          </nav>
+          <div className="edit-fields recurring-fields">
+            <LineField label="금액">
+              <input inputMode="numeric" value={form.amount} onChange={(event) => updateField('amount', event.target.value)} required />
+            </LineField>
+            {form.type === 'TRANSFER' ? (
+              <>
+                <LineField label="출금">
+                  <select value={form.fromAssetId} onChange={(event) => updateField('fromAssetId', event.target.value)}>
+                    <option value="">선택</option>
+                    {assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
+                  </select>
+                </LineField>
+                <LineField label="입금">
+                  <select value={form.toAssetId} onChange={(event) => updateField('toAssetId', event.target.value)}>
+                    <option value="">선택</option>
+                    {assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
+                  </select>
+                </LineField>
+              </>
+            ) : (
+              <>
+                <LineField label="분류">
+                  <select value={form.categoryId} onChange={(event) => updateField('categoryId', event.target.value)}>
+                    <option value="">선택</option>
+                    {selectedCategories.map((category) => <option value={category.id} key={category.id}>{category.icon} {category.name}</option>)}
+                  </select>
+                </LineField>
+                <LineField label="자산">
+                  <select value={form.assetId} onChange={(event) => updateField('assetId', event.target.value)}>
+                    <option value="">선택</option>
+                    {assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
+                  </select>
+                </LineField>
+              </>
+            )}
+            <LineField label="내용">
+              <input value={form.title} onChange={(event) => updateField('title', event.target.value)} placeholder="내용" />
+            </LineField>
+            <LineField label="반복">
+              <select value={form.frequency} onChange={(event) => updateField('frequency', event.target.value)}>
+                <option value="DAILY">매일</option>
+                <option value="WEEKLY">매주</option>
+                <option value="MONTHLY">매월</option>
+                <option value="YEARLY">매년</option>
+              </select>
+            </LineField>
+            <LineField label="간격">
+              <input inputMode="numeric" min="1" value={form.intervalValue} onChange={(event) => updateField('intervalValue', event.target.value)} />
+            </LineField>
+            <LineField label="시작">
+              <input type="date" value={form.startDate} onChange={(event) => {
+                updateField('startDate', event.target.value);
+                if (!form.nextRunDate) updateField('nextRunDate', event.target.value);
+              }} />
+            </LineField>
+            <LineField label="다음">
+              <input type="date" value={form.nextRunDate} onChange={(event) => updateField('nextRunDate', event.target.value)} />
+            </LineField>
+            <LineField label="종료">
+              <input type="date" value={form.endDate} onChange={(event) => updateField('endDate', event.target.value)} />
+            </LineField>
+          </div>
+          <button className="wide-save-button" type="submit">{editingRule ? '수정' : '저장'}</button>
+        </form>
+        <div className="recurring-actions">
+          <button type="button" onClick={() => {
+            clearEditingRule();
+            setForm(emptyRecurringForm());
+          }}>새 규칙</button>
+          <button type="button" onClick={generateDue}>오늘분 생성</button>
+        </div>
+        <div className="recurring-list">
+          {rules.map((rule) => (
+            <div className="recurring-row" key={rule.id}>
+              <button type="button" onClick={() => editRule(rule)}>
+                <strong>{rule.title || rule.categoryName || typeLabels[rule.type]}</strong>
+                <span>{frequencyLabel(rule.frequency)} · 다음 {rule.nextRunDate}</span>
+              </button>
+              <b className={transactionTone(rule.type)}>{money(rule.amount)}</b>
+              <button className="row-delete" type="button" onClick={() => deleteRule(rule)} aria-label={`${rule.title || '반복 거래'} 삭제`}>×</button>
+            </div>
+          ))}
+          {!rules.length && <EmptyState label="반복 거래 규칙이 없습니다." compact />}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function frequencyLabel(frequency) {
+  return {
+    DAILY: '매일',
+    WEEKLY: '매주',
+    MONTHLY: '매월',
+    YEARLY: '매년'
+  }[frequency] || frequency;
+}
+
+function TransactionDetailScreen({ transaction, editTransaction, deleteTransaction, openInstallmentSchedule, onClose }) {
+  if (!transaction) return null;
+  const hasInstallment = transaction.installmentGroupId && transaction.installmentMonths > 1;
+  return (
+    <div className="full-panel">
+      <section className="transaction-detail-screen">
+        <AppHeader
+          title="거래 상세"
+          left={<BackButton label="가계부" onClick={onClose} />}
+          right={<IconButton label="수정" onClick={() => editTransaction(transaction)}>✎</IconButton>}
+        />
+        <section className={`transaction-detail-hero ${transactionTone(transaction.type)}`}>
+          <span>{transaction.categoryIcon || iconForType(transaction.type)}</span>
+          <strong>{money(transaction.amount)}</strong>
+          <em>{transaction.title || transaction.categoryName || typeLabels[transaction.type]}</em>
+        </section>
+        <section className="transaction-detail-list">
+          <KeyValue label="유형" value={typeLabels[transaction.type]} />
+          <KeyValue label="날짜" value={transaction.transactionDate} />
+          <KeyValue label="분류" value={transaction.categoryName || '미분류'} />
+          <KeyValue label="자산" value={transaction.assetName || transferLabel(transaction) || '자산 미지정'} />
+          {hasInstallment && <KeyValue label="할부" value={`${transaction.installmentIndex}/${transaction.installmentMonths}개월`} />}
+          {transaction.memo && <KeyValue label="메모" value={transaction.memo} />}
+        </section>
+        <div className="transaction-detail-actions">
+          {hasInstallment && (
+            <button className="secondary-action" type="button" onClick={() => openInstallmentSchedule(transaction)}>
+              할부 내역
+            </button>
+          )}
+          <button className="danger-action" type="button" onClick={() => deleteTransaction(transaction)}>
+            삭제
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function EntryScreen({ form, expression, assets, categories, receiptFile, updateForm, setReceiptFile, setExpression, submitTransaction, editingTransaction, onClose }) {
   const tone = form.type === 'INCOME' ? 'income' : form.type === 'TRANSFER' ? 'transfer' : 'expense';
 
   function setType(type) {
     updateForm('type', type);
     updateForm('categoryId', '');
+    if (type !== 'EXPENSE') {
+      updateForm('installmentMonths', 0);
+    }
     if (type === 'TRANSFER') {
       updateForm('assetId', '');
     }
   }
 
   function handleKey(value) {
-    if (value === '확인') return;
+    if (value === '확인' || value === '저장') return;
     if (value === '⌫') {
       const next = expression.slice(0, -1);
       setExpression(next);
@@ -1019,9 +1567,9 @@ function EntryScreen({ form, expression, assets, categories, receiptFile, update
     <div className="full-panel">
       <form className="entry-screen-form" onSubmit={submitTransaction}>
         <AppHeader
-          title={typeLabels[form.type]}
+          title={editingTransaction ? '거래 수정' : typeLabels[form.type]}
           left={<BackButton label="가계부" onClick={onClose} />}
-          right={<IconButton label="즐겨찾기">☆</IconButton>}
+          right={!editingTransaction && <IconButton label="즐겨찾기">☆</IconButton>}
         />
 
         <div className="entry-tabs">
@@ -1076,6 +1624,17 @@ function EntryScreen({ form, expression, assets, categories, receiptFile, update
                   {assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
                 </select>
               </LineField>
+              {form.type === 'EXPENSE' && (
+                <LineField label="할부">
+                  <select value={form.installmentMonths} onChange={(event) => updateForm('installmentMonths', Number(event.target.value))}>
+                    <option value={0}>일시불</option>
+                    <option value={2}>2개월</option>
+                    <option value={3}>3개월</option>
+                    <option value={6}>6개월</option>
+                    <option value={12}>12개월</option>
+                  </select>
+                </LineField>
+              )}
             </>
           )}
 
@@ -1083,14 +1642,16 @@ function EntryScreen({ form, expression, assets, categories, receiptFile, update
             <input value={form.title} onChange={(event) => updateForm('title', event.target.value)} placeholder="내용" />
           </LineField>
 
-          <label className="receipt-compact">
-            영수증 사진
-            <input type="file" accept="image/*" onChange={(event) => setReceiptFile(event.target.files?.[0] || null)} />
-            {receiptFile && <span>{receiptFile.name}</span>}
-          </label>
+          {!editingTransaction && (
+            <label className="receipt-compact">
+              영수증 사진
+              <input type="file" accept="image/*" onChange={(event) => setReceiptFile(event.target.files?.[0] || null)} />
+              {receiptFile && <span>{receiptFile.name}</span>}
+            </label>
+          )}
         </section>
 
-        <CalculatorPad onKey={handleKey} submitLabel="확인" />
+        <CalculatorPad onKey={handleKey} submitLabel={editingTransaction ? '저장' : '확인'} />
       </form>
     </div>
   );
@@ -1106,8 +1667,8 @@ function LineField({ label, side, children }) {
   );
 }
 
-function CalculatorPad({ onKey }) {
-  const keys = ['+', '-', '×', '÷', '7', '8', '9', '=', '4', '5', '6', '.', '1', '2', '3', '⌫', '', '0', '', '확인'];
+function CalculatorPad({ onKey, submitLabel = '확인' }) {
+  const keys = ['+', '-', '×', '÷', '7', '8', '9', '=', '4', '5', '6', '.', '1', '2', '3', '⌫', '', '0', '', submitLabel];
   return (
     <section className="calculator">
       <header>
@@ -1117,7 +1678,7 @@ function CalculatorPad({ onKey }) {
       </header>
       <div className="calculator-grid">
         {keys.map((key, index) => key ? (
-          <button key={`${key}-${index}`} type={key === '확인' ? 'submit' : 'button'} className={key === '확인' ? 'confirm' : ''} onClick={() => onKey(key)}>
+          <button key={`${key}-${index}`} type={key === submitLabel ? 'submit' : 'button'} className={key === submitLabel ? 'confirm' : ''} onClick={() => onKey(key)}>
             {key}
           </button>
         ) : <span key={`blank-${index}`} />)}

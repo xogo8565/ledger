@@ -16,4 +16,6 @@ public interface TransactionRepository extends JpaRepository<TransactionRecord, 
             Long householdId,
             LocalDate transactionDate
     );
+
+    List<TransactionRecord> findByInstallmentGroupIdOrderByTransactionDateAscIdAsc(String installmentGroupId);
 }

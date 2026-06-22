@@ -20,6 +20,14 @@ spring:
 
 app:
   upload-dir: ${APP_UPLOAD_DIR:${APP_DATA_DIR:./data}/uploads}
+  card-payment:
+    auto-execute-enabled: ${CARD_PAYMENT_AUTO_EXECUTE_ENABLED:true}
+    auto-execute-cron: ${CARD_PAYMENT_AUTO_EXECUTE_CRON:0 10 4 * * *}
+    zone: ${CARD_PAYMENT_ZONE:Asia/Seoul}
+  recurring-transaction:
+    auto-generate-enabled: ${RECURRING_TRANSACTION_AUTO_GENERATE_ENABLED:true}
+    auto-generate-cron: ${RECURRING_TRANSACTION_AUTO_GENERATE_CRON:0 20 4 * * *}
+    zone: ${RECURRING_TRANSACTION_ZONE:Asia/Seoul}
 
 logging:
   file:

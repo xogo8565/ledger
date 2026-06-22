@@ -111,8 +111,7 @@ public class CardService {
     // Private helper methods
 
     private BigDecimal calculateUnpaidAmount(Asset cardAsset) {
-        // 미결제 금액 = 해당 카드의 모든 지출 거래 합계
-        return transactionRepository.findByHouseholdIdAndTransactionDateBetweenOrderByTransactionDateDescIdDesc(
+        BigDecimal cardExpenses = transactionRepository.findByHouseholdIdAndTransactionDateBetweenOrderByTransactionDateDescIdDesc(
                 cardAsset.getHousehold().getId(),
                 LocalDate.of(1900, 1, 1),
                 LocalDate.now().plusYears(100)
@@ -121,6 +120,12 @@ public class CardService {
                         record.getAsset() != null && record.getAsset().getId().equals(cardAsset.getId()))
                 .map(TransactionRecord::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal completedPayments = cardPaymentScheduleRepository
+                .findByCardAssetIdAndStatusOrderByScheduledDateAsc(cardAsset.getId(), PaymentStatus.COMPLETED)
+                .stream()
+                .map(CardPaymentSchedule::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return cardExpenses.subtract(completedPayments).max(BigDecimal.ZERO);
     }
 
     private BigDecimal calculatePaymentScheduleAmount(Asset cardAsset) {
@@ -164,6 +169,12 @@ public class CardService {
      */
     @Transactional
     public CardPaymentScheduleDto createPaymentSchedule(Long cardAssetId, LocalDate scheduledDate, BigDecimal amount) {
+        if (scheduledDate == null) {
+            throw new IllegalArgumentException("Payment scheduled date is required");
+        }
+        if (amount == null || amount.signum() <= 0) {
+            throw new IllegalArgumentException("Payment amount must be positive");
+        }
         Asset cardAsset = assetRepository.findById(cardAssetId).orElseThrow();
         if (cardAsset.getType() != AssetType.CARD) {
             throw new IllegalArgumentException("Card asset type expected");
@@ -194,6 +205,15 @@ public class CardService {
                 .stream()
                 .map(CardPaymentScheduleDto::from)
                 .toList();
+    }
+
+    @Transactional
+    public void cancelPaymentSchedule(Long scheduleId) {
+        CardPaymentSchedule schedule = cardPaymentScheduleRepository.findById(scheduleId).orElseThrow();
+        if (schedule.getStatus() != PaymentStatus.SCHEDULED) {
+            throw new IllegalStateException("Only scheduled payments can be cancelled");
+        }
+        cardPaymentScheduleRepository.delete(schedule);
     }
 
     /**

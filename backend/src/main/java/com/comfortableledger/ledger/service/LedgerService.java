@@ -38,6 +38,7 @@ import java.time.YearMonth;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -119,6 +120,14 @@ public class LedgerService {
                 defaultHousehold().getId(),
                 targetDate
         ).stream().map(TransactionDto::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransactionDto> installmentTransactions(String installmentGroupId) {
+        return transactionRepository.findByInstallmentGroupIdOrderByTransactionDateAscIdAsc(installmentGroupId)
+                .stream()
+                .map(TransactionDto::from)
+                .toList();
     }
 
     @Transactional
@@ -216,6 +225,40 @@ public class LedgerService {
 
     @Transactional
     public TransactionDto createTransaction(CreateTransactionRequest request) {
+        int installmentMonths = request.installmentMonths() == null ? 0 : request.installmentMonths();
+        if (request.type() == TransactionType.EXPENSE && installmentMonths > 1) {
+            return createInstallmentTransactions(request, installmentMonths);
+        }
+        return TransactionDto.from(createSingleTransaction(request, request.transactionDate(), request.amount(), 0, 0, null));
+    }
+
+    private TransactionDto createInstallmentTransactions(CreateTransactionRequest request, int installmentMonths) {
+        String groupId = UUID.randomUUID().toString();
+        BigDecimal baseAmount = request.amount().divide(BigDecimal.valueOf(installmentMonths), 2, RoundingMode.DOWN);
+        BigDecimal remainingAmount = request.amount();
+        TransactionRecord firstRecord = null;
+
+        for (int index = 1; index <= installmentMonths; index++) {
+            BigDecimal amount = index == installmentMonths ? remainingAmount : baseAmount;
+            remainingAmount = remainingAmount.subtract(amount);
+            TransactionRecord record = createSingleTransaction(
+                    request,
+                    request.transactionDate().plusMonths(index - 1L),
+                    amount,
+                    index,
+                    installmentMonths,
+                    groupId
+            );
+            if (firstRecord == null) {
+                firstRecord = record;
+            }
+        }
+        return TransactionDto.from(firstRecord);
+    }
+
+    private TransactionRecord createSingleTransaction(CreateTransactionRequest request, LocalDate transactionDate,
+                                                      BigDecimal amount, int installmentIndex,
+                                                      int installmentMonths, String installmentGroupId) {
         Household household = defaultHousehold();
         Member author = memberRepository.findByHouseholdId(household.getId()).stream().findFirst().orElseThrow();
         Category category = request.categoryId() == null ? null : categoryRepository.findById(request.categoryId()).orElseThrow();
@@ -227,18 +270,21 @@ public class LedgerService {
                 household,
                 author,
                 request.type(),
-                request.transactionDate(),
-                request.amount(),
+                transactionDate,
+                amount,
                 category,
                 asset,
                 fromAsset,
                 toAsset,
                 request.title(),
                 request.memo(),
-                request.installmentMonths() == null ? 0 : request.installmentMonths()
+                installmentMonths
         );
+        if (installmentGroupId != null) {
+            record.assignInstallment(installmentGroupId, installmentIndex, installmentMonths);
+        }
         applyAssetChange(record);
-        return TransactionDto.from(transactionRepository.save(record));
+        return transactionRepository.save(record);
     }
 
     @Transactional
@@ -365,6 +411,9 @@ public class LedgerService {
 
     @Transactional
     public BudgetSettingsDto saveBudget(SaveBudgetRequest request) {
+        if (request.totalAmount() == null || request.totalAmount().signum() < 0) {
+            throw new IllegalArgumentException("Budget total amount cannot be negative");
+        }
         Household household = defaultHousehold();
         String budgetMonth = request.month() == null || request.month().isBlank() ? YearMonth.now().toString() : request.month();
         MonthlyBudget monthlyBudget = monthlyBudgetRepository.findByHouseholdIdAndBudgetMonth(household.getId(), budgetMonth)
@@ -375,6 +424,9 @@ public class LedgerService {
                 .collect(Collectors.toMap(item -> item.getCategory().getId(), Function.identity()));
         if (request.categories() != null) {
             for (SaveBudgetRequest.SaveCategoryBudget item : request.categories()) {
+                if (item.amount() == null || item.amount().signum() < 0) {
+                    throw new IllegalArgumentException("Category budget amount cannot be negative");
+                }
                 Category category = categoryRepository.findById(item.categoryId()).orElseThrow();
                 CategoryBudget categoryBudget = existing.get(category.getId());
                 if (categoryBudget == null) {

@@ -16,8 +16,8 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "transactions")
-public class TransactionRecord {
+@Table(name = "recurring_transactions")
+public class RecurringTransaction {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -26,15 +26,9 @@ public class TransactionRecord {
     @NotNull
     private Household household;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    private Member author;
-
     @Enumerated(EnumType.STRING)
     @NotNull
     private TransactionType type;
-
-    @NotNull
-    private LocalDate transactionDate;
 
     @Positive
     @NotNull
@@ -55,32 +49,36 @@ public class TransactionRecord {
     private String title;
     private String memo;
     private int installmentMonths;
-    private int installmentIndex;
-    private String installmentGroupId;
+
+    @Enumerated(EnumType.STRING)
+    @NotNull
+    private RecurrenceFrequency frequency;
+
+    private int intervalValue;
+
+    @NotNull
+    private LocalDate startDate;
+
+    private LocalDate endDate;
+
+    @NotNull
+    private LocalDate nextRunDate;
+
+    private boolean active = true;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 
-    protected TransactionRecord() {
+    protected RecurringTransaction() {
     }
 
-    public TransactionRecord(Household household, Member author, TransactionType type, LocalDate transactionDate,
-                             BigDecimal amount, Category category, Asset asset, Asset fromAsset, Asset toAsset,
-                             String title, String memo, int installmentMonths) {
+    public RecurringTransaction(Household household, TransactionType type, BigDecimal amount, Category category,
+                                Asset asset, Asset fromAsset, Asset toAsset, String title, String memo,
+                                int installmentMonths, RecurrenceFrequency frequency, int intervalValue,
+                                LocalDate startDate, LocalDate endDate) {
         this.household = household;
-        this.author = author;
-        this.type = type;
-        this.transactionDate = transactionDate;
-        this.amount = amount;
-        this.category = category;
-        this.asset = asset;
-        this.fromAsset = fromAsset;
-        this.toAsset = toAsset;
-        this.title = title;
-        this.memo = memo;
-        this.installmentMonths = installmentMonths;
-        this.installmentIndex = installmentMonths > 1 ? 1 : 0;
+        update(type, amount, category, asset, fromAsset, toAsset, title, memo, installmentMonths,
+                frequency, intervalValue, startDate, endDate, startDate);
         this.createdAt = OffsetDateTime.now();
-        this.updatedAt = this.createdAt;
     }
 
     public Long getId() {
@@ -89,10 +87,6 @@ public class TransactionRecord {
 
     public TransactionType getType() {
         return type;
-    }
-
-    public LocalDate getTransactionDate() {
-        return transactionDate;
     }
 
     public BigDecimal getAmount() {
@@ -127,25 +121,35 @@ public class TransactionRecord {
         return installmentMonths;
     }
 
-    public int getInstallmentIndex() {
-        return installmentIndex;
+    public RecurrenceFrequency getFrequency() {
+        return frequency;
     }
 
-    public String getInstallmentGroupId() {
-        return installmentGroupId;
+    public int getIntervalValue() {
+        return intervalValue;
     }
 
-    public void assignInstallment(String installmentGroupId, int installmentIndex, int installmentMonths) {
-        this.installmentGroupId = installmentGroupId;
-        this.installmentIndex = installmentIndex;
-        this.installmentMonths = installmentMonths;
+    public LocalDate getStartDate() {
+        return startDate;
     }
 
-    public void update(TransactionType type, LocalDate transactionDate, BigDecimal amount, 
-                       Category category, Asset asset, Asset fromAsset, Asset toAsset,
-                       String title, String memo, int installmentMonths) {
+    public LocalDate getEndDate() {
+        return endDate;
+    }
+
+    public LocalDate getNextRunDate() {
+        return nextRunDate;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void update(TransactionType type, BigDecimal amount, Category category, Asset asset, Asset fromAsset,
+                       Asset toAsset, String title, String memo, int installmentMonths,
+                       RecurrenceFrequency frequency, int intervalValue, LocalDate startDate,
+                       LocalDate endDate, LocalDate nextRunDate) {
         this.type = type;
-        this.transactionDate = transactionDate;
         this.amount = amount;
         this.category = category;
         this.asset = asset;
@@ -154,7 +158,24 @@ public class TransactionRecord {
         this.title = title;
         this.memo = memo;
         this.installmentMonths = installmentMonths;
-        this.installmentIndex = installmentMonths > 1 && this.installmentIndex == 0 ? 1 : this.installmentIndex;
+        this.frequency = frequency;
+        this.intervalValue = intervalValue;
+        this.startDate = startDate;
+        this.endDate = endDate;
+        this.nextRunDate = nextRunDate;
+        this.updatedAt = OffsetDateTime.now();
+    }
+
+    public void markGenerated(LocalDate nextRunDate) {
+        this.nextRunDate = nextRunDate;
+        this.updatedAt = OffsetDateTime.now();
+        if (endDate != null && nextRunDate.isAfter(endDate)) {
+            this.active = false;
+        }
+    }
+
+    public void deactivate() {
+        this.active = false;
         this.updatedAt = OffsetDateTime.now();
     }
 }
