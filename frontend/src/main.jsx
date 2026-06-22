@@ -155,7 +155,11 @@ function App() {
       groupName: asset.groupName || assetTypeLabels[asset.type] || '기타',
       name: asset.name || '',
       balance: String(Number(asset.balance || 0)),
-      memo: asset.memo || ''
+      memo: asset.memo || '',
+      paymentAccountId: '',
+      statementClosingDay: 1,
+      paymentDay: 1,
+      autoPayment: true
     } : emptyAssetForm());
     setPanel('assetForm');
   }
@@ -261,6 +265,9 @@ function App() {
   }
 
   async function deleteTransaction(transaction) {
+    const label = transaction.title || transaction.categoryName || typeLabels[transaction.type] || '거래';
+    const confirmed = window.confirm(`${label} 거래를 삭제할까요? 삭제하면 자산 잔액도 다시 계산됩니다.`);
+    if (!confirmed) return;
     await fetch(`${API}/transactions/${transaction.id}`, { method: 'DELETE' });
     closePanel();
     await load();
@@ -270,9 +277,14 @@ function App() {
     event.preventDefault();
     const payload = {
       ...assetForm,
-      balance: Number(assetForm.balance || 0)
+      balance: Number(assetForm.balance || 0),
+      paymentAccountId: assetForm.paymentAccountId ? Number(assetForm.paymentAccountId) : null,
+      statementClosingDay: Number(assetForm.statementClosingDay || 1),
+      paymentDay: Number(assetForm.paymentDay || 1),
+      autoPayment: Boolean(assetForm.autoPayment)
     };
-    const url = editingAsset ? `${API}/assets/${editingAsset.id}` : `${API}/assets`;
+    const isNewCard = !editingAsset && assetForm.type === 'CARD';
+    const url = editingAsset ? `${API}/assets/${editingAsset.id}` : isNewCard ? `${API}/assets/card` : `${API}/assets`;
     const method = editingAsset ? 'PUT' : 'POST';
     await fetch(url, {
       method,
@@ -553,6 +565,7 @@ function App() {
           <AssetFormScreen
             form={assetForm}
             setForm={setAssetForm}
+            assets={data.assets}
             editingAsset={editingAsset}
             saveAsset={saveAsset}
             onClose={closePanel}
@@ -665,7 +678,11 @@ function emptyAssetForm() {
     groupName: '현금',
     name: '',
     balance: '',
-    memo: ''
+    memo: '',
+    paymentAccountId: '',
+    statementClosingDay: 1,
+    paymentDay: 1,
+    autoPayment: true
   };
 }
 
@@ -1699,7 +1716,8 @@ function amountFromExpression(value) {
   }
 }
 
-function AssetFormScreen({ form, setForm, editingAsset, saveAsset, onClose }) {
+function AssetFormScreen({ form, setForm, assets, editingAsset, saveAsset, onClose }) {
+  const paymentAccounts = assets.filter((asset) => asset.type !== 'CARD' && asset.type !== 'DEBT');
   return (
     <div className="full-panel">
       <form className="simple-edit-screen" onSubmit={saveAsset}>
@@ -1722,6 +1740,45 @@ function AssetFormScreen({ form, setForm, editingAsset, saveAsset, onClose }) {
           <LineField label="메모">
             <input value={form.memo} onChange={(event) => setForm((prev) => ({ ...prev, memo: event.target.value }))} />
           </LineField>
+          {form.type === 'CARD' && !editingAsset && (
+            <section className="card-profile-fields">
+              <h2>카드 결제 설정</h2>
+              <LineField label="결제계좌">
+                <select value={form.paymentAccountId} onChange={(event) => setForm((prev) => ({ ...prev, paymentAccountId: event.target.value }))} required>
+                  <option value="">선택</option>
+                  {paymentAccounts.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
+                </select>
+              </LineField>
+              <LineField label="확정일">
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={form.statementClosingDay}
+                  onChange={(event) => setForm((prev) => ({ ...prev, statementClosingDay: event.target.value }))}
+                  required
+                />
+              </LineField>
+              <LineField label="결제일">
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={form.paymentDay}
+                  onChange={(event) => setForm((prev) => ({ ...prev, paymentDay: event.target.value }))}
+                  required
+                />
+              </LineField>
+              <label className="toggle-line">
+                <span>자동 결제</span>
+                <input
+                  type="checkbox"
+                  checked={form.autoPayment}
+                  onChange={(event) => setForm((prev) => ({ ...prev, autoPayment: event.target.checked }))}
+                />
+              </label>
+            </section>
+          )}
         </section>
         <button className="wide-save-button" type="submit">저장</button>
       </form>

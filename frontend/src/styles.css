@@ -1519,6 +1519,39 @@ button {
   grid-template-rows: auto 1fr auto;
 }
 
+.simple-edit-screen .edit-fields {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.card-profile-fields {
+  display: grid;
+  border-top: 8px solid var(--surface-soft);
+}
+
+.card-profile-fields h2 {
+  margin: 0;
+  padding: 16px 18px 10px;
+  font-size: 16px;
+}
+
+.toggle-line {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 900;
+}
+
+.toggle-line input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--accent);
+}
+
 .wide-save-button {
   width: calc(100% - 36px);
   height: 54px;
