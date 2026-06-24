@@ -30,6 +30,11 @@ const assetTypeOptions = [
   ['DEBT', '부채']
 ];
 
+const consumptionScopeLabels = {
+  PERSONAL: '개인',
+  SHARED: '공동'
+};
+
 function money(value) {
   return `${Number(value || 0).toLocaleString('ko-KR')}원`;
 }
@@ -98,6 +103,9 @@ function App() {
   const [assetForm, setAssetForm] = useState(emptyAssetForm());
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm());
   const [categoryType, setCategoryType] = useState('EXPENSE');
+  const [members, setMembers] = useState([]);
+  const [memberForm, setMemberForm] = useState({ name: '' });
+  const [editingMember, setEditingMember] = useState(null);
   const [budgetSettings, setBudgetSettings] = useState(null);
   const [recurringRules, setRecurringRules] = useState([]);
   const [recurringForm, setRecurringForm] = useState(emptyRecurringForm());
@@ -112,12 +120,14 @@ function App() {
 
   async function load() {
     setLoading(true);
-    const [bootstrapResponse, assetSummaryResponse] = await Promise.all([
+    const [bootstrapResponse, assetSummaryResponse, membersResponse] = await Promise.all([
       fetch(`${API}/bootstrap?month=${month}`),
-      fetch(`${API}/assets/summary`)
+      fetch(`${API}/assets/summary`),
+      fetch(`${API}/members`)
     ]);
     const bootstrap = await bootstrapResponse.json();
     const assetSummary = await assetSummaryResponse.json();
+    setMembers(await membersResponse.json());
     setData({ ...bootstrap, assetSummary });
     setLoading(false);
   }
@@ -165,7 +175,11 @@ function App() {
   function openEntry(type = 'EXPENSE') {
     setEditingTransaction(null);
     setEditingInstallmentGroup(null);
-    const nextForm = { ...emptyTransactionForm(), type };
+    const nextForm = {
+      ...emptyTransactionForm(),
+      type,
+      consumerMemberId: type === 'EXPENSE' ? defaultConsumerMemberId(members) : ''
+    };
     setForm(nextForm);
     setEntryExpression('');
     setReceiptFiles([]);
@@ -226,6 +240,13 @@ function App() {
     setPanel('categories');
   }
 
+  async function openMemberManager() {
+    setEditingMember(null);
+    setMemberForm({ name: '' });
+    await loadMembers();
+    setPanel('members');
+  }
+
   async function openRecurringManager() {
     setEditingRecurringRule(null);
     setRecurringForm(emptyRecurringForm());
@@ -283,6 +304,7 @@ function App() {
     setSelectedTransaction(null);
     setEditingAsset(null);
     setEditingCategory(null);
+    setEditingMember(null);
     setEditingRecurringRule(null);
     setSelectedCard(null);
     setCardDetail(null);
@@ -345,6 +367,8 @@ function App() {
         Number(item.amount || 0),
         item.categoryName || '',
         item.spendingTag || '',
+        consumptionScopeLabels[item.consumptionScope] || '',
+        item.consumerMemberName || '',
         item.assetName || '',
         assetNames.get(String(item.fromAssetId)) || '',
         assetNames.get(String(item.toAssetId)) || '',
@@ -354,7 +378,7 @@ function App() {
         item.installmentMonths || ''
       ]);
     const csv = [
-      ['기간', '거래일', '유형', '금액', '카테고리', '소비태그', '자산', '출금자산', '입금자산', '제목', '메모', '할부회차', '할부개월'],
+      ['기간', '거래일', '유형', '금액', '카테고리', '소비태그', '소비구분', '소비명의', '자산', '출금자산', '입금자산', '제목', '메모', '할부회차', '할부개월'],
       ...rows
     ].map((row) => row.map(csvCell).join(',')).join('\r\n');
     downloadTextFile(`ledger-transactions-${filteredFileLabel(filters, month)}.csv`, `\uFEFF${csv}`, 'text/csv;charset=utf-8');
@@ -372,6 +396,7 @@ function App() {
       assetId: form.assetId ? Number(form.assetId) : null,
       fromAssetId: form.fromAssetId ? Number(form.fromAssetId) : null,
       toAssetId: form.toAssetId ? Number(form.toAssetId) : null,
+      consumerMemberId: form.consumerMemberId ? Number(form.consumerMemberId) : null,
       installmentMonths: Number(form.installmentMonths || 0)
     };
 
@@ -482,6 +507,44 @@ function App() {
   async function deleteCategory(category) {
     await fetch(`${API}/categories/${category.id}`, { method: 'DELETE' });
     await load();
+  }
+
+  async function loadMembers() {
+    const response = await fetch(`${API}/members`);
+    setMembers(await response.json());
+  }
+
+  async function saveMember(event) {
+    event.preventDefault();
+    const name = memberForm.name.trim();
+    if (!name) return;
+    const response = await fetch(editingMember ? `${API}/members/${editingMember.id}` : `${API}/members`, {
+      method: editingMember ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      window.alert(error.error || '명의 저장에 실패했습니다.');
+      return;
+    }
+    setEditingMember(null);
+    setMemberForm({ name: '' });
+    await Promise.all([loadMembers(), load()]);
+  }
+
+  async function deleteMember(member) {
+    const confirmed = window.confirm(`${member.name} 명의를 삭제할까요?`);
+    if (!confirmed) return;
+    const response = await fetch(`${API}/members/${member.id}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      window.alert(error.error === 'Member is used by an asset'
+        ? '이 명의를 사용하는 자산이 있습니다. 자산 명의를 먼저 변경해 주세요.'
+        : error.error || '명의 삭제에 실패했습니다.');
+      return;
+    }
+    await loadMembers();
   }
 
   async function saveBudget(event) {
@@ -668,7 +731,8 @@ function App() {
       amount: parsed.amount || '',
       categoryId: parsed.recommendedCategoryId ? String(parsed.recommendedCategoryId) : '',
       title: parsed.merchant || '',
-      memo: parsed.memo || ''
+      memo: parsed.memo || '',
+      consumerMemberId: parsed.type === 'EXPENSE' || !parsed.type ? defaultConsumerMemberId(members) : ''
     });
     setEntryExpression(String(parsed.amount || ''));
     setReceiptFiles([]);
@@ -739,6 +803,7 @@ function App() {
             exportMonthlyTransactions={exportMonthlyTransactions}
             openCategoryManager={openCategoryManager}
             openRecurringManager={openRecurringManager}
+            openMemberManager={openMemberManager}
           />
         )}
 
@@ -765,6 +830,7 @@ function App() {
             expression={entryExpression}
             assets={data.assets}
             categories={selectedCategories}
+            members={members}
             receiptFiles={receiptFiles}
             updateForm={updateForm}
             setReceiptFiles={setReceiptFiles}
@@ -791,6 +857,7 @@ function App() {
             form={assetForm}
             setForm={setAssetForm}
             assets={data.assets}
+            members={members}
             editingAsset={editingAsset}
             saveAsset={saveAsset}
             onClose={closePanel}
@@ -811,6 +878,18 @@ function App() {
             setEditingCategory={setEditingCategory}
             saveCategory={saveCategory}
             deleteCategory={deleteCategory}
+            onClose={closePanel}
+          />
+        )}
+        {panel === 'members' && (
+          <MemberManagerScreen
+            members={members}
+            form={memberForm}
+            setForm={setMemberForm}
+            editingMember={editingMember}
+            setEditingMember={setEditingMember}
+            saveMember={saveMember}
+            deleteMember={deleteMember}
             onClose={closePanel}
           />
         )}
@@ -883,8 +962,15 @@ function emptyTransactionForm() {
     title: '',
     memo: '',
     spendingTag: '',
+    consumptionScope: 'PERSONAL',
+    consumerMemberId: '',
     installmentMonths: 0
   };
+}
+
+function defaultConsumerMemberId(members) {
+  const member = members.find((item) => item.role === 'OWNER') || members[0];
+  return member ? String(member.id) : '';
 }
 
 function transactionToForm(transaction) {
@@ -900,6 +986,8 @@ function transactionToForm(transaction) {
     title: transaction.title || '',
     memo: transaction.memo || '',
     spendingTag: transaction.spendingTag || '',
+    consumptionScope: transaction.consumptionScope || 'PERSONAL',
+    consumerMemberId: transaction.consumerMemberId ? String(transaction.consumerMemberId) : '',
     installmentMonths: Number(transaction.installmentMonths || 0)
   };
 }
@@ -976,6 +1064,8 @@ function filterTransactions(transactions, filters) {
       item.title,
       item.memo,
       item.spendingTag,
+      consumptionScopeLabels[item.consumptionScope],
+      item.consumerMemberName,
       item.categoryName,
       item.assetName,
       item.transactionDate,
@@ -1263,6 +1353,13 @@ function TransactionRow({ item, openInstallmentSchedule, openTransactionDetail }
           }}>
             {item.installmentIndex}/{item.installmentMonths} 할부
           </button>
+        )}
+        {item.type === 'EXPENSE' && (
+          <span className={`consumption-scope-chip ${item.consumptionScope === 'SHARED' ? 'shared' : ''}`}>
+            {item.consumptionScope === 'PERSONAL' && item.consumerMemberName
+              ? `개인 · ${item.consumerMemberName}`
+              : consumptionScopeLabels[item.consumptionScope] || '개인'}
+          </span>
         )}
       </div>
       <b className={transactionTone(item.type)}>{money(item.amount)}</b>
@@ -1895,15 +1992,60 @@ function InstallmentScheduleScreen({ transaction, schedule, editGroup, deleteGro
   );
 }
 
-function MoreScreen({ exportMonthlyTransactions, openCategoryManager, openRecurringManager }) {
+function MoreScreen({ exportMonthlyTransactions, openCategoryManager, openRecurringManager, openMemberManager }) {
   return (
     <div className="screen more-screen">
       <AppHeader title="더보기" />
       <section className="more-list">
         <button type="button" onClick={openCategoryManager}>카테고리 관리<span>›</span></button>
+        <button type="button" onClick={openMemberManager}>명의 관리<span>›</span></button>
         <button type="button" onClick={openRecurringManager}>반복 거래<span>›</span></button>
         <button type="button">영수증 사진<span>›</span></button>
         <button type="button" onClick={exportMonthlyTransactions}>월 거래 CSV 내보내기<span>›</span></button>
+      </section>
+    </div>
+  );
+}
+
+function MemberManagerScreen({ members, form, setForm, editingMember, setEditingMember, saveMember, deleteMember, onClose }) {
+  return (
+    <div className="full-panel">
+      <section className="member-manager">
+        <AppHeader title="명의 관리" left={<BackButton label="더보기" onClick={onClose} />} />
+        <p className="member-manager-note">자산과 개인 소비에 사용할 명의를 관리합니다. 기본 명의는 삭제할 수 없습니다.</p>
+        <form className="member-inline-form" onSubmit={saveMember}>
+          <input
+            value={form.name}
+            onChange={(event) => setForm({ name: event.target.value })}
+            placeholder="명의 이름"
+            required
+          />
+          <button type="submit">{editingMember ? '수정' : '추가'}</button>
+          {editingMember && (
+            <button type="button" className="secondary" onClick={() => {
+              setEditingMember(null);
+              setForm({ name: '' });
+            }}>취소</button>
+          )}
+        </form>
+        <div className="member-list">
+          {members.map((member) => (
+            <article className="member-row" key={member.id}>
+              <div>
+                <strong>{member.name}</strong>
+                <span>{member.role === 'OWNER' ? '기본 명의' : '일반 명의'}</span>
+              </div>
+              <button type="button" onClick={() => {
+                setEditingMember(member);
+                setForm({ name: member.name });
+              }}>수정</button>
+              <button type="button" className="danger" disabled={!member.deletable} onClick={() => deleteMember(member)}>
+                삭제
+              </button>
+            </article>
+          ))}
+          {!members.length && <EmptyState label="등록된 명의가 없습니다." compact />}
+        </div>
       </section>
     </div>
   );
@@ -2088,6 +2230,12 @@ function TransactionDetailScreen({ transaction, receipts, editTransaction, delet
           <KeyValue label="분류" value={transaction.categoryName || '미분류'} />
           <KeyValue label="자산" value={transaction.assetName || transferLabel(transaction) || '자산 미지정'} />
           {transaction.spendingTag && <KeyValue label="소비 태그" value={transaction.spendingTag} />}
+          {transaction.type === 'EXPENSE' && (
+            <KeyValue label="소비 구분" value={consumptionScopeLabels[transaction.consumptionScope] || '개인'} />
+          )}
+          {transaction.type === 'EXPENSE' && transaction.consumptionScope === 'PERSONAL' && (
+            <KeyValue label="소비 명의" value={transaction.consumerMemberName || '기본 명의'} />
+          )}
           {hasInstallment && <KeyValue label="할부" value={`${transaction.installmentIndex}/${transaction.installmentMonths}개월`} />}
           {transaction.memo && <KeyValue label="메모" value={transaction.memo} />}
           <section className="receipt-preview-list">
@@ -2119,7 +2267,7 @@ function TransactionDetailScreen({ transaction, receipts, editTransaction, delet
   );
 }
 
-function EntryScreen({ form, expression, assets, categories, receiptFiles, updateForm, setReceiptFiles, setExpression, submitTransaction, editingTransaction, editingInstallmentGroup, onClose }) {
+function EntryScreen({ form, expression, assets, categories, members, receiptFiles, updateForm, setReceiptFiles, setExpression, submitTransaction, editingTransaction, editingInstallmentGroup, onClose }) {
   const tone = form.type === 'INCOME' ? 'income' : form.type === 'TRANSFER' ? 'transfer' : 'expense';
   const isEditing = Boolean(editingTransaction || editingInstallmentGroup);
 
@@ -2129,6 +2277,10 @@ function EntryScreen({ form, expression, assets, categories, receiptFiles, updat
     if (type !== 'EXPENSE') {
       updateForm('installmentMonths', 0);
       updateForm('spendingTag', '');
+      updateForm('consumptionScope', 'PERSONAL');
+      updateForm('consumerMemberId', '');
+    } else if (!form.consumerMemberId) {
+      updateForm('consumerMemberId', defaultConsumerMemberId(members));
     }
     if (type === 'TRANSFER') {
       updateForm('assetId', '');
@@ -2233,9 +2385,33 @@ function EntryScreen({ form, expression, assets, categories, receiptFiles, updat
             <input value={form.title} onChange={(event) => updateForm('title', event.target.value)} placeholder="내용" />
           </LineField>
           {form.type === 'EXPENSE' && (
-            <LineField label="태그">
-              <input value={form.spendingTag} onChange={(event) => updateForm('spendingTag', event.target.value)} placeholder="식비, 생활, 고정비" />
-            </LineField>
+            <>
+              <LineField label="태그">
+                <input value={form.spendingTag} onChange={(event) => updateForm('spendingTag', event.target.value)} placeholder="식비, 생활, 고정비" />
+              </LineField>
+              <LineField label="소비 구분">
+                <select value={form.consumptionScope} onChange={(event) => {
+                  const scope = event.target.value;
+                  updateForm('consumptionScope', scope);
+                  updateForm('consumerMemberId', scope === 'PERSONAL' ? form.consumerMemberId || defaultConsumerMemberId(members) : '');
+                }}>
+                  <option value="PERSONAL">개인 소비</option>
+                  <option value="SHARED">공동 소비</option>
+                </select>
+              </LineField>
+              {form.consumptionScope === 'PERSONAL' && (
+                <LineField label="소비 명의">
+                  <select required value={form.consumerMemberId} onChange={(event) => updateForm('consumerMemberId', event.target.value)}>
+                    <option value="">명의 선택</option>
+                    {members.map((member) => (
+                      <option value={member.id} key={member.id}>
+                        {member.name}{member.role === 'OWNER' ? ' · 기본' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </LineField>
+              )}
+            </>
           )}
 
           {!editingInstallmentGroup && (
@@ -2312,8 +2488,11 @@ function amountFromExpression(value) {
   }
 }
 
-function AssetFormScreen({ form, setForm, assets, editingAsset, saveAsset, onClose }) {
+function AssetFormScreen({ form, setForm, assets, members, editingAsset, saveAsset, onClose }) {
   const paymentAccounts = assets.filter((asset) => asset.type !== 'CARD' && asset.type !== 'DEBT');
+  const legacyOwner = form.ownerName && !members.some((member) => member.name === form.ownerName)
+    ? form.ownerName
+    : '';
   return (
     <div className="full-panel">
       <form className="simple-edit-screen" onSubmit={saveAsset}>
@@ -2331,7 +2510,15 @@ function AssetFormScreen({ form, setForm, assets, editingAsset, saveAsset, onClo
             <input autoFocus value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
           </LineField>
           <LineField label="명의">
-            <input value={form.ownerName} onChange={(event) => setForm((prev) => ({ ...prev, ownerName: event.target.value }))} placeholder="본인" />
+            <select value={form.ownerName} onChange={(event) => setForm((prev) => ({ ...prev, ownerName: event.target.value }))}>
+              <option value="">명의 미지정</option>
+              {legacyOwner && <option value={legacyOwner} disabled>{legacyOwner} · 명의 등록 필요</option>}
+              {members.map((member) => (
+                <option value={member.name} key={member.id}>
+                  {member.name}{member.role === 'OWNER' ? ' · 기본' : ''}
+                </option>
+              ))}
+            </select>
           </LineField>
           <LineField label="금액">
             <input inputMode="numeric" value={form.balance} onChange={(event) => setForm((prev) => ({ ...prev, balance: event.target.value }))} />

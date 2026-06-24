@@ -54,4 +54,8 @@ public class Member {
     public MemberRole getRole() {
         return role;
     }
+
+    public void rename(String name) {
+        this.name = name;
+    }
 }

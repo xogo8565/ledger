@@ -371,6 +371,21 @@ button {
   font-weight: 900;
 }
 
+.consumption-scope-chip {
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #5d6470;
+  background: #eef0f4;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.consumption-scope-chip.shared {
+  color: #397023;
+  background: #eaf6df;
+}
+
 .transaction-row > b {
   max-width: 116px;
   text-align: right;
@@ -1383,6 +1398,7 @@ button {
 .simple-edit-screen,
 .transaction-detail-screen,
 .category-manager,
+.member-manager,
 .recurring-manager,
 .card-payment-manager,
 .installment-manager,
@@ -2031,6 +2047,108 @@ button {
 
 .category-manager {
   grid-template-rows: auto auto auto auto 1fr;
+}
+
+.member-manager {
+  grid-template-rows: auto auto auto 1fr;
+  overflow: hidden;
+}
+
+.member-manager-note {
+  margin: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--subtle);
+  background: var(--surface-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.member-inline-form {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 8px solid var(--surface-soft);
+}
+
+.member-inline-form input,
+.member-inline-form button {
+  height: 42px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+
+.member-inline-form input {
+  min-width: 0;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--surface);
+  font-weight: 800;
+}
+
+.member-inline-form button {
+  padding: 0 14px;
+  color: white;
+  background: var(--accent);
+  font-weight: 900;
+}
+
+.member-inline-form button.secondary {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.member-list {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.member-row {
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.member-row > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.member-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-row span {
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.member-row button {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  font-weight: 800;
+}
+
+.member-row button.danger {
+  color: var(--accent);
+}
+
+.member-row button:disabled {
+  cursor: not-allowed;
+  color: var(--subtle);
+  opacity: 0.45;
 }
 
 .recurring-manager {

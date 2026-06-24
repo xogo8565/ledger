@@ -139,6 +139,8 @@ public class RecurringTransactionService {
                         rule.getTitle(),
                         rule.getMemo(),
                         null,
+                        null,
+                        null,
                         rule.getInstallmentMonths()
                 ));
                 generatedCount++;

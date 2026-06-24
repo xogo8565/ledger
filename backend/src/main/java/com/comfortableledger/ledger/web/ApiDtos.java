@@ -4,6 +4,9 @@ import com.comfortableledger.ledger.domain.Asset;
 import com.comfortableledger.ledger.domain.AssetType;
 import com.comfortableledger.ledger.domain.Category;
 import com.comfortableledger.ledger.domain.CategoryType;
+import com.comfortableledger.ledger.domain.ConsumptionScope;
+import com.comfortableledger.ledger.domain.Member;
+import com.comfortableledger.ledger.domain.MemberRole;
 import com.comfortableledger.ledger.domain.RecurrenceFrequency;
 import com.comfortableledger.ledger.domain.RecurringTransaction;
 import com.comfortableledger.ledger.domain.ReceiptAttachment;
@@ -92,6 +95,20 @@ public final class ApiDtos {
         }
     }
 
+    public record MemberDto(Long id, String name, MemberRole role, boolean deletable) {
+        public static MemberDto from(Member member) {
+            return new MemberDto(
+                    member.getId(),
+                    member.getName(),
+                    member.getRole(),
+                    member.getRole() != MemberRole.OWNER
+            );
+        }
+    }
+
+    public record SaveMemberRequest(@NotBlank String name) {
+    }
+
     public record SaveCategoryRequest(
             @NotNull CategoryType type,
             @NotBlank String name,
@@ -115,6 +132,9 @@ public final class ApiDtos {
             String title,
             String memo,
             String spendingTag,
+            ConsumptionScope consumptionScope,
+            Long consumerMemberId,
+            String consumerMemberName,
             int installmentMonths,
             int installmentIndex,
             String installmentGroupId
@@ -135,6 +155,9 @@ public final class ApiDtos {
                     record.getTitle(),
                     record.getMemo(),
                     record.getSpendingTag(),
+                    record.getConsumptionScope(),
+                    record.getConsumer() == null ? null : record.getConsumer().getId(),
+                    record.getConsumer() == null ? null : record.getConsumer().getName(),
                     record.getInstallmentMonths(),
                     record.getInstallmentIndex(),
                     record.getInstallmentGroupId()
@@ -153,6 +176,8 @@ public final class ApiDtos {
             String title,
             String memo,
             String spendingTag,
+            ConsumptionScope consumptionScope,
+            Long consumerMemberId,
             Integer installmentMonths
     ) {
     }

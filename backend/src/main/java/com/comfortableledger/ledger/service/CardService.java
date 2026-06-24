@@ -273,6 +273,8 @@ public class CardService {
                     "카드 자동 결제",
                     cardAsset.getName(),
                     null,
+                    null,
+                    null,
                     0
             ));
 

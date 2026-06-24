@@ -85,6 +85,7 @@ const mutationRequests = [];
 const cleanup = {
   assetIds: [],
   categoryIds: [],
+  memberIds: [],
   cardScheduleIds: [],
   recurringRuleIds: [],
   transactionIds: [],
@@ -118,13 +119,27 @@ try {
   assert(assetRows > 0, 'assets screen did not render any asset rows');
   await page.screenshot({ path: `${screenshotDir}/browser-smoke-assets-mobile.png`, fullPage: true });
 
+  const invalidOwnerResponse = await api.post('/api/assets', {
+    data: {
+      type: 'CASH',
+      name: `invalid-owner-asset-${Date.now()}`,
+      balance: 1,
+      groupName: '현금',
+      ownerName: 'not-registered-owner',
+      memo: ''
+    }
+  });
+  assert(invalidOwnerResponse.status() === 400, `unregistered asset owner was accepted: ${invalidOwnerResponse.status()}`);
+
   const assetName = `browser-smoke-asset-${Date.now()}`;
   const assetUpdatedName = `${assetName}-updated`;
-  const assetOwnerName = `browser-smoke-owner-${Date.now()}`;
   await page.locator('.asset-actions .top-icon-button').last().click();
   await assertVisible(page, '.simple-edit-screen', 'asset form did not open');
   await page.locator('.simple-edit-screen .line-field').nth(1).locator('input').fill(assetName);
-  await page.locator('.simple-edit-screen .line-field').nth(2).locator('input').fill(assetOwnerName);
+  const ownerSelect = page.locator('.simple-edit-screen .line-field').nth(2).locator('select');
+  await ownerSelect.selectOption({ index: 1 });
+  const assetOwnerName = await ownerSelect.locator('option:checked').textContent();
+  const normalizedAssetOwnerName = assetOwnerName.replace(' · 기본', '');
   await page.locator('.simple-edit-screen .line-field').nth(3).locator('input').fill('12345');
   const [assetCreateResponse] = await Promise.all([
     page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/assets')),
@@ -132,9 +147,10 @@ try {
   ]);
   await assertResponseOk(assetCreateResponse, 'asset UI creation');
   const createdAsset = await assetCreateResponse.json();
+  assert(createdAsset.ownerName === normalizedAssetOwnerName, `asset owner selection was not saved: ${createdAsset.ownerName}`);
   cleanup.assetIds.push(createdAsset.id);
   await page.waitForSelector(`.asset-row:has-text("${assetName}")`, { timeout: 15000 });
-  await page.waitForSelector(`.owner-summary-row:has-text("${assetOwnerName}")`, { timeout: 15000 });
+  await page.waitForSelector(`.owner-summary-row:has-text("${normalizedAssetOwnerName}")`, { timeout: 15000 });
 
   await page.locator('.asset-row', { hasText: assetName }).locator('button').first().click();
   await assertVisible(page, '.simple-edit-screen', 'asset edit form did not open');
@@ -203,6 +219,41 @@ try {
   await assertVisible(page, '.more-screen', 'more screen did not return after closing category manager');
 
   await page.locator('.more-list button').nth(1).click();
+  await assertVisible(page, '.member-manager', 'member manager did not open');
+  const ownerDeleteButton = page.locator('.member-row', { hasText: '기본 명의' }).getByRole('button', { name: '삭제' });
+  assert(await ownerDeleteButton.isDisabled(), 'owner member delete button was not disabled');
+  const memberName = `browser-smoke-member-${Date.now()}`;
+  const memberUpdatedName = `${memberName}-updated`;
+  await page.locator('.member-inline-form input').fill(memberName);
+  const [memberCreateResponse] = await Promise.all([
+    page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/members')),
+    page.locator('.member-inline-form button[type="submit"]').click()
+  ]);
+  await assertResponseOk(memberCreateResponse, 'member UI creation');
+  const createdMember = await memberCreateResponse.json();
+  cleanup.memberIds.push(createdMember.id);
+  await page.waitForSelector(`.member-row:has-text("${memberName}")`, { timeout: 15000 });
+
+  await page.locator('.member-row', { hasText: memberName }).getByRole('button', { name: '수정' }).click();
+  await page.locator('.member-inline-form input').fill(memberUpdatedName);
+  const [memberUpdateResponse] = await Promise.all([
+    page.waitForResponse((response) => response.request().method() === 'PUT' && response.url().includes(`/api/members/${createdMember.id}`)),
+    page.locator('.member-inline-form button[type="submit"]').click()
+  ]);
+  await assertResponseOk(memberUpdateResponse, 'member UI update');
+  await page.waitForSelector(`.member-row:has-text("${memberUpdatedName}")`, { timeout: 15000 });
+  page.once('dialog', (dialog) => dialog.accept());
+  const [memberDeleteResponse] = await Promise.all([
+    page.waitForResponse((response) => response.request().method() === 'DELETE' && response.url().includes(`/api/members/${createdMember.id}`)),
+    page.locator('.member-row', { hasText: memberUpdatedName }).getByRole('button', { name: '삭제' }).click()
+  ]);
+  await assertResponseOk(memberDeleteResponse, 'member UI delete');
+  cleanup.memberIds = cleanup.memberIds.filter((id) => id !== createdMember.id);
+  await page.waitForSelector(`.member-row:has-text("${memberUpdatedName}")`, { state: 'detached', timeout: 15000 });
+  await page.locator('.full-panel .back-button').first().click();
+  await assertVisible(page, '.more-screen', 'more screen did not return after closing member manager');
+
+  await page.locator('.more-list button').nth(2).click();
   await assertVisible(page, '.recurring-manager', 'recurring transaction manager did not open');
   await page.locator('.recurring-form .wide-save-button').click();
   assert(
@@ -252,16 +303,38 @@ try {
   await selectFirstOption(page.locator('.entry-fields .line-field').nth(3).locator('select'), cashAsset.id);
   await selectFirstOption(page.locator('.entry-fields .line-field').nth(4).locator('select'), 3);
   await page.locator('.entry-fields .line-field').nth(5).locator('input').fill(transactionTitle);
+  const consumerSelect = page.locator('.entry-fields .line-field').nth(8).locator('select');
+  await consumerSelect.selectOption({ index: 1 });
+  const selectedConsumerName = (await consumerSelect.locator('option:checked').textContent()).replace(' · 기본', '');
   const [transactionResponse] = await Promise.all([
     page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/transactions')),
     page.locator('.entry-screen-form button[type="submit"]').click()
   ]);
   await assertResponseOk(transactionResponse, 'transaction UI creation');
   const transaction = await transactionResponse.json();
+  assert(transaction.consumptionScope === 'PERSONAL', `transaction consumption scope was not saved: ${transaction.consumptionScope}`);
+  assert(transaction.consumerMemberName === selectedConsumerName, `transaction consumer was not saved: ${transaction.consumerMemberName}`);
   cleanup.transactionIds.push(transaction.id);
   if (transaction.installmentGroupId) {
     cleanup.installmentGroupIds.push(transaction.installmentGroupId);
   }
+  const sharedTransactionResponse = await api.post('/api/transactions', {
+    data: {
+      type: 'EXPENSE',
+      transactionDate: transaction.transactionDate,
+      amount: 1,
+      categoryId: expenseCategory.id,
+      assetId: cashAsset.id,
+      title: `${transactionTitle}-shared`,
+      consumptionScope: 'SHARED',
+      consumerMemberId: transaction.consumerMemberId,
+      installmentMonths: 0
+    }
+  });
+  await assertResponseOk(sharedTransactionResponse, 'shared transaction consumer normalization');
+  const sharedTransaction = await sharedTransactionResponse.json();
+  assert(sharedTransaction.consumerMemberId === null, `shared transaction kept a consumer: ${sharedTransaction.consumerMemberId}`);
+  cleanup.transactionIds.push(sharedTransaction.id);
   await assertVisible(page, '.ledger-screen', 'ledger screen did not return after creating transaction');
   await page.getByLabel('거래 검색').fill(transactionTitle);
   await page.waitForTimeout(150);
@@ -378,6 +451,9 @@ try {
   }
   for (const categoryId of cleanup.categoryIds) {
     await api.delete(`/api/categories/${categoryId}`).catch(() => {});
+  }
+  for (const memberId of cleanup.memberIds) {
+    await api.delete(`/api/members/${memberId}`).catch(() => {});
   }
   for (const assetId of cleanup.assetIds) {
     await api.delete(`/api/assets/${assetId}`).catch(() => {});

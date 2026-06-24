@@ -11,10 +11,12 @@ import com.comfortableledger.ledger.web.ApiDtos.CategoryDto;
 import com.comfortableledger.ledger.web.ApiDtos.CreatePaymentScheduleRequest;
 import com.comfortableledger.ledger.web.ApiDtos.CreateTransactionRequest;
 import com.comfortableledger.ledger.web.ApiDtos.MonthlySummaryDto;
+import com.comfortableledger.ledger.web.ApiDtos.MemberDto;
 import com.comfortableledger.ledger.web.ApiDtos.SaveAssetRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveBudgetRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveCardAssetRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveCategoryRequest;
+import com.comfortableledger.ledger.web.ApiDtos.SaveMemberRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SchedulePaymentRequest;
 import com.comfortableledger.ledger.web.ApiDtos.TransactionDto;
 import com.comfortableledger.ledger.web.ApiDtos.YearlySummaryDto;
@@ -111,6 +113,26 @@ public class LedgerController {
     @DeleteMapping("/categories/{id}")
     public void deleteCategory(@PathVariable Long id) {
         ledgerService.deleteCategory(id);
+    }
+
+    @GetMapping("/members")
+    public List<MemberDto> members() {
+        return ledgerService.members();
+    }
+
+    @PostMapping("/members")
+    public MemberDto createMember(@Valid @RequestBody SaveMemberRequest request) {
+        return ledgerService.createMember(request);
+    }
+
+    @PutMapping("/members/{id}")
+    public MemberDto updateMember(@PathVariable Long id, @Valid @RequestBody SaveMemberRequest request) {
+        return ledgerService.updateMember(id, request);
+    }
+
+    @DeleteMapping("/members/{id}")
+    public void deleteMember(@PathVariable Long id) {
+        ledgerService.deleteMember(id);
     }
 
     @GetMapping("/transactions")

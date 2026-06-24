@@ -8,6 +8,7 @@ import com.comfortableledger.ledger.domain.CategoryBudget;
 import com.comfortableledger.ledger.domain.CategoryType;
 import com.comfortableledger.ledger.domain.Household;
 import com.comfortableledger.ledger.domain.Member;
+import com.comfortableledger.ledger.domain.MemberRole;
 import com.comfortableledger.ledger.domain.MonthlyBudget;
 import com.comfortableledger.ledger.domain.TransactionRecord;
 import com.comfortableledger.ledger.domain.TransactionType;
@@ -26,10 +27,12 @@ import com.comfortableledger.ledger.web.ApiDtos.CategoryBudgetDto;
 import com.comfortableledger.ledger.web.ApiDtos.CategoryDto;
 import com.comfortableledger.ledger.web.ApiDtos.CreateTransactionRequest;
 import com.comfortableledger.ledger.web.ApiDtos.MonthlySummaryDto;
+import com.comfortableledger.ledger.web.ApiDtos.MemberDto;
 import com.comfortableledger.ledger.web.ApiDtos.SaveAssetRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveBudgetRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveCardAssetRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveCategoryRequest;
+import com.comfortableledger.ledger.web.ApiDtos.SaveMemberRequest;
 import com.comfortableledger.ledger.web.ApiDtos.TransactionDto;
 import com.comfortableledger.ledger.web.ApiDtos.YearlySummaryDto;
 import java.math.BigDecimal;
@@ -145,6 +148,94 @@ public class LedgerService {
     }
 
     @Transactional(readOnly = true)
+    public List<MemberDto> members() {
+        return memberRepository.findByHouseholdId(defaultHousehold().getId()).stream()
+                .sorted(Comparator
+                        .comparing((Member member) -> member.getRole() != MemberRole.OWNER)
+                        .thenComparing(Member::getName)
+                        .thenComparing(Member::getId))
+                .map(MemberDto::from)
+                .toList();
+    }
+
+    @Transactional
+    public MemberDto createMember(SaveMemberRequest request) {
+        Household household = defaultHousehold();
+        String name = normalizedMemberName(request.name());
+        if (memberRepository.existsByHouseholdIdAndNameIgnoreCase(household.getId(), name)) {
+            throw new IllegalArgumentException("Member name already exists");
+        }
+        return MemberDto.from(memberRepository.save(new Member(household, name, MemberRole.EDITOR)));
+    }
+
+    @Transactional
+    public MemberDto updateMember(Long id, SaveMemberRequest request) {
+        Member member = memberRepository.findById(id).orElseThrow();
+        String name = normalizedMemberName(request.name());
+        boolean duplicate = memberRepository.findByHouseholdId(member.getHousehold().getId()).stream()
+                .anyMatch(item -> !item.getId().equals(id) && item.getName().equalsIgnoreCase(name));
+        if (duplicate) {
+            throw new IllegalArgumentException("Member name already exists");
+        }
+        String oldName = member.getName();
+        member.rename(name);
+        assetRepository.findAll().stream()
+                .filter(asset -> asset.getHousehold().getId().equals(member.getHousehold().getId()))
+                .filter(asset -> normalizedMemberNameOrEmpty(asset.getOwnerName()).equalsIgnoreCase(oldName))
+                .forEach(asset -> asset.update(
+                        asset.getType(),
+                        asset.getName(),
+                        asset.getBalance(),
+                        asset.getGroupName(),
+                        name,
+                        asset.getMemo()
+                ));
+        return MemberDto.from(member);
+    }
+
+    @Transactional
+    public void deleteMember(Long id) {
+        Member member = memberRepository.findById(id).orElseThrow();
+        if (member.getRole() == MemberRole.OWNER) {
+            throw new IllegalArgumentException("Owner member cannot be deleted");
+        }
+        boolean usedByAsset = assetRepository.findAll().stream()
+                .filter(asset -> asset.getHousehold().getId().equals(member.getHousehold().getId()))
+                .anyMatch(asset -> normalizedMemberNameOrEmpty(asset.getOwnerName()).equalsIgnoreCase(member.getName()));
+        if (usedByAsset) {
+            throw new IllegalArgumentException("Member is used by an asset");
+        }
+        if (transactionRepository.existsByConsumerId(member.getId())) {
+            throw new IllegalArgumentException("Member is used by a personal expense");
+        }
+        memberRepository.delete(member);
+    }
+
+    private String normalizedMemberName(String name) {
+        String normalized = normalizedMemberNameOrEmpty(name);
+        if (normalized.isBlank()) {
+            throw new IllegalArgumentException("Member name is required");
+        }
+        return normalized;
+    }
+
+    private String normalizedMemberNameOrEmpty(String name) {
+        return name == null ? "" : name.trim().replaceAll("\\s+", " ");
+    }
+
+    private String registeredOwnerName(Household household, String ownerName) {
+        String normalized = normalizedMemberNameOrEmpty(ownerName);
+        if (normalized.isBlank()) {
+            return null;
+        }
+        return memberRepository.findByHouseholdId(household.getId()).stream()
+                .filter(member -> member.getName().equalsIgnoreCase(normalized))
+                .map(Member::getName)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Asset owner must be a registered member"));
+    }
+
+    @Transactional(readOnly = true)
     public List<TransactionDto> transactions(String month) {
         YearMonth yearMonth = month == null || month.isBlank() ? YearMonth.now() : YearMonth.parse(month);
         return monthlyRecords(yearMonth).stream().map(TransactionDto::from).toList();
@@ -184,7 +275,7 @@ public class LedgerService {
         }
 
         StringBuilder csv = new StringBuilder();
-        csv.append("기간,거래일,유형,금액,카테고리,소비태그,자산,출금자산,입금자산,제목,메모,할부회차,할부개월\n");
+        csv.append("기간,거래일,유형,금액,카테고리,소비태그,소비구분,소비명의,자산,출금자산,입금자산,제목,메모,할부회차,할부개월\n");
         records.stream()
                 .sorted(Comparator.comparing(TransactionRecord::getTransactionDate).thenComparing(TransactionRecord::getId))
                 .forEach(record -> csv.append(csvRow(
@@ -194,6 +285,8 @@ public class LedgerService {
                         record.getAmount().toPlainString(),
                         record.getCategory() == null ? "" : record.getCategory().getName(),
                         record.getSpendingTag(),
+                        record.getConsumptionScope() == null ? "" : record.getConsumptionScope().name(),
+                        record.getConsumer() == null ? "" : record.getConsumer().getName(),
                         record.getAsset() == null ? "" : record.getAsset().getName(),
                         record.getFromAsset() == null ? "" : record.getFromAsset().getName(),
                         record.getToAsset() == null ? "" : record.getToAsset().getName(),
@@ -231,6 +324,7 @@ public class LedgerService {
     @Transactional
     public AssetDto createAsset(SaveAssetRequest request) {
         Household household = defaultHousehold();
+        String ownerName = registeredOwnerName(household, request.ownerName());
         Asset asset = new Asset(
                 household,
                 request.type(),
@@ -238,13 +332,14 @@ public class LedgerService {
                 request.balance(),
                 normalizedAssetGroup(request.type(), request.groupName())
         );
-        asset.update(asset.getType(), asset.getName(), asset.getBalance(), asset.getGroupName(), request.ownerName(), request.memo());
+        asset.update(asset.getType(), asset.getName(), asset.getBalance(), asset.getGroupName(), ownerName, request.memo());
         return AssetDto.from(assetRepository.save(asset));
     }
 
     @Transactional
     public AssetDto createCardAsset(SaveCardAssetRequest request) {
         Household household = defaultHousehold();
+        String ownerName = registeredOwnerName(household, request.ownerName());
         Asset paymentAccount = assetRepository.findById(request.paymentAccountId()).orElseThrow();
         
         Asset cardAsset = new Asset(
@@ -255,7 +350,7 @@ public class LedgerService {
                 normalizedAssetGroup(AssetType.CARD, request.groupName())
         );
         cardAsset.update(cardAsset.getType(), cardAsset.getName(), cardAsset.getBalance(),
-                cardAsset.getGroupName(), request.ownerName(), request.memo());
+                cardAsset.getGroupName(), ownerName, request.memo());
         assetRepository.save(cardAsset);
         
         // CardProfile 생성
@@ -275,12 +370,13 @@ public class LedgerService {
     @Transactional
     public AssetDto updateAsset(Long id, SaveAssetRequest request) {
         Asset asset = assetRepository.findById(id).orElseThrow();
+        String ownerName = registeredOwnerName(asset.getHousehold(), request.ownerName());
         asset.update(
                 request.type(),
                 request.name(),
                 request.balance(),
                 normalizedAssetGroup(request.type(), request.groupName()),
-                request.ownerName(),
+                ownerName,
                 request.memo()
         );
         return AssetDto.from(asset);
@@ -289,6 +385,7 @@ public class LedgerService {
     @Transactional
     public AssetDto updateCardAsset(Long id, SaveCardAssetRequest request) {
         Asset asset = assetRepository.findById(id).orElseThrow();
+        String ownerName = registeredOwnerName(asset.getHousehold(), request.ownerName());
         Asset paymentAccount = assetRepository.findById(request.paymentAccountId()).orElseThrow();
 
         asset.update(
@@ -296,7 +393,7 @@ public class LedgerService {
                 request.name(),
                 request.balance(),
                 normalizedAssetGroup(AssetType.CARD, request.groupName()),
-                request.ownerName(),
+                ownerName,
                 request.memo()
         );
 
@@ -398,6 +495,7 @@ public class LedgerService {
                                                       int installmentMonths, String installmentGroupId) {
         Household household = defaultHousehold();
         Member author = memberRepository.findByHouseholdId(household.getId()).stream().findFirst().orElseThrow();
+        Member consumer = personalExpenseConsumer(household, request);
         Category category = request.categoryId() == null ? null : categoryRepository.findById(request.categoryId()).orElseThrow();
         Asset asset = request.assetId() == null ? null : assetRepository.findById(request.assetId()).orElseThrow();
         Asset fromAsset = request.fromAssetId() == null ? null : assetRepository.findById(request.fromAssetId()).orElseThrow();
@@ -416,6 +514,8 @@ public class LedgerService {
                 request.title(),
                 request.memo(),
                 request.spendingTag(),
+                request.consumptionScope(),
+                consumer,
                 installmentMonths
         );
         if (installmentGroupId != null) {
@@ -485,6 +585,7 @@ public class LedgerService {
         Asset asset = request.assetId() == null ? null : assetRepository.findById(request.assetId()).orElseThrow();
         Asset fromAsset = request.fromAssetId() == null ? null : assetRepository.findById(request.fromAssetId()).orElseThrow();
         Asset toAsset = request.toAssetId() == null ? null : assetRepository.findById(request.toAssetId()).orElseThrow();
+        Member consumer = personalExpenseConsumer(record.getHousehold(), request);
 
         record.update(
                 request.type(),
@@ -497,6 +598,8 @@ public class LedgerService {
                 request.title(),
                 request.memo(),
                 request.spendingTag(),
+                request.consumptionScope(),
+                consumer,
                 request.installmentMonths() == null ? 0 : request.installmentMonths()
         );
         
@@ -504,6 +607,23 @@ public class LedgerService {
         applyAssetChange(record);
         
         return TransactionDto.from(transactionRepository.save(record));
+    }
+
+    private Member personalExpenseConsumer(Household household, CreateTransactionRequest request) {
+        if (request.type() != TransactionType.EXPENSE
+                || request.consumptionScope() == com.comfortableledger.ledger.domain.ConsumptionScope.SHARED) {
+            return null;
+        }
+        if (request.consumerMemberId() != null) {
+            Member member = memberRepository.findById(request.consumerMemberId()).orElseThrow();
+            if (!member.getHousehold().getId().equals(household.getId())) {
+                throw new IllegalArgumentException("Consumer member must belong to the household");
+            }
+            return member;
+        }
+        return memberRepository.findByHouseholdId(household.getId()).stream()
+                .min(Comparator.comparing(member -> member.getRole() == MemberRole.OWNER ? 0 : 1))
+                .orElseThrow();
     }
 
     @Transactional

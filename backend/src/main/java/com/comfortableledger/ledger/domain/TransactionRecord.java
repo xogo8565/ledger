@@ -29,6 +29,9 @@ public class TransactionRecord {
     @ManyToOne(fetch = FetchType.LAZY)
     private Member author;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Member consumer;
+
     @Enumerated(EnumType.STRING)
     @NotNull
     private TransactionType type;
@@ -55,6 +58,10 @@ public class TransactionRecord {
     private String title;
     private String memo;
     private String spendingTag;
+
+    @Enumerated(EnumType.STRING)
+    private ConsumptionScope consumptionScope;
+
     private int installmentMonths;
     private int installmentIndex;
     private String installmentGroupId;
@@ -67,6 +74,22 @@ public class TransactionRecord {
     public TransactionRecord(Household household, Member author, TransactionType type, LocalDate transactionDate,
                              BigDecimal amount, Category category, Asset asset, Asset fromAsset, Asset toAsset,
                              String title, String memo, String spendingTag, int installmentMonths) {
+        this(household, author, type, transactionDate, amount, category, asset, fromAsset, toAsset,
+                title, memo, spendingTag, null, null, installmentMonths);
+    }
+
+    public TransactionRecord(Household household, Member author, TransactionType type, LocalDate transactionDate,
+                             BigDecimal amount, Category category, Asset asset, Asset fromAsset, Asset toAsset,
+                             String title, String memo, String spendingTag, ConsumptionScope consumptionScope,
+                             int installmentMonths) {
+        this(household, author, type, transactionDate, amount, category, asset, fromAsset, toAsset,
+                title, memo, spendingTag, consumptionScope, null, installmentMonths);
+    }
+
+    public TransactionRecord(Household household, Member author, TransactionType type, LocalDate transactionDate,
+                             BigDecimal amount, Category category, Asset asset, Asset fromAsset, Asset toAsset,
+                             String title, String memo, String spendingTag, ConsumptionScope consumptionScope,
+                             Member consumer, int installmentMonths) {
         this.household = household;
         this.author = author;
         this.type = type;
@@ -79,6 +102,8 @@ public class TransactionRecord {
         this.title = title;
         this.memo = memo;
         this.spendingTag = spendingTag;
+        this.consumptionScope = normalizedConsumptionScope(type, consumptionScope);
+        this.consumer = normalizedConsumer(type, this.consumptionScope, consumer);
         this.installmentMonths = installmentMonths;
         this.installmentIndex = installmentMonths > 1 ? 1 : 0;
         this.createdAt = OffsetDateTime.now();
@@ -87,6 +112,10 @@ public class TransactionRecord {
 
     public Long getId() {
         return id;
+    }
+
+    public Household getHousehold() {
+        return household;
     }
 
     public TransactionType getType() {
@@ -129,6 +158,14 @@ public class TransactionRecord {
         return spendingTag;
     }
 
+    public ConsumptionScope getConsumptionScope() {
+        return normalizedConsumptionScope(type, consumptionScope);
+    }
+
+    public Member getConsumer() {
+        return normalizedConsumer(type, getConsumptionScope(), consumer);
+    }
+
     public int getInstallmentMonths() {
         return installmentMonths;
     }
@@ -149,7 +186,16 @@ public class TransactionRecord {
 
     public void update(TransactionType type, LocalDate transactionDate, BigDecimal amount, 
                        Category category, Asset asset, Asset fromAsset, Asset toAsset,
-                       String title, String memo, String spendingTag, int installmentMonths) {
+                       String title, String memo, String spendingTag, ConsumptionScope consumptionScope,
+                       int installmentMonths) {
+        update(type, transactionDate, amount, category, asset, fromAsset, toAsset, title, memo, spendingTag,
+                consumptionScope, null, installmentMonths);
+    }
+
+    public void update(TransactionType type, LocalDate transactionDate, BigDecimal amount,
+                       Category category, Asset asset, Asset fromAsset, Asset toAsset,
+                       String title, String memo, String spendingTag, ConsumptionScope consumptionScope,
+                       Member consumer, int installmentMonths) {
         this.type = type;
         this.transactionDate = transactionDate;
         this.amount = amount;
@@ -160,8 +206,21 @@ public class TransactionRecord {
         this.title = title;
         this.memo = memo;
         this.spendingTag = spendingTag;
+        this.consumptionScope = normalizedConsumptionScope(type, consumptionScope);
+        this.consumer = normalizedConsumer(type, this.consumptionScope, consumer);
         this.installmentMonths = installmentMonths;
         this.installmentIndex = installmentMonths > 1 && this.installmentIndex == 0 ? 1 : this.installmentIndex;
         this.updatedAt = OffsetDateTime.now();
+    }
+
+    private ConsumptionScope normalizedConsumptionScope(TransactionType transactionType, ConsumptionScope scope) {
+        if (transactionType != TransactionType.EXPENSE) {
+            return null;
+        }
+        return scope == null ? ConsumptionScope.PERSONAL : scope;
+    }
+
+    private Member normalizedConsumer(TransactionType transactionType, ConsumptionScope scope, Member member) {
+        return transactionType == TransactionType.EXPENSE && scope == ConsumptionScope.PERSONAL ? member : null;
     }
 }
