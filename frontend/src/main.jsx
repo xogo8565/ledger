@@ -338,6 +338,16 @@ function App() {
     setMainTab('ledger');
   }
 
+  function openLedgerScope(scopeSpend) {
+    setLedgerFilters({
+      ...emptyLedgerFilters(),
+      type: 'EXPENSE',
+      consumptionScope: scopeSpend?.scope || ''
+    });
+    setLedgerMode('daily');
+    setMainTab('ledger');
+  }
+
   async function exportMonthlyTransactions() {
     const response = await fetch(`${API}/export/transactions.csv?month=${month}`);
     if (!response.ok) {
@@ -788,6 +798,7 @@ function App() {
             openBudgetSettings={openBudgetSettings}
             openLedgerCategory={openLedgerCategory}
             openLedgerTag={openLedgerTag}
+            openLedgerScope={openLedgerScope}
           />
         )}
         {mainTab === 'assets' && (
@@ -1047,6 +1058,7 @@ function emptyLedgerFilters() {
     query: '',
     type: 'ALL',
     categoryId: '',
+    consumptionScope: '',
     startDate: '',
     endDate: ''
   };
@@ -1057,6 +1069,7 @@ function filterTransactions(transactions, filters) {
   return transactions.filter((item) => {
     if (filters.type !== 'ALL' && item.type !== filters.type) return false;
     if (filters.categoryId && String(item.categoryId || '') !== String(filters.categoryId)) return false;
+    if (filters.consumptionScope && item.consumptionScope !== filters.consumptionScope) return false;
     if (filters.startDate && item.transactionDate < filters.startDate) return false;
     if (filters.endDate && item.transactionDate > filters.endDate) return false;
     if (!query) return true;
@@ -1148,7 +1161,7 @@ function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, filter
   const filteredTransactions = useMemo(() => filterTransactions(sourceTransactions, filters), [sourceTransactions, filters]);
   const filteredSummary = useMemo(() => summarizeTransactions(filteredTransactions), [filteredTransactions]);
   const filterCategories = data.categories.filter((category) => filters.type === 'ALL' || category.type === filters.type);
-  const hasActiveFilter = Boolean(filters.query || filters.categoryId || filters.startDate || filters.endDate || filters.type !== 'ALL');
+  const hasActiveFilter = Boolean(filters.query || filters.categoryId || filters.consumptionScope || filters.startDate || filters.endDate || filters.type !== 'ALL');
   const rangeActive = Boolean(filters.startDate && filters.endDate);
   const summaryScope = hasActiveFilter ? filteredPeriodLabel(filters, month) : monthLabel(month);
   const tabs = [
@@ -1212,7 +1225,10 @@ function LedgerFilters({ filters, setFilters, categories, resultCount, hasActive
   function updateFilter(key, value) {
     setFilters((prev) => {
       const next = { ...prev, [key]: value };
-      if (key === 'type') next.categoryId = '';
+      if (key === 'type') {
+        next.categoryId = '';
+        if (value !== 'EXPENSE') next.consumptionScope = '';
+      }
       return next;
     });
   }
@@ -1237,6 +1253,11 @@ function LedgerFilters({ filters, setFilters, categories, resultCount, hasActive
           {categories.map((category) => (
             <option value={category.id} key={category.id}>{category.icon} {category.name}</option>
           ))}
+        </select>
+        <select value={filters.consumptionScope} onChange={(event) => updateFilter('consumptionScope', event.target.value)} aria-label="소비 구분 필터">
+          <option value="">소비 전체</option>
+          <option value="PERSONAL">개인 소비</option>
+          <option value="SHARED">공동 소비</option>
         </select>
         {hasActiveFilter && (
           <button type="button" onClick={() => setFilters(emptyLedgerFilters())}>초기화</button>
@@ -1525,7 +1546,7 @@ function MemoLedger({ transactions, openInstallmentSchedule, openTransactionDeta
   );
 }
 
-function StatsScreen({ data, month, setMonth, statsMode, setStatsMode, statsPeriod, setStatsPeriod, statsBreakdown, setStatsBreakdown, yearlySummary, categoryByName, spendMax, loading, openBudgetSettings, openLedgerCategory, openLedgerTag }) {
+function StatsScreen({ data, month, setMonth, statsMode, setStatsMode, statsPeriod, setStatsPeriod, statsBreakdown, setStatsBreakdown, yearlySummary, categoryByName, spendMax, loading, openBudgetSettings, openLedgerCategory, openLedgerTag, openLedgerScope }) {
   const summary = data.summary || {};
   const activeSummary = statsPeriod === 'yearly' ? yearlySummary || {} : summary;
   const tabs = [
@@ -1555,6 +1576,7 @@ function StatsScreen({ data, month, setMonth, statsMode, setStatsMode, statsPeri
         <nav className="stats-breakdown-tabs" aria-label="지출 통계 기준">
           <button type="button" className={statsBreakdown === 'category' ? 'active' : ''} onClick={() => setStatsBreakdown('category')}>카테고리</button>
           <button type="button" className={statsBreakdown === 'tag' ? 'active' : ''} onClick={() => setStatsBreakdown('tag')}>소비 태그</button>
+          <button type="button" className={statsBreakdown === 'scope' ? 'active' : ''} onClick={() => setStatsBreakdown('scope')}>개인/공동</button>
         </nav>
       )}
 
@@ -1565,7 +1587,9 @@ function StatsScreen({ data, month, setMonth, statsMode, setStatsMode, statsPeri
           {statsMode === 'stats' && statsPeriod === 'monthly' && (
             statsBreakdown === 'category'
               ? <CategoryStats summary={summary} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />
-              : <TagStats summary={summary} openLedgerTag={openLedgerTag} />
+              : statsBreakdown === 'tag'
+                ? <TagStats summary={summary} openLedgerTag={openLedgerTag} />
+                : <ScopeStats summary={summary} openLedgerScope={openLedgerScope} />
           )}
           {statsMode === 'stats' && statsPeriod === 'yearly' && (
             <YearlyStats
@@ -1574,6 +1598,7 @@ function StatsScreen({ data, month, setMonth, statsMode, setStatsMode, statsPeri
               breakdown={statsBreakdown}
               openLedgerCategory={openLedgerCategory}
               openLedgerTag={openLedgerTag}
+              openLedgerScope={openLedgerScope}
             />
           )}
           {statsMode === 'budget' && <BudgetStats summary={summary} categoryByName={categoryByName} spendMax={spendMax} openBudgetSettings={openBudgetSettings} />}
@@ -1619,7 +1644,15 @@ function TagStats({ summary, openLedgerTag }) {
   );
 }
 
-function YearlyStats({ summary, categoryByName, breakdown, openLedgerCategory, openLedgerTag }) {
+function ScopeStats({ summary, openLedgerScope }) {
+  return (
+    <section className="stats-content">
+      <ScopeRanking scopes={summary.scopeSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerScope={openLedgerScope} />
+    </section>
+  );
+}
+
+function YearlyStats({ summary, categoryByName, breakdown, openLedgerCategory, openLedgerTag, openLedgerScope }) {
   const spends = summary.categorySpends || [];
   const total = spends.reduce((sum, item) => sum + Number(item.amount), 0);
   const rows = summary.monthlyTotals || [];
@@ -1645,7 +1678,9 @@ function YearlyStats({ summary, categoryByName, breakdown, openLedgerCategory, o
       </div>
       {breakdown === 'tag'
         ? <TagRanking tags={summary.tagSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerTag={openLedgerTag} />
-        : <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />}
+        : breakdown === 'scope'
+          ? <ScopeRanking scopes={summary.scopeSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerScope={openLedgerScope} />
+          : <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />}
     </section>
   );
 }
@@ -1695,6 +1730,25 @@ function TagRanking({ tags, expenseTotal, openLedgerTag }) {
           <button className="ranking-row tag-ranking-row" type="button" key={item.tagName} onClick={() => openLedgerTag(item)}>
             <span className="percent-badge" style={{ backgroundColor: color }}>{percent}%</span>
             <strong>#{item.tagName}<small>{item.transactionCount}건</small></strong>
+            <b>{money(item.amount)}</b>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ScopeRanking({ scopes, expenseTotal, openLedgerScope }) {
+  if (!scopes.length) return <EmptyState label="개인/공동 소비 통계가 없습니다." compact />;
+  return (
+    <div className="ranking-list scope-ranking-list">
+      {scopes.map((item, index) => {
+        const percent = expenseTotal ? Math.round((Number(item.amount) / expenseTotal) * 100) : 0;
+        const color = item.scope === 'SHARED' ? '#58a9ff' : palette[index % palette.length];
+        return (
+          <button className="ranking-row scope-ranking-row" type="button" key={item.scope} onClick={() => openLedgerScope(item)}>
+            <span className="percent-badge" style={{ backgroundColor: color }}>{percent}%</span>
+            <strong>{consumptionScopeLabels[item.scope] || item.scope}<small>{item.transactionCount}건</small></strong>
             <b>{money(item.amount)}</b>
           </button>
         );

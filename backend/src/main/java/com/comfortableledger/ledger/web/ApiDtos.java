@@ -195,12 +195,16 @@ public final class ApiDtos {
             BigDecimal budgetUsageRate,
             List<CategorySpend> categorySpends,
             List<TagSpend> tagSpends,
+            List<ScopeSpend> scopeSpends,
             List<CategoryBudgetUsage> categoryBudgetUsages
     ) {
         public record CategorySpend(Long categoryId, String categoryName, BigDecimal amount) {
         }
 
         public record TagSpend(String tagName, BigDecimal amount, long transactionCount) {
+        }
+
+        public record ScopeSpend(ConsumptionScope scope, BigDecimal amount, long transactionCount) {
         }
 
         public record CategoryBudgetUsage(
@@ -273,7 +277,8 @@ public final class ApiDtos {
             BigDecimal transfer,
             List<MonthlyTotals> monthlyTotals,
             List<MonthlySummaryDto.CategorySpend> categorySpends,
-            List<MonthlySummaryDto.TagSpend> tagSpends
+            List<MonthlySummaryDto.TagSpend> tagSpends,
+            List<MonthlySummaryDto.ScopeSpend> scopeSpends
     ) {
         public record MonthlyTotals(String month, BigDecimal income, BigDecimal expense, BigDecimal transfer) {
         }

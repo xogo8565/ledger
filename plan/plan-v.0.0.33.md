@@ -99,6 +99,7 @@
 2. 사용자 정의 문자 파싱·추천 규칙 관리
 3. 기존 개인 지출 소비 명의 일괄 마이그레이션
 
+
 ## 6. 검증
 
 - `docker compose build frontend backend` 통과

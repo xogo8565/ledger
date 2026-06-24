@@ -721,6 +721,7 @@ public class LedgerService {
                         .map(entry -> new MonthlySummaryDto.CategorySpend(entry.getKey().getId(), entry.getKey().getName(), entry.getValue()))
                         .toList(),
                 tagSpends(records),
+                scopeSpends(records),
                 categoryBudgetUsages
         );
     }
@@ -767,7 +768,8 @@ public class LedgerService {
                         .sorted(Map.Entry.<Category, BigDecimal>comparingByValue(Comparator.reverseOrder()))
                         .map(entry -> new MonthlySummaryDto.CategorySpend(entry.getKey().getId(), entry.getKey().getName(), entry.getValue()))
                         .toList(),
-                tagSpends(records)
+                tagSpends(records),
+                scopeSpends(records)
         );
     }
 
@@ -892,6 +894,23 @@ public class LedgerService {
                 .sorted(Comparator.comparing(MonthlySummaryDto.TagSpend::amount).reversed()
                         .thenComparing(MonthlySummaryDto.TagSpend::transactionCount, Comparator.reverseOrder())
                         .thenComparing(MonthlySummaryDto.TagSpend::tagName))
+                .toList();
+    }
+
+    static List<MonthlySummaryDto.ScopeSpend> scopeSpends(List<TransactionRecord> records) {
+        return records.stream()
+                .filter(record -> record.getType() == TransactionType.EXPENSE)
+                .collect(Collectors.groupingBy(
+                        TransactionRecord::getConsumptionScope,
+                        Collectors.collectingAndThen(Collectors.toList(), grouped -> new MonthlySummaryDto.ScopeSpend(
+                                grouped.getFirst().getConsumptionScope(),
+                                grouped.stream().map(TransactionRecord::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add),
+                                grouped.size()
+                        ))
+                ))
+                .values().stream()
+                .sorted(Comparator.comparing(MonthlySummaryDto.ScopeSpend::amount).reversed()
+                        .thenComparing(item -> item.scope().name()))
                 .toList();
     }
 

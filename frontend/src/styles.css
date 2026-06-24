@@ -420,7 +420,7 @@ button {
 
 .ledger-filters > div {
   display: grid;
-  grid-template-columns: 88px 1fr auto;
+  grid-template-columns: 76px 1fr 92px auto;
   gap: 8px;
 }
 
@@ -802,7 +802,7 @@ button {
 
 .stats-breakdown-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   padding: 10px 18px;
   border-bottom: 1px solid var(--line);
@@ -900,12 +900,14 @@ button {
   border-top: 10px solid var(--surface-soft);
 }
 
-.tag-ranking-row strong {
+.tag-ranking-row strong,
+.scope-ranking-row strong {
   display: grid;
   gap: 3px;
 }
 
-.tag-ranking-row small {
+.tag-ranking-row small,
+.scope-ranking-row small {
   color: var(--subtle);
   font-size: 12px;
 }

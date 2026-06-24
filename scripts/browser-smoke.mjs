@@ -335,12 +335,25 @@ try {
   const sharedTransaction = await sharedTransactionResponse.json();
   assert(sharedTransaction.consumerMemberId === null, `shared transaction kept a consumer: ${sharedTransaction.consumerMemberId}`);
   cleanup.transactionIds.push(sharedTransaction.id);
+  const scopeSummaryResponse = await api.get(`/api/summary/monthly?month=${transaction.transactionDate.slice(0, 7)}`);
+  await assertResponseOk(scopeSummaryResponse, 'monthly consumption scope summary');
+  const scopeSummary = await scopeSummaryResponse.json();
+  assert(
+    scopeSummary.scopeSpends.some((item) => item.scope === 'PERSONAL'),
+    'monthly summary did not include personal consumption'
+  );
+  assert(
+    scopeSummary.scopeSpends.some((item) => item.scope === 'SHARED'),
+    'monthly summary did not include shared consumption'
+  );
+  await page.reload({ waitUntil: 'networkidle' });
   await assertVisible(page, '.ledger-screen', 'ledger screen did not return after creating transaction');
   await page.getByLabel('거래 검색').fill(transactionTitle);
   await page.waitForTimeout(150);
   const filteredExpenseText = await page.locator('.month-totals .mini-metric.expense strong').textContent();
+  const expectedFilteredExpense = Number(transaction.amount) + Number(sharedTransaction.amount);
   assert(
-    filteredExpenseText?.replaceAll(',', '').includes(String(Number(transaction.amount))),
+    filteredExpenseText?.replaceAll(',', '').includes(String(expectedFilteredExpense)),
     `filtered transaction total did not match created transaction: ${filteredExpenseText}`
   );
   await page.locator('.ledger-filters button', { hasText: '초기화' }).click();
@@ -375,6 +388,15 @@ try {
   await page.locator('.full-panel .back-button').first().click();
   await assertVisible(page, '.ledger-screen', 'ledger screen did not return after clipboard entry');
 
+  await clickBottomTab(page, 1, '.stats-screen');
+  await page.getByRole('button', { name: '개인/공동' }).click();
+  await page.waitForSelector('.scope-ranking-row:has-text("개인")', { timeout: 15000 });
+  await page.waitForSelector('.scope-ranking-row:has-text("공동")', { timeout: 15000 });
+  await page.locator('.scope-ranking-row', { hasText: '공동' }).click();
+  await assertVisible(page, '.ledger-screen', 'scope statistics did not open ledger');
+  const selectedScopeFilter = await page.getByLabel('소비 구분 필터').inputValue();
+  assert(selectedScopeFilter === 'SHARED', `shared scope filter was not selected: ${selectedScopeFilter}`);
+  await page.waitForSelector(`.transaction-row:has-text("${transactionTitle}-shared")`, { timeout: 15000 });
   await clickBottomTab(page, 1, '.stats-screen');
   await page.locator('.segmented-tabs button').nth(1).click();
   await assertVisible(page, '.budget-screen', 'budget stats screen did not open');
