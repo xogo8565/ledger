@@ -649,6 +649,7 @@ function App() {
       type: preview.type || 'EXPENSE',
       transactionDate: preview.transactionDate || today,
       amount: preview.amount || '',
+      categoryId: preview.recommendedCategoryId ? String(preview.recommendedCategoryId) : '',
       title: preview.merchant || '',
       memo: preview.memo || ''
     });
@@ -1829,6 +1830,13 @@ function MoreScreen({ rawText, setRawText, preview, parseText, confirmTextImport
               <span>{preview.transactionDate} · {typeLabels[preview.type]} · {money(preview.amount)}</span>
             </div>
             <dl className="preview-detail">
+              <div>
+                <dt>추천 분류</dt>
+                <dd>
+                  {preview.recommendedCategoryName || '추천 없음'}
+                  {preview.categoryRecommendationReason && <small>{preview.categoryRecommendationReason}</small>}
+                </dd>
+              </div>
               <div>
                 <dt>메모</dt>
                 <dd>{preview.memo || '-'}</dd>

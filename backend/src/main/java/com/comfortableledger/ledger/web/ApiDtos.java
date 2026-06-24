@@ -214,7 +214,10 @@ public final class ApiDtos {
             LocalDate transactionDate,
             BigDecimal amount,
             String merchant,
-            String memo
+            String memo,
+            Long recommendedCategoryId,
+            String recommendedCategoryName,
+            String categoryRecommendationReason
     ) {
     }
 

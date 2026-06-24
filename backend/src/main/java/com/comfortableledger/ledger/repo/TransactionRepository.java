@@ -17,5 +17,7 @@ public interface TransactionRepository extends JpaRepository<TransactionRecord, 
             LocalDate transactionDate
     );
 
+    List<TransactionRecord> findTop200ByHouseholdIdOrderByTransactionDateDescIdDesc(Long householdId);
+
     List<TransactionRecord> findByInstallmentGroupIdOrderByTransactionDateAscIdAsc(String installmentGroupId);
 }
