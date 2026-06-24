@@ -196,6 +196,7 @@ public final class ApiDtos {
             List<CategorySpend> categorySpends,
             List<TagSpend> tagSpends,
             List<ScopeSpend> scopeSpends,
+            List<MemberSpend> memberSpends,
             List<CategoryBudgetUsage> categoryBudgetUsages
     ) {
         public record CategorySpend(Long categoryId, String categoryName, BigDecimal amount) {
@@ -205,6 +206,9 @@ public final class ApiDtos {
         }
 
         public record ScopeSpend(ConsumptionScope scope, BigDecimal amount, long transactionCount) {
+        }
+
+        public record MemberSpend(Long memberId, String memberName, BigDecimal amount, long transactionCount) {
         }
 
         public record CategoryBudgetUsage(
@@ -278,10 +282,25 @@ public final class ApiDtos {
             List<MonthlyTotals> monthlyTotals,
             List<MonthlySummaryDto.CategorySpend> categorySpends,
             List<MonthlySummaryDto.TagSpend> tagSpends,
-            List<MonthlySummaryDto.ScopeSpend> scopeSpends
+            List<MonthlySummaryDto.ScopeSpend> scopeSpends,
+            List<MonthlySummaryDto.MemberSpend> memberSpends
     ) {
         public record MonthlyTotals(String month, BigDecimal income, BigDecimal expense, BigDecimal transfer) {
         }
+    }
+
+    public record PeriodSummaryDto(
+            String period,
+            LocalDate startDate,
+            LocalDate endDate,
+            BigDecimal income,
+            BigDecimal expense,
+            BigDecimal transfer,
+            List<MonthlySummaryDto.CategorySpend> categorySpends,
+            List<MonthlySummaryDto.TagSpend> tagSpends,
+            List<MonthlySummaryDto.ScopeSpend> scopeSpends,
+            List<MonthlySummaryDto.MemberSpend> memberSpends
+    ) {
     }
 
     public record AssetSummaryDto(

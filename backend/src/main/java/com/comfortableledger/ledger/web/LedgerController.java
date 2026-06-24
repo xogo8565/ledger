@@ -12,6 +12,7 @@ import com.comfortableledger.ledger.web.ApiDtos.CreatePaymentScheduleRequest;
 import com.comfortableledger.ledger.web.ApiDtos.CreateTransactionRequest;
 import com.comfortableledger.ledger.web.ApiDtos.MonthlySummaryDto;
 import com.comfortableledger.ledger.web.ApiDtos.MemberDto;
+import com.comfortableledger.ledger.web.ApiDtos.PeriodSummaryDto;
 import com.comfortableledger.ledger.web.ApiDtos.SaveAssetRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveBudgetRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveCardAssetRequest;
@@ -199,6 +200,14 @@ public class LedgerController {
     @GetMapping("/summary/yearly")
     public YearlySummaryDto yearlySummary(@RequestParam(required = false) Integer year) {
         return ledgerService.yearlySummary(year);
+    }
+
+    @GetMapping("/summary/range")
+    public PeriodSummaryDto rangeSummary(
+            @RequestParam LocalDate startDate,
+            @RequestParam LocalDate endDate
+    ) {
+        return ledgerService.rangeSummary(startDate, endDate);
     }
 
     @GetMapping("/export/transactions.csv")

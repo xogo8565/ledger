@@ -90,6 +90,8 @@ function App() {
   const [data, setData] = useState({ assets: [], categories: [], transactions: [], summary: null, assetSummary: null });
   const [rangeTransactions, setRangeTransactions] = useState(null);
   const [yearlySummary, setYearlySummary] = useState(null);
+  const [statsRange, setStatsRange] = useState({ startDate: `${currentMonth}-01`, endDate: today });
+  const [rangeSummary, setRangeSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [panel, setPanel] = useState(null);
   const [editingAsset, setEditingAsset] = useState(null);
@@ -117,6 +119,7 @@ function App() {
   const [installmentSchedule, setInstallmentSchedule] = useState([]);
   const [selectedInstallment, setSelectedInstallment] = useState(null);
   const [receiptFiles, setReceiptFiles] = useState([]);
+  const [installmentReceiptTargetIndex, setInstallmentReceiptTargetIndex] = useState(1);
 
   async function load() {
     setLoading(true);
@@ -144,6 +147,10 @@ function App() {
   }, [month]);
 
   useEffect(() => {
+    loadRangeSummary().catch((error) => console.error(error));
+  }, [statsRange.startDate, statsRange.endDate]);
+
+  useEffect(() => {
     loadRangeTransactions().catch((error) => console.error(error));
   }, [ledgerFilters.startDate, ledgerFilters.endDate]);
 
@@ -166,6 +173,15 @@ function App() {
     setYearlySummary(await response.json());
   }
 
+  async function loadRangeSummary() {
+    if (!statsRange.startDate || !statsRange.endDate || statsRange.endDate < statsRange.startDate) {
+      setRangeSummary(null);
+      return;
+    }
+    const response = await fetch(`${API}/summary/range?startDate=${statsRange.startDate}&endDate=${statsRange.endDate}`);
+    setRangeSummary(await response.json());
+  }
+
   async function openBudgetSettings() {
     const response = await fetch(`${API}/budgets/settings?month=${month}`);
     setBudgetSettings(await response.json());
@@ -183,6 +199,7 @@ function App() {
     setForm(nextForm);
     setEntryExpression('');
     setReceiptFiles([]);
+    setInstallmentReceiptTargetIndex(1);
     setPanel('entry');
   }
 
@@ -214,6 +231,7 @@ function App() {
     setForm(transactionToForm(transaction));
     setEntryExpression(String(Number(transaction.amount || 0) || ''));
     setReceiptFiles([]);
+    setInstallmentReceiptTargetIndex(1);
     setPanel('entry');
   }
 
@@ -281,6 +299,7 @@ function App() {
     };
     setEditingTransaction(null);
     setEditingInstallmentGroup(selectedInstallment.installmentGroupId);
+    setInstallmentReceiptTargetIndex(selectedInstallment.installmentIndex || 1);
     setForm(nextForm);
     setEntryExpression(String(total || ''));
     setReceiptFiles([]);
@@ -311,6 +330,7 @@ function App() {
     setCardSchedules([]);
     setSelectedInstallment(null);
     setInstallmentSchedule([]);
+    setInstallmentReceiptTargetIndex(1);
   }
 
   function updateForm(key, value) {
@@ -343,6 +363,17 @@ function App() {
       ...emptyLedgerFilters(),
       type: 'EXPENSE',
       consumptionScope: scopeSpend?.scope || ''
+    });
+    setLedgerMode('daily');
+    setMainTab('ledger');
+  }
+
+  function openLedgerMember(memberSpend) {
+    setLedgerFilters({
+      ...emptyLedgerFilters(),
+      type: 'EXPENSE',
+      consumptionScope: 'PERSONAL',
+      consumerMemberId: memberSpend?.memberId ? String(memberSpend.memberId) : ''
     });
     setLedgerMode('daily');
     setMainTab('ledger');
@@ -421,8 +452,16 @@ function App() {
     });
     const created = await response.json();
 
-    if (receiptFiles.length && !editingInstallmentGroup) {
-      const receiptTransactionId = created.id || editingTransaction?.id;
+    if (receiptFiles.length) {
+      const updatedInstallments = Array.isArray(created) ? created : [];
+      const requestedTargetIndex = Math.min(
+        Math.max(Number(installmentReceiptTargetIndex || 1), 1),
+        Math.max(Number(form.installmentMonths || 1), 1)
+      );
+      const receiptTransactionId = editingInstallmentGroup
+        ? updatedInstallments.find((item) => Number(item.installmentIndex) === requestedTargetIndex)?.id
+          || updatedInstallments.at(-1)?.id
+        : created.id || editingTransaction?.id;
       if (!receiptTransactionId) {
         window.alert('영수증을 첨부할 거래를 찾지 못했습니다.');
         return;
@@ -455,6 +494,7 @@ function App() {
     setForm(emptyTransactionForm());
     setEntryExpression('');
     setReceiptFiles([]);
+    setInstallmentReceiptTargetIndex(1);
     setEditingTransaction(null);
     setEditingInstallmentGroup(null);
     closePanel();
@@ -783,6 +823,7 @@ function App() {
             exportFilteredTransactions={exportFilteredTransactions}
             openInstallmentSchedule={openInstallmentSchedule}
             openTransactionDetail={openTransactionDetail}
+            members={members}
           />
         )}
         {mainTab === 'stats' && (
@@ -795,10 +836,14 @@ function App() {
             statsBreakdown={statsBreakdown}
             setStatsBreakdown={setStatsBreakdown}
             yearlySummary={yearlySummary}
+            rangeSummary={rangeSummary}
+            statsRange={statsRange}
+            setStatsRange={setStatsRange}
             openBudgetSettings={openBudgetSettings}
             openLedgerCategory={openLedgerCategory}
             openLedgerTag={openLedgerTag}
             openLedgerScope={openLedgerScope}
+            openLedgerMember={openLedgerMember}
           />
         )}
         {mainTab === 'assets' && (
@@ -849,6 +894,8 @@ function App() {
             submitTransaction={submitTransaction}
             editingTransaction={editingTransaction}
             editingInstallmentGroup={editingInstallmentGroup}
+            installmentReceiptTargetIndex={installmentReceiptTargetIndex}
+            setInstallmentReceiptTargetIndex={setInstallmentReceiptTargetIndex}
             onClose={closePanel}
           />
         )}
@@ -1059,6 +1106,7 @@ function emptyLedgerFilters() {
     type: 'ALL',
     categoryId: '',
     consumptionScope: '',
+    consumerMemberId: '',
     startDate: '',
     endDate: ''
   };
@@ -1070,6 +1118,7 @@ function filterTransactions(transactions, filters) {
     if (filters.type !== 'ALL' && item.type !== filters.type) return false;
     if (filters.categoryId && String(item.categoryId || '') !== String(filters.categoryId)) return false;
     if (filters.consumptionScope && item.consumptionScope !== filters.consumptionScope) return false;
+    if (filters.consumerMemberId && String(item.consumerMemberId || '') !== String(filters.consumerMemberId)) return false;
     if (filters.startDate && item.transactionDate < filters.startDate) return false;
     if (filters.endDate && item.transactionDate > filters.endDate) return false;
     if (!query) return true;
@@ -1155,13 +1204,13 @@ function IconButton({ label, children, onClick }) {
   );
 }
 
-function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, filters, setFilters, rangeTransactions, loading, exportFilteredTransactions, openInstallmentSchedule, openTransactionDetail }) {
+function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, filters, setFilters, rangeTransactions, loading, exportFilteredTransactions, openInstallmentSchedule, openTransactionDetail, members }) {
   const summary = data.summary || {};
   const sourceTransactions = rangeTransactions || data.transactions || [];
   const filteredTransactions = useMemo(() => filterTransactions(sourceTransactions, filters), [sourceTransactions, filters]);
   const filteredSummary = useMemo(() => summarizeTransactions(filteredTransactions), [filteredTransactions]);
   const filterCategories = data.categories.filter((category) => filters.type === 'ALL' || category.type === filters.type);
-  const hasActiveFilter = Boolean(filters.query || filters.categoryId || filters.consumptionScope || filters.startDate || filters.endDate || filters.type !== 'ALL');
+  const hasActiveFilter = Boolean(filters.query || filters.categoryId || filters.consumptionScope || filters.consumerMemberId || filters.startDate || filters.endDate || filters.type !== 'ALL');
   const rangeActive = Boolean(filters.startDate && filters.endDate);
   const summaryScope = hasActiveFilter ? filteredPeriodLabel(filters, month) : monthLabel(month);
   const tabs = [
@@ -1191,6 +1240,7 @@ function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, filter
         filters={filters}
         setFilters={setFilters}
         categories={filterCategories}
+        members={members}
         resultCount={filteredTransactions.length}
         hasActiveFilter={hasActiveFilter}
         exportFilteredTransactions={() => exportFilteredTransactions(filteredTransactions, filters)}
@@ -1221,13 +1271,23 @@ function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, filter
   );
 }
 
-function LedgerFilters({ filters, setFilters, categories, resultCount, hasActiveFilter, exportFilteredTransactions }) {
+function LedgerFilters({ filters, setFilters, categories, members, resultCount, hasActiveFilter, exportFilteredTransactions }) {
   function updateFilter(key, value) {
     setFilters((prev) => {
       const next = { ...prev, [key]: value };
       if (key === 'type') {
         next.categoryId = '';
-        if (value !== 'EXPENSE') next.consumptionScope = '';
+        if (value !== 'EXPENSE') {
+          next.consumptionScope = '';
+          next.consumerMemberId = '';
+        }
+      }
+      if (key === 'consumptionScope' && value !== 'PERSONAL') {
+        next.consumerMemberId = '';
+      }
+      if (key === 'consumerMemberId' && value) {
+        next.type = 'EXPENSE';
+        next.consumptionScope = 'PERSONAL';
       }
       return next;
     });
@@ -1258,6 +1318,12 @@ function LedgerFilters({ filters, setFilters, categories, resultCount, hasActive
           <option value="">소비 전체</option>
           <option value="PERSONAL">개인 소비</option>
           <option value="SHARED">공동 소비</option>
+        </select>
+        <select value={filters.consumerMemberId} onChange={(event) => updateFilter('consumerMemberId', event.target.value)} aria-label="소비 명의 필터">
+          <option value="">명의 전체</option>
+          {members.map((member) => (
+            <option value={member.id} key={member.id}>{member.name}</option>
+          ))}
         </select>
         {hasActiveFilter && (
           <button type="button" onClick={() => setFilters(emptyLedgerFilters())}>초기화</button>
@@ -1546,13 +1612,46 @@ function MemoLedger({ transactions, openInstallmentSchedule, openTransactionDeta
   );
 }
 
-function StatsScreen({ data, month, setMonth, statsMode, setStatsMode, statsPeriod, setStatsPeriod, statsBreakdown, setStatsBreakdown, yearlySummary, categoryByName, spendMax, loading, openBudgetSettings, openLedgerCategory, openLedgerTag, openLedgerScope }) {
+function StatsScreen({
+  data,
+  month,
+  setMonth,
+  statsMode,
+  setStatsMode,
+  statsPeriod,
+  setStatsPeriod,
+  statsBreakdown,
+  setStatsBreakdown,
+  yearlySummary,
+  rangeSummary,
+  statsRange,
+  setStatsRange,
+  categoryByName,
+  spendMax,
+  loading,
+  openBudgetSettings,
+  openLedgerCategory,
+  openLedgerTag,
+  openLedgerScope,
+  openLedgerMember
+}) {
   const summary = data.summary || {};
-  const activeSummary = statsPeriod === 'yearly' ? yearlySummary || {} : summary;
+  const activePeriod = statsMode === 'stats' ? statsPeriod : 'monthly';
+  const activeSummary = activePeriod === 'yearly'
+    ? yearlySummary || {}
+    : activePeriod === 'range'
+      ? rangeSummary || {}
+      : summary;
+  const rangeInvalid = statsRange.endDate && statsRange.startDate && statsRange.endDate < statsRange.startDate;
   const tabs = [
     ['stats', '통계'],
     ['budget', '예산'],
     ['details', '내용']
+  ];
+  const periodTabs = [
+    ['monthly', '월별'],
+    ['yearly', '연별'],
+    ['range', '기간']
   ];
 
   return (
@@ -1565,18 +1664,35 @@ function StatsScreen({ data, month, setMonth, statsMode, setStatsMode, statsPeri
             </button>
           ))}
         </nav>
-        <button className="period-button" type="button" onClick={() => setStatsPeriod((prev) => prev === 'monthly' ? 'yearly' : 'monthly')}>
-          {statsPeriod === 'yearly' ? '연별' : '월별'}
-        </button>
+        {statsMode === 'stats' ? (
+          <nav className="period-mode-tabs" aria-label="통계 기간">
+            {periodTabs.map(([key, label]) => (
+              <button key={key} type="button" className={statsPeriod === key ? 'active' : ''} onClick={() => setStatsPeriod(key)}>
+                {label}
+              </button>
+            ))}
+          </nav>
+        ) : (
+          <button className="period-button" type="button">월별</button>
+        )}
       </header>
 
-      <MonthNav month={month} setMonth={setMonth} />
+      {activePeriod === 'range' ? (
+        <section className={`stats-range-filter ${rangeInvalid ? 'invalid' : ''}`}>
+          <input type="date" value={statsRange.startDate} onChange={(event) => setStatsRange((current) => ({ ...current, startDate: event.target.value }))} aria-label="통계 시작일" />
+          <input type="date" value={statsRange.endDate} onChange={(event) => setStatsRange((current) => ({ ...current, endDate: event.target.value }))} aria-label="통계 종료일" />
+          <span>{rangeInvalid ? '종료일을 시작일 이후로 선택' : rangeSummary?.period || '기간 선택'}</span>
+        </section>
+      ) : (
+        <MonthNav month={month} setMonth={setMonth} />
+      )}
       <IncomeExpenseSwitch summary={activeSummary} />
       {statsMode === 'stats' && (
         <nav className="stats-breakdown-tabs" aria-label="지출 통계 기준">
           <button type="button" className={statsBreakdown === 'category' ? 'active' : ''} onClick={() => setStatsBreakdown('category')}>카테고리</button>
           <button type="button" className={statsBreakdown === 'tag' ? 'active' : ''} onClick={() => setStatsBreakdown('tag')}>소비 태그</button>
           <button type="button" className={statsBreakdown === 'scope' ? 'active' : ''} onClick={() => setStatsBreakdown('scope')}>개인/공동</button>
+          <button type="button" className={statsBreakdown === 'member' ? 'active' : ''} onClick={() => setStatsBreakdown('member')}>명의별</button>
         </nav>
       )}
 
@@ -1584,14 +1700,16 @@ function StatsScreen({ data, month, setMonth, statsMode, setStatsMode, statsPeri
         <EmptyState label="불러오는 중입니다." />
       ) : (
         <>
-          {statsMode === 'stats' && statsPeriod === 'monthly' && (
+          {statsMode === 'stats' && activePeriod === 'monthly' && (
             statsBreakdown === 'category'
               ? <CategoryStats summary={summary} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />
               : statsBreakdown === 'tag'
                 ? <TagStats summary={summary} openLedgerTag={openLedgerTag} />
-                : <ScopeStats summary={summary} openLedgerScope={openLedgerScope} />
+                : statsBreakdown === 'scope'
+                  ? <ScopeStats summary={summary} openLedgerScope={openLedgerScope} />
+                  : <MemberStats summary={summary} openLedgerMember={openLedgerMember} />
           )}
-          {statsMode === 'stats' && statsPeriod === 'yearly' && (
+          {statsMode === 'stats' && activePeriod === 'yearly' && (
             <YearlyStats
               summary={yearlySummary || {}}
               categoryByName={categoryByName}
@@ -1599,7 +1717,21 @@ function StatsScreen({ data, month, setMonth, statsMode, setStatsMode, statsPeri
               openLedgerCategory={openLedgerCategory}
               openLedgerTag={openLedgerTag}
               openLedgerScope={openLedgerScope}
+              openLedgerMember={openLedgerMember}
             />
+          )}
+          {statsMode === 'stats' && activePeriod === 'range' && (
+            rangeInvalid
+              ? <EmptyState label="통계 기간을 확인해 주세요." />
+              : <PeriodStats
+                  summary={rangeSummary || {}}
+                  categoryByName={categoryByName}
+                  breakdown={statsBreakdown}
+                  openLedgerCategory={openLedgerCategory}
+                  openLedgerTag={openLedgerTag}
+                  openLedgerScope={openLedgerScope}
+                  openLedgerMember={openLedgerMember}
+                />
           )}
           {statsMode === 'budget' && <BudgetStats summary={summary} categoryByName={categoryByName} spendMax={spendMax} openBudgetSettings={openBudgetSettings} />}
           {statsMode === 'details' && <DetailStats transactions={data.transactions} />}
@@ -1652,7 +1784,15 @@ function ScopeStats({ summary, openLedgerScope }) {
   );
 }
 
-function YearlyStats({ summary, categoryByName, breakdown, openLedgerCategory, openLedgerTag, openLedgerScope }) {
+function MemberStats({ summary, openLedgerMember }) {
+  return (
+    <section className="stats-content">
+      <MemberRanking members={summary.memberSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerMember={openLedgerMember} />
+    </section>
+  );
+}
+
+function YearlyStats({ summary, categoryByName, breakdown, openLedgerCategory, openLedgerTag, openLedgerScope, openLedgerMember }) {
   const spends = summary.categorySpends || [];
   const total = spends.reduce((sum, item) => sum + Number(item.amount), 0);
   const rows = summary.monthlyTotals || [];
@@ -1680,7 +1820,30 @@ function YearlyStats({ summary, categoryByName, breakdown, openLedgerCategory, o
         ? <TagRanking tags={summary.tagSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerTag={openLedgerTag} />
         : breakdown === 'scope'
           ? <ScopeRanking scopes={summary.scopeSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerScope={openLedgerScope} />
-          : <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />}
+          : breakdown === 'member'
+            ? <MemberRanking members={summary.memberSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerMember={openLedgerMember} />
+            : <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />}
+    </section>
+  );
+}
+
+function PeriodStats({ summary, categoryByName, breakdown, openLedgerCategory, openLedgerTag, openLedgerScope, openLedgerMember }) {
+  const spends = summary.categorySpends || [];
+  const total = spends.reduce((sum, item) => sum + Number(item.amount), 0);
+
+  return (
+    <section className="stats-content period-stats">
+      <div className="period-headline">
+        <span>{summary.period || ''}</span>
+        <strong>{money(summary.expense)}</strong>
+      </div>
+      {breakdown === 'tag'
+        ? <TagRanking tags={summary.tagSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerTag={openLedgerTag} />
+        : breakdown === 'scope'
+          ? <ScopeRanking scopes={summary.scopeSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerScope={openLedgerScope} />
+          : breakdown === 'member'
+            ? <MemberRanking members={summary.memberSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerMember={openLedgerMember} />
+            : <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />}
     </section>
   );
 }
@@ -1749,6 +1912,25 @@ function ScopeRanking({ scopes, expenseTotal, openLedgerScope }) {
           <button className="ranking-row scope-ranking-row" type="button" key={item.scope} onClick={() => openLedgerScope(item)}>
             <span className="percent-badge" style={{ backgroundColor: color }}>{percent}%</span>
             <strong>{consumptionScopeLabels[item.scope] || item.scope}<small>{item.transactionCount}건</small></strong>
+            <b>{money(item.amount)}</b>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function MemberRanking({ members, expenseTotal, openLedgerMember }) {
+  if (!members.length) return <EmptyState label="명의별 소비 통계가 없습니다." compact />;
+  return (
+    <div className="ranking-list member-ranking-list">
+      {members.map((item, index) => {
+        const percent = expenseTotal ? Math.round((Number(item.amount) / expenseTotal) * 100) : 0;
+        const color = palette[(index + 2) % palette.length];
+        return (
+          <button className="ranking-row member-ranking-row" type="button" key={item.memberId || item.memberName} onClick={() => openLedgerMember(item)}>
+            <span className="percent-badge" style={{ backgroundColor: color }}>{percent}%</span>
+            <strong>{item.memberName || '명의 미지정'}<small>{item.transactionCount}건</small></strong>
             <b>{money(item.amount)}</b>
           </button>
         );
@@ -2321,9 +2503,33 @@ function TransactionDetailScreen({ transaction, receipts, editTransaction, delet
   );
 }
 
-function EntryScreen({ form, expression, assets, categories, members, receiptFiles, updateForm, setReceiptFiles, setExpression, submitTransaction, editingTransaction, editingInstallmentGroup, onClose }) {
+function EntryScreen({
+  form,
+  expression,
+  assets,
+  categories,
+  members,
+  receiptFiles,
+  updateForm,
+  setReceiptFiles,
+  setExpression,
+  submitTransaction,
+  editingTransaction,
+  editingInstallmentGroup,
+  installmentReceiptTargetIndex,
+  setInstallmentReceiptTargetIndex,
+  onClose
+}) {
   const tone = form.type === 'INCOME' ? 'income' : form.type === 'TRANSFER' ? 'transfer' : 'expense';
   const isEditing = Boolean(editingTransaction || editingInstallmentGroup);
+  const installmentReceiptOptions = Array.from(
+    { length: Math.max(Number(form.installmentMonths || 0), 0) },
+    (_, index) => index + 1
+  );
+  const installmentReceiptTargetValue = Math.min(
+    Math.max(Number(installmentReceiptTargetIndex || 1), 1),
+    Math.max(installmentReceiptOptions.length, 1)
+  );
 
   function setType(type) {
     updateForm('type', type);
@@ -2423,7 +2629,13 @@ function EntryScreen({ form, expression, assets, categories, members, receiptFil
               </LineField>
               {form.type === 'EXPENSE' && (
                 <LineField label="할부">
-                  <select value={form.installmentMonths} onChange={(event) => updateForm('installmentMonths', Number(event.target.value))}>
+                  <select value={form.installmentMonths} onChange={(event) => {
+                    const months = Number(event.target.value);
+                    updateForm('installmentMonths', months);
+                    if (editingInstallmentGroup && Number(installmentReceiptTargetIndex || 1) > months) {
+                      setInstallmentReceiptTargetIndex(Math.max(months, 1));
+                    }
+                  }}>
                     <option value={0}>일시불</option>
                     <option value={2}>2개월</option>
                     <option value={3}>3개월</option>
@@ -2468,30 +2680,41 @@ function EntryScreen({ form, expression, assets, categories, members, receiptFil
             </>
           )}
 
-          {!editingInstallmentGroup && (
-            <label className="receipt-compact">
-              <strong>{editingTransaction ? '영수증 추가' : '영수증 사진'}</strong>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(event) => setReceiptFiles(Array.from(event.target.files || []).slice(0, 10))}
-              />
-              <em>최대 10장</em>
-              {receiptFiles.length > 0 && (
-                <span className="receipt-selection-list">
-                  {receiptFiles.map((file, index) => (
-                    <button type="button" key={`${file.name}-${file.lastModified}-${index}`} onClick={(event) => {
-                      event.preventDefault();
-                      setReceiptFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
-                    }}>
-                      {file.name} ×
-                    </button>
-                  ))}
-                </span>
-              )}
-            </label>
+          {editingInstallmentGroup && (
+            <LineField label="첨부 회차">
+              <select
+                value={installmentReceiptTargetValue}
+                onChange={(event) => setInstallmentReceiptTargetIndex(Number(event.target.value))}
+              >
+                {installmentReceiptOptions.map((index) => (
+                  <option value={index} key={index}>{index}회차</option>
+                ))}
+              </select>
+            </LineField>
           )}
+
+          <label className="receipt-compact">
+            <strong>{isEditing ? '영수증 추가' : '영수증 사진'}</strong>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(event) => setReceiptFiles(Array.from(event.target.files || []).slice(0, 10))}
+            />
+            <em>최대 10장</em>
+            {receiptFiles.length > 0 && (
+              <span className="receipt-selection-list">
+                {receiptFiles.map((file, index) => (
+                  <button type="button" key={`${file.name}-${file.lastModified}-${index}`} onClick={(event) => {
+                    event.preventDefault();
+                    setReceiptFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+                  }}>
+                    {file.name} ×
+                  </button>
+                ))}
+              </span>
+            )}
+          </label>
         </section>
 
         <CalculatorPad onKey={handleKey} submitLabel={isEditing ? '저장' : '확인'} />

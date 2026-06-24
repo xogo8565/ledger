@@ -723,7 +723,7 @@ button {
 
 .stats-top {
   display: grid;
-  grid-template-columns: 1fr 78px;
+  grid-template-columns: 1fr 156px;
   gap: 14px;
   align-items: center;
   padding: 18px 18px 4px;
@@ -770,6 +770,69 @@ button {
   font-weight: 800;
 }
 
+.period-mode-tabs {
+  height: 48px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: #e9eaef;
+}
+
+.period-mode-tabs button {
+  border: 0;
+  border-right: 1px solid #d4d5dc;
+  color: #8f93a1;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.period-mode-tabs button:last-child {
+  border-right: 0;
+}
+
+.period-mode-tabs button.active {
+  border-right: 0;
+  border-radius: 10px;
+  color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.stats-range-filter {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.stats-range-filter input {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 0 9px;
+  color: var(--text);
+  background: var(--surface);
+  font-weight: 800;
+}
+
+.stats-range-filter span {
+  grid-column: 1 / -1;
+  color: var(--subtle);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.stats-range-filter.invalid input {
+  border-color: var(--danger);
+}
+
 .income-expense-switch {
   height: 66px;
   display: grid;
@@ -802,7 +865,7 @@ button {
 
 .stats-breakdown-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   padding: 10px 18px;
   border-bottom: 1px solid var(--line);
@@ -901,22 +964,26 @@ button {
 }
 
 .tag-ranking-row strong,
-.scope-ranking-row strong {
+.scope-ranking-row strong,
+.member-ranking-row strong {
   display: grid;
   gap: 3px;
 }
 
 .tag-ranking-row small,
-.scope-ranking-row small {
+.scope-ranking-row small,
+.member-ranking-row small {
   color: var(--subtle);
   font-size: 12px;
 }
 
-.yearly-stats {
+.yearly-stats,
+.period-stats {
   background: var(--surface-soft);
 }
 
-.yearly-headline {
+.yearly-headline,
+.period-headline {
   display: grid;
   gap: 8px;
   padding: 24px 24px 18px;
@@ -924,13 +991,15 @@ button {
   border-bottom: 1px solid var(--line);
 }
 
-.yearly-headline span {
+.yearly-headline span,
+.period-headline span {
   color: #777;
   font-size: 15px;
   font-weight: 800;
 }
 
-.yearly-headline strong {
+.yearly-headline strong,
+.period-headline strong {
   font-size: 32px;
   font-weight: 700;
 }

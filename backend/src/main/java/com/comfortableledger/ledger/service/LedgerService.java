@@ -10,6 +10,7 @@ import com.comfortableledger.ledger.domain.Household;
 import com.comfortableledger.ledger.domain.Member;
 import com.comfortableledger.ledger.domain.MemberRole;
 import com.comfortableledger.ledger.domain.MonthlyBudget;
+import com.comfortableledger.ledger.domain.ReceiptAttachment;
 import com.comfortableledger.ledger.domain.TransactionRecord;
 import com.comfortableledger.ledger.domain.TransactionType;
 import com.comfortableledger.ledger.repo.AssetRepository;
@@ -19,6 +20,7 @@ import com.comfortableledger.ledger.repo.CategoryRepository;
 import com.comfortableledger.ledger.repo.HouseholdRepository;
 import com.comfortableledger.ledger.repo.MemberRepository;
 import com.comfortableledger.ledger.repo.MonthlyBudgetRepository;
+import com.comfortableledger.ledger.repo.ReceiptAttachmentRepository;
 import com.comfortableledger.ledger.repo.TransactionRepository;
 import com.comfortableledger.ledger.web.ApiDtos.AssetDto;
 import com.comfortableledger.ledger.web.ApiDtos.AssetSummaryDto;
@@ -28,6 +30,7 @@ import com.comfortableledger.ledger.web.ApiDtos.CategoryDto;
 import com.comfortableledger.ledger.web.ApiDtos.CreateTransactionRequest;
 import com.comfortableledger.ledger.web.ApiDtos.MonthlySummaryDto;
 import com.comfortableledger.ledger.web.ApiDtos.MemberDto;
+import com.comfortableledger.ledger.web.ApiDtos.PeriodSummaryDto;
 import com.comfortableledger.ledger.web.ApiDtos.SaveAssetRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveBudgetRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveCardAssetRequest;
@@ -59,11 +62,13 @@ public class LedgerService {
     private final TransactionRepository transactionRepository;
     private final MonthlyBudgetRepository monthlyBudgetRepository;
     private final CardProfileRepository cardProfileRepository;
+    private final ReceiptAttachmentRepository receiptAttachmentRepository;
 
     public LedgerService(HouseholdRepository householdRepository, MemberRepository memberRepository,
                          AssetRepository assetRepository, CategoryRepository categoryRepository,
                          CategoryBudgetRepository categoryBudgetRepository, TransactionRepository transactionRepository,
-                         MonthlyBudgetRepository monthlyBudgetRepository, CardProfileRepository cardProfileRepository) {
+                         MonthlyBudgetRepository monthlyBudgetRepository, CardProfileRepository cardProfileRepository,
+                         ReceiptAttachmentRepository receiptAttachmentRepository) {
         this.householdRepository = householdRepository;
         this.memberRepository = memberRepository;
         this.assetRepository = assetRepository;
@@ -72,6 +77,7 @@ public class LedgerService {
         this.transactionRepository = transactionRepository;
         this.monthlyBudgetRepository = monthlyBudgetRepository;
         this.cardProfileRepository = cardProfileRepository;
+        this.receiptAttachmentRepository = receiptAttachmentRepository;
     }
 
     @Transactional(readOnly = true)
@@ -542,25 +548,76 @@ public class LedgerService {
         BigDecimal remainingAmount = request.amount();
 
         records.forEach(this::reverseAssetChange);
-        transactionRepository.deleteAll(records);
-        transactionRepository.flush();
 
         for (int index = 1; index <= installmentMonths; index++) {
             BigDecimal amount = index == installmentMonths ? remainingAmount : baseAmount;
             remainingAmount = remainingAmount.subtract(amount);
-            createSingleTransaction(
-                    request,
-                    request.transactionDate().plusMonths(index - 1L),
-                    amount,
-                    index,
-                    installmentMonths,
-                    installmentGroupId
-            );
+            LocalDate transactionDate = request.transactionDate().plusMonths(index - 1L);
+            if (index <= records.size()) {
+                updateExistingInstallmentTransaction(
+                        records.get(index - 1),
+                        request,
+                        transactionDate,
+                        amount,
+                        index,
+                        installmentMonths,
+                        installmentGroupId
+                );
+            } else {
+                createSingleTransaction(
+                        request,
+                        transactionDate,
+                        amount,
+                        index,
+                        installmentMonths,
+                        installmentGroupId
+                );
+            }
+        }
+
+        if (records.size() > installmentMonths) {
+            TransactionRecord fallbackRecord = records.get(installmentMonths - 1);
+            List<TransactionRecord> removedRecords = records.subList(installmentMonths, records.size());
+            for (TransactionRecord removedRecord : removedRecords) {
+                for (ReceiptAttachment attachment : receiptAttachmentRepository.findByTransactionId(removedRecord.getId())) {
+                    attachment.reassignTo(fallbackRecord);
+                }
+            }
+            transactionRepository.deleteAll(removedRecords);
         }
 
         return transactionRepository.findByInstallmentGroupIdOrderByTransactionDateAscIdAsc(installmentGroupId).stream()
                 .map(TransactionDto::from)
                 .toList();
+    }
+
+    private void updateExistingInstallmentTransaction(TransactionRecord record, CreateTransactionRequest request,
+                                                      LocalDate transactionDate, BigDecimal amount,
+                                                      int installmentIndex, int installmentMonths,
+                                                      String installmentGroupId) {
+        Category category = request.categoryId() == null ? null : categoryRepository.findById(request.categoryId()).orElseThrow();
+        Asset asset = request.assetId() == null ? null : assetRepository.findById(request.assetId()).orElseThrow();
+        Asset fromAsset = request.fromAssetId() == null ? null : assetRepository.findById(request.fromAssetId()).orElseThrow();
+        Asset toAsset = request.toAssetId() == null ? null : assetRepository.findById(request.toAssetId()).orElseThrow();
+        Member consumer = personalExpenseConsumer(record.getHousehold(), request);
+
+        record.update(
+                request.type(),
+                transactionDate,
+                amount,
+                category,
+                asset,
+                fromAsset,
+                toAsset,
+                request.title(),
+                request.memo(),
+                request.spendingTag(),
+                request.consumptionScope(),
+                consumer,
+                installmentMonths
+        );
+        record.assignInstallment(installmentGroupId, installmentIndex, installmentMonths);
+        applyAssetChange(record);
     }
 
     @Transactional
@@ -656,12 +713,6 @@ public class LedgerService {
                 .map(BigDecimal::abs)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        Map<Category, BigDecimal> byCategory = records.stream()
-                .filter(record -> record.getType() == TransactionType.EXPENSE)
-                .filter(record -> record.getCategory() != null)
-                .collect(Collectors.groupingBy(TransactionRecord::getCategory,
-                        Collectors.mapping(TransactionRecord::getAmount, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))));
-
         Household household = defaultHousehold();
         MonthlyBudget monthlyBudget = monthlyBudgetRepository.findByHouseholdIdAndBudgetMonth(household.getId(), yearMonth.toString())
                 .orElse(null);
@@ -716,12 +767,10 @@ public class LedgerService {
                 budget,
                 budget.subtract(expense),
                 budgetUsageRate,
-                byCategory.entrySet().stream()
-                        .sorted(Map.Entry.<Category, BigDecimal>comparingByValue(Comparator.reverseOrder()))
-                        .map(entry -> new MonthlySummaryDto.CategorySpend(entry.getKey().getId(), entry.getKey().getName(), entry.getValue()))
-                        .toList(),
+                categorySpends(records),
                 tagSpends(records),
                 scopeSpends(records),
+                memberSpends(records),
                 categoryBudgetUsages
         );
     }
@@ -752,24 +801,44 @@ public class LedgerService {
                 })
                 .toList();
 
-        Map<Category, BigDecimal> byCategory = records.stream()
-                .filter(record -> record.getType() == TransactionType.EXPENSE)
-                .filter(record -> record.getCategory() != null)
-                .collect(Collectors.groupingBy(TransactionRecord::getCategory,
-                        Collectors.mapping(TransactionRecord::getAmount, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))));
-
         return new YearlySummaryDto(
                 targetYear,
                 sum(records, TransactionType.INCOME),
                 sum(records, TransactionType.EXPENSE),
                 sum(records, TransactionType.TRANSFER),
                 monthlyTotals,
-                byCategory.entrySet().stream()
-                        .sorted(Map.Entry.<Category, BigDecimal>comparingByValue(Comparator.reverseOrder()))
-                        .map(entry -> new MonthlySummaryDto.CategorySpend(entry.getKey().getId(), entry.getKey().getName(), entry.getValue()))
-                        .toList(),
+                categorySpends(records),
                 tagSpends(records),
-                scopeSpends(records)
+                scopeSpends(records),
+                memberSpends(records)
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public PeriodSummaryDto rangeSummary(LocalDate startDate, LocalDate endDate) {
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+        List<TransactionRecord> records = transactionRepository.findByHouseholdIdAndTransactionDateBetweenOrderByTransactionDateDescIdDesc(
+                defaultHousehold().getId(),
+                startDate,
+                endDate
+        );
+        return periodSummary(startDate, endDate, records);
+    }
+
+    static PeriodSummaryDto periodSummary(LocalDate startDate, LocalDate endDate, List<TransactionRecord> records) {
+        return new PeriodSummaryDto(
+                startDate + " ~ " + endDate,
+                startDate,
+                endDate,
+                sum(records, TransactionType.INCOME),
+                sum(records, TransactionType.EXPENSE),
+                sum(records, TransactionType.TRANSFER),
+                categorySpends(records),
+                tagSpends(records),
+                scopeSpends(records),
+                memberSpends(records)
         );
     }
 
@@ -866,11 +935,24 @@ public class LedgerService {
         return budgetSettings(targetMonth.toString());
     }
 
-    private BigDecimal sum(List<TransactionRecord> records, TransactionType type) {
+    private static BigDecimal sum(List<TransactionRecord> records, TransactionType type) {
         return records.stream()
                 .filter(record -> record.getType() == type)
                 .map(TransactionRecord::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    static List<MonthlySummaryDto.CategorySpend> categorySpends(List<TransactionRecord> records) {
+        Map<Category, BigDecimal> byCategory = records.stream()
+                .filter(record -> record.getType() == TransactionType.EXPENSE)
+                .filter(record -> record.getCategory() != null)
+                .collect(Collectors.groupingBy(TransactionRecord::getCategory,
+                        Collectors.mapping(TransactionRecord::getAmount, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))));
+
+        return byCategory.entrySet().stream()
+                .sorted(Map.Entry.<Category, BigDecimal>comparingByValue(Comparator.reverseOrder()))
+                .map(entry -> new MonthlySummaryDto.CategorySpend(entry.getKey().getId(), entry.getKey().getName(), entry.getValue()))
+                .toList();
     }
 
     static List<MonthlySummaryDto.TagSpend> tagSpends(List<TransactionRecord> records) {
@@ -912,6 +994,50 @@ public class LedgerService {
                 .sorted(Comparator.comparing(MonthlySummaryDto.ScopeSpend::amount).reversed()
                         .thenComparing(item -> item.scope().name()))
                 .toList();
+    }
+
+    static List<MonthlySummaryDto.MemberSpend> memberSpends(List<TransactionRecord> records) {
+        Map<MemberSpendKey, MemberSpendAccumulator> totals = new LinkedHashMap<>();
+        records.stream()
+                .filter(record -> record.getType() == TransactionType.EXPENSE)
+                .filter(record -> record.getConsumptionScope() == com.comfortableledger.ledger.domain.ConsumptionScope.PERSONAL)
+                .forEach(record -> {
+                    Member consumer = record.getConsumer();
+                    MemberSpendKey key = consumer == null
+                            ? new MemberSpendKey(null, "명의 미지정")
+                            : new MemberSpendKey(consumer.getId(), consumer.getName());
+                    totals.computeIfAbsent(key, ignored -> new MemberSpendAccumulator(key))
+                            .add(record.getAmount());
+                });
+        return totals.values().stream()
+                .map(item -> new MonthlySummaryDto.MemberSpend(
+                        item.key.memberId,
+                        item.key.memberName,
+                        item.amount,
+                        item.transactionCount
+                ))
+                .sorted(Comparator.comparing(MonthlySummaryDto.MemberSpend::amount).reversed()
+                        .thenComparing(MonthlySummaryDto.MemberSpend::transactionCount, Comparator.reverseOrder())
+                        .thenComparing(item -> item.memberName() == null ? "" : item.memberName()))
+                .toList();
+    }
+
+    private record MemberSpendKey(Long memberId, String memberName) {
+    }
+
+    private static class MemberSpendAccumulator {
+        private final MemberSpendKey key;
+        private BigDecimal amount = BigDecimal.ZERO;
+        private long transactionCount;
+
+        private MemberSpendAccumulator(MemberSpendKey key) {
+            this.key = key;
+        }
+
+        private void add(BigDecimal value) {
+            amount = amount.add(value);
+            transactionCount++;
+        }
     }
 
     private static class TagSpendAccumulator {

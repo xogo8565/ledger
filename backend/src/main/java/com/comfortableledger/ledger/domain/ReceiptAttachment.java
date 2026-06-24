@@ -68,4 +68,8 @@ public class ReceiptAttachment {
     public OffsetDateTime getCreatedAt() {
         return createdAt;
     }
+
+    public void reassignTo(TransactionRecord transaction) {
+        this.transaction = transaction;
+    }
 }

@@ -48,10 +48,57 @@ async function assertResponseOk(response, label) {
 }
 
 const api = await request.newContext({ baseURL: backendUrl });
+const cleanup = {
+  assetIds: [],
+  categoryIds: [],
+  memberIds: [],
+  cardScheduleIds: [],
+  recurringRuleIds: [],
+  transactionIds: [],
+  installmentGroupIds: [],
+  originalBudgetSettings: null
+};
 const bootstrapResponse = await api.get('/api/bootstrap');
 assert(bootstrapResponse.ok(), `bootstrap API returned HTTP ${bootstrapResponse.status()}`);
 
-const bootstrap = await bootstrapResponse.json();
+let bootstrap = await bootstrapResponse.json();
+
+if (!Array.isArray(bootstrap.assets) || bootstrap.assets.length === 0) {
+  const seedAssetResponse = await api.post('/api/assets', {
+    data: {
+      type: 'CASH',
+      name: `browser-smoke-seed-asset-${Date.now()}`,
+      balance: 100000,
+      groupName: '현금',
+      ownerName: '',
+      memo: ''
+    }
+  });
+  await assertResponseOk(seedAssetResponse, 'seed asset creation');
+  const seedAsset = await seedAssetResponse.json();
+  cleanup.assetIds.push(seedAsset.id);
+}
+
+if (!Array.isArray(bootstrap.categories) || !bootstrap.categories.some((item) => item.type === 'EXPENSE')) {
+  const seedCategoryResponse = await api.post('/api/categories', {
+    data: {
+      type: 'EXPENSE',
+      name: `browser-smoke-seed-category-${Date.now()}`,
+      icon: '•',
+      color: '#609249'
+    }
+  });
+  await assertResponseOk(seedCategoryResponse, 'seed category creation');
+  const seedCategory = await seedCategoryResponse.json();
+  cleanup.categoryIds.push(seedCategory.id);
+}
+
+if (cleanup.assetIds.length || cleanup.categoryIds.length) {
+  const seededBootstrapResponse = await api.get('/api/bootstrap');
+  assert(seededBootstrapResponse.ok(), `seeded bootstrap API returned HTTP ${seededBootstrapResponse.status()}`);
+  bootstrap = await seededBootstrapResponse.json();
+}
+
 assert(Array.isArray(bootstrap.assets) && bootstrap.assets.length > 0, 'bootstrap did not return assets');
 assert(Array.isArray(bootstrap.categories) && bootstrap.categories.length > 0, 'bootstrap did not return categories');
 
@@ -82,16 +129,6 @@ await context.addInitScript(() => {
 const page = await context.newPage();
 const browserErrors = [];
 const mutationRequests = [];
-const cleanup = {
-  assetIds: [],
-  categoryIds: [],
-  memberIds: [],
-  cardScheduleIds: [],
-  recurringRuleIds: [],
-  transactionIds: [],
-  installmentGroupIds: [],
-  originalBudgetSettings: null
-};
 
 page.on('pageerror', (error) => browserErrors.push(error.message));
 page.on('console', (message) => {
@@ -335,6 +372,7 @@ try {
   const sharedTransaction = await sharedTransactionResponse.json();
   assert(sharedTransaction.consumerMemberId === null, `shared transaction kept a consumer: ${sharedTransaction.consumerMemberId}`);
   cleanup.transactionIds.push(sharedTransaction.id);
+  const expectedFilteredExpense = Number(transaction.amount) + Number(sharedTransaction.amount);
   const scopeSummaryResponse = await api.get(`/api/summary/monthly?month=${transaction.transactionDate.slice(0, 7)}`);
   await assertResponseOk(scopeSummaryResponse, 'monthly consumption scope summary');
   const scopeSummary = await scopeSummaryResponse.json();
@@ -346,16 +384,57 @@ try {
     scopeSummary.scopeSpends.some((item) => item.scope === 'SHARED'),
     'monthly summary did not include shared consumption'
   );
+  assert(
+    scopeSummary.memberSpends.some((item) => item.memberName === selectedConsumerName),
+    'monthly summary did not include selected consumer member consumption'
+  );
+  const rangeSummaryResponse = await api.get(`/api/summary/range?startDate=${transaction.transactionDate.slice(0, 7)}-01&endDate=${transaction.transactionDate}`);
+  await assertResponseOk(rangeSummaryResponse, 'custom range summary');
+  const rangeSummary = await rangeSummaryResponse.json();
+  assert(
+    rangeSummary.expense >= expectedFilteredExpense,
+    `range summary expense did not include created transactions: ${rangeSummary.expense}`
+  );
+  assert(
+    rangeSummary.categorySpends.some((item) => item.categoryName === expenseCategory.name),
+    'range summary did not include expense category breakdown'
+  );
   await page.reload({ waitUntil: 'networkidle' });
   await assertVisible(page, '.ledger-screen', 'ledger screen did not return after creating transaction');
   await page.getByLabel('거래 검색').fill(transactionTitle);
   await page.waitForTimeout(150);
   const filteredExpenseText = await page.locator('.month-totals .mini-metric.expense strong').textContent();
-  const expectedFilteredExpense = Number(transaction.amount) + Number(sharedTransaction.amount);
   assert(
     filteredExpenseText?.replaceAll(',', '').includes(String(expectedFilteredExpense)),
     `filtered transaction total did not match created transaction: ${filteredExpenseText}`
   );
+  await page.locator('.transaction-row.has-installment', { hasText: transactionTitle }).locator('.installment-chip').first().click();
+  await assertVisible(page, '.installment-manager', 'installment manager did not open for receipt edit');
+  await page.locator('.installment-manager .text-action', { hasText: '수정' }).click();
+  await assertVisible(page, '.entry-screen-form', 'installment group edit form did not open');
+  await page.locator('.line-field', { hasText: '첨부 회차' }).locator('select').selectOption('2');
+  await page.locator('.receipt-compact input[type="file"]').setInputFiles({
+    name: 'browser-smoke-installment-receipt.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64')
+  });
+  const [installmentUpdateResponse, installmentReceiptUploadResponse] = await Promise.all([
+    page.waitForResponse((response) => response.request().method() === 'PUT' && response.url().includes('/api/transactions/installments/')),
+    page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes('/receipts/batch')),
+    page.locator('.entry-screen-form button[type="submit"]').click()
+  ]);
+  await assertResponseOk(installmentUpdateResponse, 'installment group edit with receipt');
+  await assertResponseOk(installmentReceiptUploadResponse, 'installment group receipt upload');
+  const updatedInstallments = await installmentUpdateResponse.json();
+  const receiptTarget = updatedInstallments.find((item) => item.installmentIndex === 2);
+  assert(receiptTarget, 'updated installment group did not include target receipt installment');
+  const installmentReceiptsResponse = await api.get(`/api/transactions/${receiptTarget.id}/receipts`);
+  await assertResponseOk(installmentReceiptsResponse, 'installment receipt list');
+  const installmentReceipts = await installmentReceiptsResponse.json();
+  const installmentReceipt = installmentReceipts.find((item) => item.originalFilename === 'browser-smoke-installment-receipt.png');
+  assert(installmentReceipt, 'installment receipt was not attached to selected installment');
+  await api.delete(`/api/transactions/${receiptTarget.id}/receipts/${installmentReceipt.id}`).catch(() => {});
+  await assertVisible(page, '.ledger-screen', 'ledger screen did not return after installment group receipt edit');
   await page.locator('.ledger-filters button', { hasText: '초기화' }).click();
   await page.locator('.fab').click();
   await assertVisible(page, '.entry-choice-sheet', 'transaction entry choice did not reopen after create');
@@ -389,6 +468,12 @@ try {
   await assertVisible(page, '.ledger-screen', 'ledger screen did not return after clipboard entry');
 
   await clickBottomTab(page, 1, '.stats-screen');
+  await page.getByRole('button', { name: '기간' }).click();
+  await assertVisible(page, '.stats-range-filter', 'range stats filter did not render');
+  await page.getByLabel('통계 시작일').fill(`${transaction.transactionDate.slice(0, 7)}-01`);
+  await page.getByLabel('통계 종료일').fill(transaction.transactionDate);
+  await page.waitForSelector(`.period-stats:has-text("${expenseCategory.name}")`, { timeout: 15000 });
+  await page.getByRole('button', { name: '월별' }).click();
   await page.getByRole('button', { name: '개인/공동' }).click();
   await page.waitForSelector('.scope-ranking-row:has-text("개인")', { timeout: 15000 });
   await page.waitForSelector('.scope-ranking-row:has-text("공동")', { timeout: 15000 });
@@ -397,6 +482,14 @@ try {
   const selectedScopeFilter = await page.getByLabel('소비 구분 필터').inputValue();
   assert(selectedScopeFilter === 'SHARED', `shared scope filter was not selected: ${selectedScopeFilter}`);
   await page.waitForSelector(`.transaction-row:has-text("${transactionTitle}-shared")`, { timeout: 15000 });
+  await clickBottomTab(page, 1, '.stats-screen');
+  await page.getByRole('button', { name: '명의별' }).click();
+  await page.waitForSelector(`.member-ranking-row:has-text("${selectedConsumerName}")`, { timeout: 15000 });
+  await page.locator('.member-ranking-row', { hasText: selectedConsumerName }).click();
+  await assertVisible(page, '.ledger-screen', 'member statistics did not open ledger');
+  const selectedConsumerFilter = await page.getByLabel('소비 명의 필터').inputValue();
+  assert(String(selectedConsumerFilter) === String(transaction.consumerMemberId), `consumer member filter was not selected: ${selectedConsumerFilter}`);
+  await page.waitForSelector(`.transaction-row:has-text("${transactionTitle}")`, { timeout: 15000 });
   await clickBottomTab(page, 1, '.stats-screen');
   await page.locator('.segmented-tabs button').nth(1).click();
   await assertVisible(page, '.budget-screen', 'budget stats screen did not open');
