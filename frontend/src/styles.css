@@ -1779,24 +1779,50 @@ button {
 
 .receipt-compact {
   min-height: 54px;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 10px;
-  padding: 0 18px;
+  padding: 10px 18px;
   color: #777;
   border-bottom: 1px solid var(--line);
   font-weight: 900;
 }
 
 .receipt-compact input {
-  max-width: 150px;
+  min-width: 0;
+  max-width: 190px;
 }
 
-.receipt-compact span {
-  min-width: 0;
+.receipt-compact > em {
+  color: var(--subtle);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.receipt-selection-list {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.receipt-selection-list button {
+  max-width: 100%;
+  padding: 6px 9px;
   overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--accent);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.receipt-compact > span {
+  min-width: 0;
   color: var(--accent);
   font-size: 13px;
 }

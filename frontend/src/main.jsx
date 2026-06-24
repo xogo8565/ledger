@@ -108,7 +108,7 @@ function App() {
   const [cardScheduleForm, setCardScheduleForm] = useState(emptyCardScheduleForm());
   const [installmentSchedule, setInstallmentSchedule] = useState([]);
   const [selectedInstallment, setSelectedInstallment] = useState(null);
-  const [receiptFile, setReceiptFile] = useState(null);
+  const [receiptFiles, setReceiptFiles] = useState([]);
   const [rawText, setRawText] = useState('');
   const [preview, setPreview] = useState(null);
 
@@ -165,7 +165,7 @@ function App() {
     const nextForm = { ...emptyTransactionForm(), type };
     setForm(nextForm);
     setEntryExpression('');
-    setReceiptFile(null);
+    setReceiptFiles([]);
     setPanel('entry');
   }
 
@@ -192,7 +192,7 @@ function App() {
     setTransactionReceipts([]);
     setForm(transactionToForm(transaction));
     setEntryExpression(String(Number(transaction.amount || 0) || ''));
-    setReceiptFile(null);
+    setReceiptFiles([]);
     setPanel('entry');
   }
 
@@ -255,7 +255,7 @@ function App() {
     setEditingInstallmentGroup(selectedInstallment.installmentGroupId);
     setForm(nextForm);
     setEntryExpression(String(total || ''));
-    setReceiptFile(null);
+    setReceiptFiles([]);
     setPanel('entry');
   }
 
@@ -379,17 +379,17 @@ function App() {
     });
     const created = await response.json();
 
-    if (receiptFile && !editingInstallmentGroup) {
+    if (receiptFiles.length && !editingInstallmentGroup) {
       const receiptTransactionId = created.id || editingTransaction?.id;
       if (!receiptTransactionId) {
         window.alert('영수증을 첨부할 거래를 찾지 못했습니다.');
         return;
       }
       const upload = new FormData();
-      upload.append('file', receiptFile);
-      const uploadResponse = await fetch(`${API}/transactions/${receiptTransactionId}/receipts`, { method: 'POST', body: upload });
+      receiptFiles.forEach((file) => upload.append('files', file));
+      const uploadResponse = await fetch(`${API}/transactions/${receiptTransactionId}/receipts/batch`, { method: 'POST', body: upload });
       if (!uploadResponse.ok) {
-        window.alert('영수증 첨부에 실패했습니다.');
+        window.alert('영수증 일괄 첨부에 실패했습니다. 파일 형식과 개수를 확인해 주세요.');
         return;
       }
     }
@@ -412,7 +412,7 @@ function App() {
 
     setForm(emptyTransactionForm());
     setEntryExpression('');
-    setReceiptFile(null);
+    setReceiptFiles([]);
     setEditingTransaction(null);
     setEditingInstallmentGroup(null);
     closePanel();
@@ -653,7 +653,7 @@ function App() {
       memo: preview.memo || ''
     });
     setEntryExpression(String(preview.amount || ''));
-    setReceiptFile(null);
+    setReceiptFiles([]);
     setPanel('entry');
   }
 
@@ -745,9 +745,9 @@ function App() {
             expression={entryExpression}
             assets={data.assets}
             categories={selectedCategories}
-            receiptFile={receiptFile}
+            receiptFiles={receiptFiles}
             updateForm={updateForm}
-            setReceiptFile={setReceiptFile}
+            setReceiptFiles={setReceiptFiles}
             setExpression={setEntryExpression}
             submitTransaction={submitTransaction}
             editingTransaction={editingTransaction}
@@ -2033,7 +2033,7 @@ function TransactionDetailScreen({ transaction, receipts, editTransaction, delet
   );
 }
 
-function EntryScreen({ form, expression, assets, categories, receiptFile, updateForm, setReceiptFile, setExpression, submitTransaction, editingTransaction, editingInstallmentGroup, onClose }) {
+function EntryScreen({ form, expression, assets, categories, receiptFiles, updateForm, setReceiptFiles, setExpression, submitTransaction, editingTransaction, editingInstallmentGroup, onClose }) {
   const tone = form.type === 'INCOME' ? 'income' : form.type === 'TRANSFER' ? 'transfer' : 'expense';
   const isEditing = Boolean(editingTransaction || editingInstallmentGroup);
 
@@ -2154,9 +2154,26 @@ function EntryScreen({ form, expression, assets, categories, receiptFile, update
 
           {!editingInstallmentGroup && (
             <label className="receipt-compact">
-              {editingTransaction ? '영수증 추가' : '영수증 사진'}
-              <input type="file" accept="image/*" onChange={(event) => setReceiptFile(event.target.files?.[0] || null)} />
-              {receiptFile && <span>{receiptFile.name}</span>}
+              <strong>{editingTransaction ? '영수증 추가' : '영수증 사진'}</strong>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) => setReceiptFiles(Array.from(event.target.files || []).slice(0, 10))}
+              />
+              <em>최대 10장</em>
+              {receiptFiles.length > 0 && (
+                <span className="receipt-selection-list">
+                  {receiptFiles.map((file, index) => (
+                    <button type="button" key={`${file.name}-${file.lastModified}-${index}`} onClick={(event) => {
+                      event.preventDefault();
+                      setReceiptFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+                    }}>
+                      {file.name} ×
+                    </button>
+                  ))}
+                </span>
+              )}
             </label>
           )}
         </section>

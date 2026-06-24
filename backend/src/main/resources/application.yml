@@ -16,7 +16,7 @@ spring:
   servlet:
     multipart:
       max-file-size: 10MB
-      max-request-size: 20MB
+      max-request-size: 50MB
 
 app:
   upload-dir: ${APP_UPLOAD_DIR:${APP_DATA_DIR:./data}/uploads}

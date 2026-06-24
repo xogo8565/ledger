@@ -31,6 +31,14 @@ public class ReceiptController {
         return receiptService.attach(transactionId, file);
     }
 
+    @PostMapping(path = "/batch", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public List<ReceiptDto> attachMany(
+            @PathVariable Long transactionId,
+            @RequestPart("files") List<MultipartFile> files
+    ) throws IOException {
+        return receiptService.attachMany(transactionId, files);
+    }
+
     @GetMapping
     public List<ReceiptDto> receipts(@PathVariable Long transactionId) {
         return receiptService.receipts(transactionId);
