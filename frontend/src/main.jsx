@@ -109,8 +109,6 @@ function App() {
   const [installmentSchedule, setInstallmentSchedule] = useState([]);
   const [selectedInstallment, setSelectedInstallment] = useState(null);
   const [receiptFiles, setReceiptFiles] = useState([]);
-  const [rawText, setRawText] = useState('');
-  const [preview, setPreview] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -167,6 +165,10 @@ function App() {
     setEntryExpression('');
     setReceiptFiles([]);
     setPanel('entry');
+  }
+
+  function openEntryChoice() {
+    setPanel('entryChoice');
   }
 
   async function openTransactionDetail(transaction) {
@@ -629,31 +631,41 @@ function App() {
     });
   }
 
-  async function parseText() {
-    if (!rawText.trim()) return;
+  async function openClipboardEntry() {
+    let clipboardText = '';
+    try {
+      clipboardText = await navigator.clipboard.readText();
+    } catch (error) {
+      console.error(error);
+      window.alert('클립보드 내용을 읽을 수 없습니다. 브라우저의 클립보드 권한을 확인해 주세요.');
+      return;
+    }
+    if (!clipboardText.trim()) {
+      window.alert('클립보드에 분석할 문자 내용이 없습니다.');
+      return;
+    }
     const response = await fetch(`${API}/import/text/parse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rawText })
+      body: JSON.stringify({ rawText: clipboardText })
     });
+    if (!response.ok) {
+      window.alert('클립보드 문자 분석에 실패했습니다.');
+      return;
+    }
     const parsed = await response.json();
-    setPreview(parsed);
-  }
-
-  function confirmTextImport() {
-    if (!preview) return;
     setEditingTransaction(null);
     setEditingInstallmentGroup(null);
     setForm({
       ...emptyTransactionForm(),
-      type: preview.type || 'EXPENSE',
-      transactionDate: preview.transactionDate || today,
-      amount: preview.amount || '',
-      categoryId: preview.recommendedCategoryId ? String(preview.recommendedCategoryId) : '',
-      title: preview.merchant || '',
-      memo: preview.memo || ''
+      type: parsed.type || 'EXPENSE',
+      transactionDate: parsed.transactionDate || today,
+      amount: parsed.amount || '',
+      categoryId: parsed.recommendedCategoryId ? String(parsed.recommendedCategoryId) : '',
+      title: parsed.merchant || '',
+      memo: parsed.memo || ''
     });
-    setEntryExpression(String(preview.amount || ''));
+    setEntryExpression(String(parsed.amount || ''));
     setReceiptFiles([]);
     setPanel('entry');
   }
@@ -719,11 +731,6 @@ function App() {
         )}
         {mainTab === 'more' && (
           <MoreScreen
-            rawText={rawText}
-            setRawText={setRawText}
-            preview={preview}
-            parseText={parseText}
-            confirmTextImport={confirmTextImport}
             exportMonthlyTransactions={exportMonthlyTransactions}
             openCategoryManager={openCategoryManager}
             openRecurringManager={openRecurringManager}
@@ -734,12 +741,19 @@ function App() {
 
         {(mainTab === 'ledger' || mainTab === 'stats') && (
           <div className="floating-actions">
-            <button className="fab" type="button" onClick={() => openEntry('EXPENSE')} aria-label="거래 추가">
+            <button className="fab" type="button" onClick={openEntryChoice} aria-label="거래 추가">
               +
             </button>
           </div>
         )}
 
+        {panel === 'entryChoice' && (
+          <EntryChoiceSheet
+            openEntry={openEntry}
+            openClipboardEntry={openClipboardEntry}
+            onClose={closePanel}
+          />
+        )}
         {panel === 'entry' && (
           <EntryScreen
             form={form}
@@ -966,6 +980,17 @@ function filterTransactions(transactions, filters) {
   });
 }
 
+function summarizeTransactions(transactions) {
+  return transactions.reduce((summary, item) => {
+    const amount = Number(item.amount || 0);
+    if (item.type === 'INCOME') summary.income += amount;
+    if (item.type === 'EXPENSE') summary.expense += amount;
+    if (item.type === 'TRANSFER') summary.transfer += amount;
+    summary.count += 1;
+    return summary;
+  }, { income: 0, expense: 0, transfer: 0, count: 0 });
+}
+
 function csvCell(value) {
   return `"${String(value ?? '').replaceAll('"', '""')}"`;
 }
@@ -1026,9 +1051,11 @@ function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, filter
   const summary = data.summary || {};
   const sourceTransactions = rangeTransactions || data.transactions || [];
   const filteredTransactions = useMemo(() => filterTransactions(sourceTransactions, filters), [sourceTransactions, filters]);
+  const filteredSummary = useMemo(() => summarizeTransactions(filteredTransactions), [filteredTransactions]);
   const filterCategories = data.categories.filter((category) => filters.type === 'ALL' || category.type === filters.type);
   const hasActiveFilter = Boolean(filters.query || filters.categoryId || filters.startDate || filters.endDate || filters.type !== 'ALL');
   const rangeActive = Boolean(filters.startDate && filters.endDate);
+  const summaryScope = hasActiveFilter ? filteredPeriodLabel(filters, month) : monthLabel(month);
   const tabs = [
     ['daily', '일일'],
     ['calendar', '달력'],
@@ -1051,7 +1078,7 @@ function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, filter
         ))}
       </nav>
 
-      <MonthTotals summary={summary} />
+      <MonthTotals summary={hasActiveFilter ? filteredSummary : summary} scope={summaryScope} filtered={hasActiveFilter} />
       <LedgerFilters
         filters={filters}
         setFilters={setFilters}
@@ -1067,10 +1094,14 @@ function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, filter
         <>
           {ledgerMode === 'daily' && <DailyLedger transactions={filteredTransactions} openInstallmentSchedule={openInstallmentSchedule} openTransactionDetail={openTransactionDetail} />}
           {ledgerMode === 'calendar' && <CalendarLedger transactions={filteredTransactions} month={month} />}
-          {ledgerMode === 'monthly' && <MonthlyLedger summary={summary} month={month} />}
+          {ledgerMode === 'monthly' && (
+            <MonthlyLedger summary={hasActiveFilter ? filteredSummary : summary} month={month} filtered={hasActiveFilter} scope={summaryScope} />
+          )}
           {ledgerMode === 'summary' && (
             <LedgerSummary
               summary={summary}
+              transactionSummary={hasActiveFilter ? filteredSummary : summarizeTransactions(data.transactions || [])}
+              summaryScope={summaryScope}
               hasActiveFilter={hasActiveFilter}
               exportTransactions={() => exportFilteredTransactions(filteredTransactions, filters)}
             />
@@ -1141,9 +1172,10 @@ function MonthNav({ month, setMonth }) {
   );
 }
 
-function MonthTotals({ summary }) {
+function MonthTotals({ summary, scope, filtered }) {
   return (
-    <section className="month-totals" aria-label="월 합계">
+    <section className={`month-totals ${filtered ? 'filtered' : ''}`} aria-label={filtered ? '필터 결과 합계' : '월 합계'}>
+      <span className="totals-scope">{scope}</span>
       <Metric label="수입" value={numberOnly(summary.income)} tone="income" />
       <Metric label="지출" value={numberOnly(summary.expense)} tone="expense" />
       <Metric label="합계" value={money((Number(summary.income) || 0) - (Number(summary.expense) || 0))} tone="total" />
@@ -1171,7 +1203,7 @@ function DailyLedger({ transactions, openInstallmentSchedule, openTransactionDet
   }, [transactions]);
 
   if (!transactions.length) {
-    return <EmptyState label="이번 달 거래가 없습니다." />;
+    return <EmptyState label="조건에 맞는 거래가 없습니다." />;
   }
 
   return (
@@ -1277,7 +1309,21 @@ function CalendarLedger({ transactions, month }) {
   );
 }
 
-function MonthlyLedger({ summary, month }) {
+function MonthlyLedger({ summary, month, filtered, scope }) {
+  if (filtered) {
+    return (
+      <section className="plain-list">
+        <div className="monthly-row filtered-summary-row">
+          <strong>{scope}</strong>
+          <div>
+            <span className="income">수입 {money(summary.income)}</span>
+            <span className="expense">지출 {money(summary.expense)}</span>
+            <span className="transfer">이체 {money(summary.transfer)}</span>
+          </div>
+        </div>
+      </section>
+    );
+  }
   const rows = [0, -1, -2, -3].map((offset) => {
     const rowMonth = shiftMonth(month, offset);
     const active = offset === 0;
@@ -1303,16 +1349,25 @@ function MonthlyLedger({ summary, month }) {
   );
 }
 
-function LedgerSummary({ summary, hasActiveFilter, exportTransactions }) {
+function LedgerSummary({ summary, transactionSummary, summaryScope, hasActiveFilter, exportTransactions }) {
   const budgetUsage = Math.min(100, Number(summary.budgetUsageRate || 0));
   return (
     <section className="summary-sections">
+      <SummaryBlock icon="▤" title={hasActiveFilter ? '필터 결과' : '거래 요약'}>
+        <KeyValue label="대상" value={summaryScope} />
+        <KeyValue label="거래 건수" value={`${transactionSummary.count || 0}건`} />
+        <KeyValue label="수입" value={money(transactionSummary.income)} />
+        <KeyValue label="지출" value={money(transactionSummary.expense)} />
+        <KeyValue label="이체" value={money(transactionSummary.transfer)} />
+        <KeyValue label="수지" value={money(Number(transactionSummary.income || 0) - Number(transactionSummary.expense || 0))} />
+      </SummaryBlock>
+
       <SummaryBlock icon="◎" title="자산">
         <KeyValue label="자산" value={money(summary.assetTotal)} />
         <KeyValue label="부채" value={money(summary.liabilityTotal)} />
       </SummaryBlock>
 
-      <SummaryBlock icon="▤" title="예산">
+      <SummaryBlock icon="▤" title={`예산 (${monthLabel(summary.month || currentMonth)})`}>
         <div className="budget-overview">
           <div>
             <span>전체예산</span>
@@ -1811,51 +1866,45 @@ function InstallmentScheduleScreen({ transaction, schedule, editGroup, deleteGro
   );
 }
 
-function MoreScreen({ rawText, setRawText, preview, parseText, confirmTextImport, exportMonthlyTransactions, openCategoryManager, openRecurringManager }) {
+function MoreScreen({ exportMonthlyTransactions, openCategoryManager, openRecurringManager }) {
   return (
     <div className="screen more-screen">
       <AppHeader title="더보기" />
-      <section className="sms-import">
-        <h2>문자 자동 입력</h2>
-        <textarea
-          value={rawText}
-          onChange={(event) => setRawText(event.target.value)}
-          placeholder="[카드승인] 6/22 석수 점심식비 8,900원"
-        />
-        <button className="primary-button" type="button" onClick={parseText}>문자 분석</button>
-        {preview && (
-          <div className="preview-card">
-            <div>
-              <strong>{preview.merchant || '가맹점 후보 없음'}</strong>
-              <span>{preview.transactionDate} · {typeLabels[preview.type]} · {money(preview.amount)}</span>
-            </div>
-            <dl className="preview-detail">
-              <div>
-                <dt>추천 분류</dt>
-                <dd>
-                  {preview.recommendedCategoryName || '추천 없음'}
-                  {preview.categoryRecommendationReason && <small>{preview.categoryRecommendationReason}</small>}
-                </dd>
-              </div>
-              <div>
-                <dt>메모</dt>
-                <dd>{preview.memo || '-'}</dd>
-              </div>
-              <div>
-                <dt>원문</dt>
-                <dd>{preview.rawText || rawText}</dd>
-              </div>
-            </dl>
-            <button className="secondary-button" type="button" onClick={confirmTextImport}>거래 입력으로 이동</button>
-          </div>
-        )}
-      </section>
-
       <section className="more-list">
         <button type="button" onClick={openCategoryManager}>카테고리 관리<span>›</span></button>
         <button type="button" onClick={openRecurringManager}>반복 거래<span>›</span></button>
         <button type="button">영수증 사진<span>›</span></button>
         <button type="button" onClick={exportMonthlyTransactions}>월 거래 CSV 내보내기<span>›</span></button>
+      </section>
+    </div>
+  );
+}
+
+function EntryChoiceSheet({ openEntry, openClipboardEntry, onClose }) {
+  return (
+    <div className="sheet-backdrop entry-choice-backdrop" role="presentation" onClick={onClose}>
+      <section className="entry-choice-sheet" role="dialog" aria-modal="true" aria-label="거래 입력 방식" onClick={(event) => event.stopPropagation()}>
+        <header>
+          <div>
+            <strong>거래 추가</strong>
+            <span>입력 방식을 선택하세요.</span>
+          </div>
+          <button type="button" onClick={onClose} aria-label="닫기">×</button>
+        </header>
+        <button type="button" className="entry-choice-button" onClick={() => openEntry('EXPENSE')}>
+          <span>✎</span>
+          <div>
+            <strong>직접 입력</strong>
+            <small>수입·지출·이체를 직접 작성합니다.</small>
+          </div>
+        </button>
+        <button type="button" className="entry-choice-button" onClick={openClipboardEntry}>
+          <span>▤</span>
+          <div>
+            <strong>문자 자동 입력</strong>
+            <small>클립보드의 카드·은행 문자를 분석합니다.</small>
+          </div>
+        </button>
       </section>
     </div>
   );

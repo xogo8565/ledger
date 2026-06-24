@@ -63,7 +63,23 @@ assert(expenseCategory, 'bootstrap did not return an expense category');
 assert(cashAsset, 'bootstrap did not return a cash/bank asset');
 
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+const context = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  permissions: ['clipboard-read', 'clipboard-write']
+});
+await context.addInitScript(() => {
+  let clipboardText = '';
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      readText: async () => clipboardText,
+      writeText: async (text) => {
+        clipboardText = String(text || '');
+      }
+    }
+  });
+});
+const page = await context.newPage();
 const browserErrors = [];
 const mutationRequests = [];
 const cleanup = {
@@ -217,6 +233,8 @@ try {
 
   await clickBottomTab(page, 0, '.ledger-screen');
   await page.locator('.fab').click();
+  await assertVisible(page, '.entry-choice-sheet', 'transaction entry choice did not open');
+  await page.getByRole('button', { name: '직접 입력' }).click();
   await assertVisible(page, '.entry-screen-form', 'transaction entry panel did not open');
   await page.locator('.entry-screen-form button[type="submit"]').click();
   assert(
@@ -241,10 +259,44 @@ try {
     cleanup.installmentGroupIds.push(transaction.installmentGroupId);
   }
   await assertVisible(page, '.ledger-screen', 'ledger screen did not return after creating transaction');
+  await page.getByLabel('거래 검색').fill(transactionTitle);
+  await page.waitForTimeout(150);
+  const filteredExpenseText = await page.locator('.month-totals .mini-metric.expense strong').textContent();
+  assert(
+    filteredExpenseText?.replaceAll(',', '').includes(String(Number(transaction.amount))),
+    `filtered transaction total did not match created transaction: ${filteredExpenseText}`
+  );
+  await page.locator('.ledger-filters button', { hasText: '초기화' }).click();
   await page.locator('.fab').click();
+  await assertVisible(page, '.entry-choice-sheet', 'transaction entry choice did not reopen after create');
+  await page.getByRole('button', { name: '직접 입력' }).click();
   await assertVisible(page, '.entry-screen-form', 'transaction entry panel did not reopen after create');
   await page.locator('.full-panel .back-button').first().click();
   await assertVisible(page, '.ledger-screen', 'ledger screen did not return after closing entry panel');
+
+  await page.evaluate(async () => navigator.clipboard.writeText(''));
+  await page.locator('.fab').click();
+  await assertVisible(page, '.entry-choice-sheet', 'empty clipboard entry choice did not open');
+  let emptyClipboardMessage = '';
+  page.once('dialog', async (dialog) => {
+    emptyClipboardMessage = dialog.message();
+    await dialog.accept();
+  });
+  await page.getByRole('button', { name: '문자 자동 입력' }).click();
+  assert(emptyClipboardMessage.includes('문자 내용이 없습니다'), `unexpected empty clipboard alert: ${emptyClipboardMessage}`);
+  await assertVisible(page, '.entry-choice-sheet', 'entry choice closed after empty clipboard alert');
+
+  await page.evaluate(async () => navigator.clipboard.writeText('[신한카드] 06/24 스타벅스 8,900원'));
+  const [textParseResponse] = await Promise.all([
+    page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/import/text/parse')),
+    page.getByRole('button', { name: '문자 자동 입력' }).click()
+  ]);
+  await assertResponseOk(textParseResponse, 'clipboard text parse');
+  await assertVisible(page, '.entry-screen-form', 'clipboard text did not open transaction entry');
+  const clipboardAmount = await page.locator('.entry-fields .line-field').nth(1).locator('input').inputValue();
+  assert(clipboardAmount === '8900', `clipboard amount was not populated: ${clipboardAmount}`);
+  await page.locator('.full-panel .back-button').first().click();
+  await assertVisible(page, '.ledger-screen', 'ledger screen did not return after clipboard entry');
 
   await clickBottomTab(page, 1, '.stats-screen');
   await page.locator('.segmented-tabs button').nth(1).click();
