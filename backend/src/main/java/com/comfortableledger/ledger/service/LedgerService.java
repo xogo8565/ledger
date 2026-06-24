@@ -82,6 +82,10 @@ public class LedgerService {
     @Transactional(readOnly = true)
     public AssetSummaryDto assetSummary() {
         List<Asset> assets = assetRepository.findByHouseholdIdAndHiddenFalseOrderBySortOrderAscIdAsc(defaultHousehold().getId());
+        return summarizeAssets(assets);
+    }
+
+    static AssetSummaryDto summarizeAssets(List<Asset> assets) {
         BigDecimal totalAssets = assets.stream()
                 .filter(asset -> asset.getType() != AssetType.CARD && asset.getType() != AssetType.DEBT)
                 .map(Asset::getBalance)
@@ -92,7 +96,44 @@ public class LedgerService {
                 .map(BigDecimal::abs)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal netWorth = totalAssets.subtract(totalLiabilities);
-        return new AssetSummaryDto(totalAssets, totalLiabilities, netWorth);
+        Map<String, List<Asset>> byOwner = assets.stream()
+                .collect(Collectors.groupingBy(
+                        asset -> normalizedOwnerName(asset.getOwnerName()),
+                        java.util.LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+        List<AssetSummaryDto.OwnerAssetSummary> owners = byOwner.entrySet().stream()
+                .map(entry -> {
+                    BigDecimal ownerAssets = entry.getValue().stream()
+                            .filter(asset -> asset.getType() != AssetType.CARD && asset.getType() != AssetType.DEBT)
+                            .map(Asset::getBalance)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal ownerLiabilities = entry.getValue().stream()
+                            .filter(asset -> asset.getType() == AssetType.CARD || asset.getType() == AssetType.DEBT)
+                            .map(Asset::getBalance)
+                            .map(BigDecimal::abs)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return new AssetSummaryDto.OwnerAssetSummary(
+                            entry.getKey(),
+                            ownerAssets,
+                            ownerLiabilities,
+                            ownerAssets.subtract(ownerLiabilities),
+                            entry.getValue().size()
+                    );
+                })
+                .sorted(Comparator
+                        .comparing((AssetSummaryDto.OwnerAssetSummary item) -> "명의 미지정".equals(item.ownerName()))
+                        .thenComparing(AssetSummaryDto.OwnerAssetSummary::netWorth, Comparator.reverseOrder())
+                        .thenComparing(AssetSummaryDto.OwnerAssetSummary::ownerName))
+                .toList();
+        return new AssetSummaryDto(totalAssets, totalLiabilities, netWorth, owners);
+    }
+
+    private static String normalizedOwnerName(String ownerName) {
+        if (ownerName == null || ownerName.isBlank()) {
+            return "명의 미지정";
+        }
+        return ownerName.trim().replaceAll("\\s+", " ");
     }
 
     @Transactional(readOnly = true)

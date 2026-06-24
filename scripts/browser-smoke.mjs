@@ -113,16 +113,19 @@ try {
   await assertNoHorizontalOverflow(page, 'mobile ledger screen');
 
   await clickBottomTab(page, 2, '.assets-screen');
+  await assertVisible(page, '.owner-asset-summary', 'owner asset summary did not render');
   const assetRows = await page.locator('.asset-row').count();
   assert(assetRows > 0, 'assets screen did not render any asset rows');
   await page.screenshot({ path: `${screenshotDir}/browser-smoke-assets-mobile.png`, fullPage: true });
 
   const assetName = `browser-smoke-asset-${Date.now()}`;
   const assetUpdatedName = `${assetName}-updated`;
+  const assetOwnerName = `browser-smoke-owner-${Date.now()}`;
   await page.locator('.asset-actions .top-icon-button').last().click();
   await assertVisible(page, '.simple-edit-screen', 'asset form did not open');
   await page.locator('.simple-edit-screen .line-field').nth(1).locator('input').fill(assetName);
-  await page.locator('.simple-edit-screen .line-field').nth(2).locator('input').fill('12345');
+  await page.locator('.simple-edit-screen .line-field').nth(2).locator('input').fill(assetOwnerName);
+  await page.locator('.simple-edit-screen .line-field').nth(3).locator('input').fill('12345');
   const [assetCreateResponse] = await Promise.all([
     page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/assets')),
     page.locator('.simple-edit-screen .wide-save-button').click()
@@ -131,6 +134,7 @@ try {
   const createdAsset = await assetCreateResponse.json();
   cleanup.assetIds.push(createdAsset.id);
   await page.waitForSelector(`.asset-row:has-text("${assetName}")`, { timeout: 15000 });
+  await page.waitForSelector(`.owner-summary-row:has-text("${assetOwnerName}")`, { timeout: 15000 });
 
   await page.locator('.asset-row', { hasText: assetName }).locator('button').first().click();
   await assertVisible(page, '.simple-edit-screen', 'asset edit form did not open');

@@ -82,7 +82,7 @@ function App() {
   const [statsPeriod, setStatsPeriod] = useState('monthly');
   const [statsBreakdown, setStatsBreakdown] = useState('category');
   const [month, setMonth] = useState(currentMonth);
-  const [data, setData] = useState({ assets: [], categories: [], transactions: [], summary: null });
+  const [data, setData] = useState({ assets: [], categories: [], transactions: [], summary: null, assetSummary: null });
   const [rangeTransactions, setRangeTransactions] = useState(null);
   const [yearlySummary, setYearlySummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -112,8 +112,13 @@ function App() {
 
   async function load() {
     setLoading(true);
-    const response = await fetch(`${API}/bootstrap?month=${month}`);
-    setData(await response.json());
+    const [bootstrapResponse, assetSummaryResponse] = await Promise.all([
+      fetch(`${API}/bootstrap?month=${month}`),
+      fetch(`${API}/assets/summary`)
+    ]);
+    const bootstrap = await bootstrapResponse.json();
+    const assetSummary = await assetSummaryResponse.json();
+    setData({ ...bootstrap, assetSummary });
     setLoading(false);
   }
 
@@ -1687,7 +1692,12 @@ function ProgressBar({ value, marker }) {
 }
 
 function AssetsScreen({ data, loading, openAssetForm, openCardPaymentManager, deleteAsset }) {
-  const summary = data.summary || {};
+  const summary = data.assetSummary || {
+    totalAssets: data.summary?.assetTotal,
+    totalLiabilities: data.summary?.liabilityTotal,
+    netWorth: data.summary?.netWorth,
+    owners: []
+  };
   const groups = useMemo(() => {
     const next = new Map();
     data.assets.forEach((asset) => {
@@ -1710,38 +1720,57 @@ function AssetsScreen({ data, loading, openAssetForm, openCardPaymentManager, de
         }
       />
       <section className="asset-summary">
-        <Metric label="자산" value={numberOnly(summary.assetTotal)} tone="income" />
-        <Metric label="부채" value={`-${numberOnly(summary.liabilityTotal)}`} tone="expense" />
+        <Metric label="자산" value={numberOnly(summary.totalAssets)} tone="income" />
+        <Metric label="부채" value={`-${numberOnly(summary.totalLiabilities)}`} tone="expense" />
         <Metric label="합계" value={numberOnly(summary.netWorth)} tone="total" />
       </section>
       {loading ? (
         <EmptyState label="불러오는 중입니다." />
       ) : (
-        <section className="asset-groups">
-          {groups.map(([groupName, assets]) => {
-            const groupTotal = assets.reduce((sum, asset) => sum + Number(asset.balance), 0);
-            return (
-              <article className="asset-group" key={groupName}>
-                <h2><span>{groupName}</span><b>{money(groupTotal)}</b></h2>
-                {assets.map((asset) => (
-                  <div className="asset-row" key={asset.id}>
-                    <button type="button" onClick={() => openAssetForm(asset)}>
-                      <strong>{asset.name}</strong>
-                      <span>{asset.ownerName ? `${asset.ownerName} · ${assetTypeLabels[asset.type] || asset.type}` : assetTypeLabels[asset.type] || asset.type}</span>
-                    </button>
-                    <b className={asset.type === 'CARD' || asset.type === 'DEBT' ? 'expense' : 'income'}>{money(asset.balance)}</b>
-                    {asset.type === 'CARD' && (
-                      <button className="card-pay-button" type="button" onClick={() => openCardPaymentManager(asset)} aria-label={`${asset.name} 결제 관리`}>
-                        결제
-                      </button>
-                    )}
-                    <button className="row-delete" type="button" aria-label={`${asset.name} 삭제`} onClick={() => deleteAsset(asset)}>−</button>
-                  </div>
-                ))}
+        <>
+          <section className="owner-asset-summary" aria-label="명의별 자산 요약">
+            <h2>명의별 자산</h2>
+            {(summary.owners || []).map((owner) => (
+              <article className="owner-summary-row" key={owner.ownerName}>
+                <div>
+                  <strong>{owner.ownerName}</strong>
+                  <span>{owner.assetCount}개 자산</span>
+                </div>
+                <dl>
+                  <div><dt>자산</dt><dd className="income">{money(owner.totalAssets)}</dd></div>
+                  <div><dt>부채</dt><dd className="expense">{money(owner.totalLiabilities)}</dd></div>
+                  <div><dt>순자산</dt><dd>{money(owner.netWorth)}</dd></div>
+                </dl>
               </article>
-            );
-          })}
-        </section>
+            ))}
+            {!(summary.owners || []).length && <EmptyState label="명의별 자산이 없습니다." compact />}
+          </section>
+          <section className="asset-groups">
+            {groups.map(([groupName, assets]) => {
+              const groupTotal = assets.reduce((sum, asset) => sum + Number(asset.balance), 0);
+              return (
+                <article className="asset-group" key={groupName}>
+                  <h2><span>{groupName}</span><b>{money(groupTotal)}</b></h2>
+                  {assets.map((asset) => (
+                    <div className="asset-row" key={asset.id}>
+                      <button type="button" onClick={() => openAssetForm(asset)}>
+                        <strong>{asset.name}</strong>
+                        <span>{asset.ownerName ? `${asset.ownerName} · ${assetTypeLabels[asset.type] || asset.type}` : assetTypeLabels[asset.type] || asset.type}</span>
+                      </button>
+                      <b className={asset.type === 'CARD' || asset.type === 'DEBT' ? 'expense' : 'income'}>{money(asset.balance)}</b>
+                      {asset.type === 'CARD' && (
+                        <button className="card-pay-button" type="button" onClick={() => openCardPaymentManager(asset)} aria-label={`${asset.name} 결제 관리`}>
+                          결제
+                        </button>
+                      )}
+                      <button className="row-delete" type="button" aria-label={`${asset.name} 삭제`} onClick={() => deleteAsset(asset)}>−</button>
+                    </div>
+                  ))}
+                </article>
+              );
+            })}
+          </section>
+        </>
       )}
     </div>
   );

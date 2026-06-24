@@ -1113,6 +1113,63 @@ button {
   padding: 18px 0;
 }
 
+.owner-asset-summary {
+  display: grid;
+  border-bottom: 10px solid var(--surface-soft);
+  background: var(--surface);
+}
+
+.owner-asset-summary > h2 {
+  margin: 0;
+  padding: 18px 18px 10px;
+  font-size: 18px;
+}
+
+.owner-summary-row {
+  display: grid;
+  gap: 12px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.owner-summary-row > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.owner-summary-row > div span {
+  color: var(--subtle);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.owner-summary-row dl {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+}
+
+.owner-summary-row dl div {
+  display: grid;
+  gap: 4px;
+}
+
+.owner-summary-row dt {
+  color: var(--subtle);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.owner-summary-row dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  font-weight: 900;
+}
+
 .asset-group {
   border-bottom: 10px solid var(--surface-soft);
 }

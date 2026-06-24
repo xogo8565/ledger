@@ -254,7 +254,20 @@ public final class ApiDtos {
         }
     }
 
-    public record AssetSummaryDto(BigDecimal totalAssets, BigDecimal totalLiabilities, BigDecimal netWorth) {
+    public record AssetSummaryDto(
+            BigDecimal totalAssets,
+            BigDecimal totalLiabilities,
+            BigDecimal netWorth,
+            List<OwnerAssetSummary> owners
+    ) {
+        public record OwnerAssetSummary(
+                String ownerName,
+                BigDecimal totalAssets,
+                BigDecimal totalLiabilities,
+                BigDecimal netWorth,
+                long assetCount
+        ) {
+        }
     }
 
     public record CardPaymentScheduleDto(
