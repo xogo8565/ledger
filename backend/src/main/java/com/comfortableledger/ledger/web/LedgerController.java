@@ -17,10 +17,15 @@ import com.comfortableledger.ledger.web.ApiDtos.SaveCardAssetRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveCategoryRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SchedulePaymentRequest;
 import com.comfortableledger.ledger.web.ApiDtos.TransactionDto;
+import com.comfortableledger.ledger.web.ApiDtos.YearlySummaryDto;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -73,6 +78,11 @@ public class LedgerController {
         return ledgerService.createCardAsset(request);
     }
 
+    @PutMapping("/assets/{id}/card")
+    public AssetDto updateCardAsset(@PathVariable Long id, @Valid @RequestBody SaveCardAssetRequest request) {
+        return ledgerService.updateCardAsset(id, request);
+    }
+
     @PutMapping("/assets/{id}")
     public AssetDto updateAsset(@PathVariable Long id, @Valid @RequestBody SaveAssetRequest request) {
         return ledgerService.updateAsset(id, request);
@@ -108,6 +118,14 @@ public class LedgerController {
         return ledgerService.transactions(month);
     }
 
+    @GetMapping("/transactions/range")
+    public List<TransactionDto> transactionsBetween(
+            @RequestParam LocalDate startDate,
+            @RequestParam LocalDate endDate
+    ) {
+        return ledgerService.transactionsBetween(startDate, endDate);
+    }
+
     @GetMapping("/transactions/daily")
     public List<TransactionDto> dailyTransactions(@RequestParam(required = false) String date) {
         return ledgerService.dailyTransactions(date);
@@ -121,6 +139,19 @@ public class LedgerController {
     @GetMapping("/transactions/installments/{installmentGroupId}")
     public List<TransactionDto> installmentTransactions(@PathVariable String installmentGroupId) {
         return ledgerService.installmentTransactions(installmentGroupId);
+    }
+
+    @PutMapping("/transactions/installments/{installmentGroupId}")
+    public List<TransactionDto> updateInstallmentTransactions(
+            @PathVariable String installmentGroupId,
+            @Valid @RequestBody CreateTransactionRequest request
+    ) {
+        return ledgerService.updateInstallmentTransactions(installmentGroupId, request);
+    }
+
+    @DeleteMapping("/transactions/installments/{installmentGroupId}")
+    public void deleteInstallmentTransactions(@PathVariable String installmentGroupId) {
+        ledgerService.deleteInstallmentTransactions(installmentGroupId);
     }
 
     @PostMapping("/transactions")
@@ -143,6 +174,24 @@ public class LedgerController {
         return ledgerService.monthlySummary(month);
     }
 
+    @GetMapping("/summary/yearly")
+    public YearlySummaryDto yearlySummary(@RequestParam(required = false) Integer year) {
+        return ledgerService.yearlySummary(year);
+    }
+
+    @GetMapping("/export/transactions.csv")
+    public ResponseEntity<byte[]> exportTransactionsCsv(
+            @RequestParam(required = false) String month,
+            @RequestParam(required = false) Integer year
+    ) {
+        String csv = "\uFEFF" + ledgerService.exportTransactionsCsv(month, year);
+        String period = year != null ? String.valueOf(year) : month == null || month.isBlank() ? YearMonth.now().toString() : month;
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"ledger-transactions-" + period + ".csv\"")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csv.getBytes(StandardCharsets.UTF_8));
+    }
+
     @GetMapping("/budgets/settings")
     public BudgetSettingsDto budgetSettings(@RequestParam(required = false) String month) {
         return ledgerService.budgetSettings(month);
@@ -151,5 +200,10 @@ public class LedgerController {
     @PostMapping("/budgets/settings")
     public BudgetSettingsDto saveBudget(@Valid @RequestBody SaveBudgetRequest request) {
         return ledgerService.saveBudget(request);
+    }
+
+    @PostMapping("/budgets/settings/copy-previous")
+    public BudgetSettingsDto copyPreviousBudget(@RequestParam(required = false) String month) {
+        return ledgerService.copyPreviousBudget(month);
     }
 }

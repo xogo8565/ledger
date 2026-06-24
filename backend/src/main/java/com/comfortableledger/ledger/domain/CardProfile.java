@@ -48,6 +48,13 @@ public class CardProfile {
         this.autoPayment = autoPayment;
     }
 
+    public void update(Asset paymentAccount, int statementClosingDay, int paymentDay, boolean autoPayment) {
+        this.paymentAccount = paymentAccount;
+        this.statementClosingDay = statementClosingDay;
+        this.paymentDay = paymentDay;
+        this.autoPayment = autoPayment;
+    }
+
     public Long getId() {
         return id;
     }

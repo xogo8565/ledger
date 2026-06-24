@@ -70,8 +70,18 @@ public class CardController {
     }
 
     @PostMapping("/payment-schedules/execute")
-    public void executePaymentSchedule(@Valid @RequestBody SchedulePaymentRequest request) {
-        cardService.executePaymentSchedule(request.scheduleId(), ledgerService);
+    public CardPaymentScheduleDto executePaymentSchedule(@Valid @RequestBody SchedulePaymentRequest request) {
+        return cardService.executePaymentSchedule(request.scheduleId(), ledgerService);
+    }
+
+    @PostMapping("/payment-schedules/{scheduleId}/reschedule")
+    public CardPaymentScheduleDto rescheduleFailedPayment(@PathVariable Long scheduleId) {
+        return cardService.rescheduleFailedPayment(scheduleId);
+    }
+
+    @PostMapping("/payment-schedules/{scheduleId}/retry")
+    public CardPaymentScheduleDto retryFailedPayment(@PathVariable Long scheduleId) {
+        return cardService.retryFailedPayment(scheduleId, ledgerService);
     }
 
     @DeleteMapping("/payment-schedules/{scheduleId}")

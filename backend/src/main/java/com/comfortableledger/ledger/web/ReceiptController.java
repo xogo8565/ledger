@@ -1,9 +1,15 @@
 package com.comfortableledger.ledger.web;
 
 import com.comfortableledger.ledger.service.ReceiptService;
+import com.comfortableledger.ledger.service.ReceiptService.ReceiptFile;
 import com.comfortableledger.ledger.web.ApiDtos.ReceiptDto;
 import java.io.IOException;
+import java.util.List;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,5 +29,24 @@ public class ReceiptController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ReceiptDto attach(@PathVariable Long transactionId, @RequestPart MultipartFile file) throws IOException {
         return receiptService.attach(transactionId, file);
+    }
+
+    @GetMapping
+    public List<ReceiptDto> receipts(@PathVariable Long transactionId) {
+        return receiptService.receipts(transactionId);
+    }
+
+    @GetMapping("/{receiptId}/file")
+    public ResponseEntity<byte[]> file(@PathVariable Long receiptId) throws IOException {
+        ReceiptFile file = receiptService.receiptFile(receiptId);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.filename() + "\"")
+                .contentType(MediaType.parseMediaType(file.contentType()))
+                .body(file.bytes());
+    }
+
+    @DeleteMapping("/{receiptId}")
+    public void delete(@PathVariable Long receiptId) throws IOException {
+        receiptService.delete(receiptId);
     }
 }

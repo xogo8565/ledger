@@ -353,6 +353,76 @@ button {
   font-size: 19px;
 }
 
+.ledger-filters {
+  display: grid;
+  gap: 8px;
+  padding: 0 18px 12px;
+  background: var(--surface);
+  border-bottom: 8px solid var(--surface-soft);
+}
+
+.ledger-filters input,
+.ledger-filters select,
+.ledger-filters button {
+  height: 36px;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.ledger-filters input {
+  width: 100%;
+  padding: 0 12px;
+}
+
+.ledger-filters > div {
+  display: grid;
+  grid-template-columns: 88px 1fr auto;
+  gap: 8px;
+}
+
+.ledger-filters > .date-filter-row {
+  grid-template-columns: 1fr 1fr;
+}
+
+.ledger-filters select {
+  padding: 0 8px;
+}
+
+.ledger-filters button {
+  padding: 0 10px;
+  color: var(--accent);
+}
+
+.ledger-filters button:disabled {
+  cursor: not-allowed;
+  color: var(--subtle);
+  opacity: 0.55;
+}
+
+.ledger-filters > .filter-result-row {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.filter-result-row span {
+  color: var(--subtle);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.range-banner {
+  padding: 8px 18px;
+  border-top: 1px solid var(--line);
+  color: var(--accent);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .transfer {
   color: var(--transfer);
 }
@@ -684,6 +754,30 @@ button {
   background: var(--accent);
 }
 
+.stats-breakdown-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.stats-breakdown-tabs button {
+  height: 38px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--subtle);
+  background: var(--surface);
+  font-weight: 900;
+}
+
+.stats-breakdown-tabs button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #f1f9e8;
+}
+
 .chart-zone {
   display: grid;
   place-items: center;
@@ -728,6 +822,13 @@ button {
   grid-template-columns: 68px 1fr auto;
   gap: 12px;
   padding: 0 18px;
+  width: 100%;
+  border-top: 0;
+  border-right: 0;
+  border-left: 0;
+  color: var(--text);
+  background: var(--surface);
+  text-align: left;
 }
 
 .percent-badge {
@@ -747,6 +848,85 @@ button {
   min-width: 0;
   overflow-wrap: anywhere;
   font-size: 18px;
+}
+
+.tag-ranking-list {
+  border-top: 10px solid var(--surface-soft);
+}
+
+.tag-ranking-row strong {
+  display: grid;
+  gap: 3px;
+}
+
+.tag-ranking-row small {
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.yearly-stats {
+  background: var(--surface-soft);
+}
+
+.yearly-headline {
+  display: grid;
+  gap: 8px;
+  padding: 24px 24px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.yearly-headline span {
+  color: #777;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.yearly-headline strong {
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.yearly-month-list {
+  display: grid;
+  gap: 0;
+  padding: 8px 0;
+  background: var(--surface);
+  border-bottom: 10px solid var(--surface-soft);
+}
+
+.yearly-month-row {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 44px 1fr 112px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+}
+
+.yearly-month-row span {
+  color: #777;
+  font-weight: 900;
+}
+
+.yearly-month-row div {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-soft);
+}
+
+.yearly-month-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.yearly-month-row b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .budget-screen {
@@ -808,7 +988,7 @@ button {
 }
 
 .budget-category-row {
-  grid-template-columns: 126px 1fr 86px;
+  grid-template-columns: 126px 1fr 64px;
   gap: 12px;
   padding: 0 18px;
 }
@@ -836,6 +1016,29 @@ button {
 .budget-category-row b {
   text-align: right;
   font-size: 16px;
+}
+
+.budget-category-row small,
+.budget-category-row em {
+  color: var(--subtle);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.budget-category-row small {
+  grid-column: 2;
+}
+
+.budget-category-row em {
+  grid-column: 3;
+  text-align: right;
+}
+
+.budget-category-row.over span,
+.budget-category-row.over b,
+.budget-category-row.over em {
+  color: var(--accent);
 }
 
 .details-table header,
@@ -1003,9 +1206,18 @@ button {
   font-weight: 900;
 }
 
+.secondary-button {
+  height: 44px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: var(--accent);
+  background: var(--surface);
+  font-weight: 900;
+}
+
 .preview-card {
   display: grid;
-  gap: 4px;
+  gap: 12px;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1013,7 +1225,33 @@ button {
 }
 
 .preview-card span {
+  display: block;
+  margin-top: 4px;
   color: #777;
+}
+
+.preview-detail {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.preview-detail div {
+  display: grid;
+  gap: 3px;
+}
+
+.preview-detail dt {
+  color: #777;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.preview-detail dd {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .more-list button {
@@ -1083,6 +1321,13 @@ button {
   gap: 10px;
 }
 
+.card-billing-note {
+  margin: 10px 0 0;
+  color: var(--subtle);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .card-payment-form {
   display: grid;
   border-bottom: 8px solid var(--surface-soft);
@@ -1117,15 +1362,36 @@ button {
   color: var(--muted);
 }
 
+.card-payment-row.failed {
+  grid-template-columns: 1fr auto auto;
+  color: var(--accent);
+}
+
 .card-payment-row strong,
-.card-payment-row span {
+.card-payment-row span,
+.card-payment-row small {
   display: block;
 }
 
-.card-payment-row span {
+.card-payment-row span,
+.card-payment-row small {
   margin-top: 4px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.card-payment-row.failed span,
+.card-payment-row.failed small {
+  color: var(--accent);
+}
+
+.payment-status-badge {
+  justify-self: end;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .card-payment-row b {
@@ -1165,6 +1431,22 @@ button {
   border-top: 1px solid var(--line);
   border-bottom: 8px solid var(--surface-soft);
   background: var(--surface);
+}
+
+.text-action {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 900;
+}
+
+.danger-outline-button {
+  height: 40px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 900;
 }
 
 .installment-summary > strong {
@@ -1275,6 +1557,63 @@ button {
   max-width: 68%;
   overflow-wrap: anywhere;
   text-align: right;
+}
+
+.receipt-preview-list {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.receipt-preview-list h2 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.receipt-preview-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.receipt-preview-row a {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 900;
+}
+
+.receipt-preview-row img {
+  width: 54px;
+  height: 54px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--surface-soft);
+}
+
+.receipt-preview-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipt-preview-row button {
+  height: 34px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 900;
 }
 
 .transaction-detail-actions {
@@ -1790,6 +2129,16 @@ button {
 
 .budget-settings-screen {
   overflow: hidden;
+}
+
+.budget-copy-button {
+  height: 42px;
+  margin: 0 18px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 900;
 }
 
 .budget-total-edit {

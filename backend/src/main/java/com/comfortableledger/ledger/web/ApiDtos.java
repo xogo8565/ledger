@@ -14,6 +14,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public final class ApiDtos {
@@ -26,6 +27,7 @@ public final class ApiDtos {
             String name,
             BigDecimal balance,
             String groupName,
+            String ownerName,
             String memo,
             CardDto card
     ) {
@@ -44,6 +46,7 @@ public final class ApiDtos {
                     asset.getName(),
                     asset.getBalance(),
                     asset.getGroupName(),
+                    asset.getOwnerName(),
                     asset.getMemo(),
                     card
             );
@@ -55,6 +58,7 @@ public final class ApiDtos {
             @NotBlank String name,
             @NotNull BigDecimal balance,
             String groupName,
+            String ownerName,
             String memo
     ) {
     }
@@ -63,6 +67,7 @@ public final class ApiDtos {
             @NotBlank String name,
             @NotNull BigDecimal balance,
             String groupName,
+            String ownerName,
             String memo,
             @NotNull Long paymentAccountId,
             int statementClosingDay,
@@ -76,7 +81,9 @@ public final class ApiDtos {
 
     public record CardDetailDto(Long id, String name, BigDecimal balance, Long paymentAccountId, 
                                 int statementClosingDay, int paymentDay, boolean autoPayment,
-                                BigDecimal unpaidAmount, BigDecimal paymentScheduleAmount) {
+                                BigDecimal unpaidAmount, BigDecimal paymentScheduleAmount,
+                                LocalDate nextPaymentDate, LocalDate originalPaymentDate, boolean paymentDateAdjusted,
+                                LocalDate billingStartDate, LocalDate billingEndDate) {
     }
 
     public record CategoryDto(Long id, CategoryType type, String name, String icon, String color) {
@@ -107,6 +114,7 @@ public final class ApiDtos {
             Long toAssetId,
             String title,
             String memo,
+            String spendingTag,
             int installmentMonths,
             int installmentIndex,
             String installmentGroupId
@@ -126,6 +134,7 @@ public final class ApiDtos {
                     record.getToAsset() == null ? null : record.getToAsset().getId(),
                     record.getTitle(),
                     record.getMemo(),
+                    record.getSpendingTag(),
                     record.getInstallmentMonths(),
                     record.getInstallmentIndex(),
                     record.getInstallmentGroupId()
@@ -143,6 +152,7 @@ public final class ApiDtos {
             Long toAssetId,
             String title,
             String memo,
+            String spendingTag,
             Integer installmentMonths
     ) {
     }
@@ -158,9 +168,26 @@ public final class ApiDtos {
             BigDecimal budget,
             BigDecimal remainingBudget,
             BigDecimal budgetUsageRate,
-            List<CategorySpend> categorySpends
+            List<CategorySpend> categorySpends,
+            List<TagSpend> tagSpends,
+            List<CategoryBudgetUsage> categoryBudgetUsages
     ) {
-        public record CategorySpend(String categoryName, BigDecimal amount) {
+        public record CategorySpend(Long categoryId, String categoryName, BigDecimal amount) {
+        }
+
+        public record TagSpend(String tagName, BigDecimal amount, long transactionCount) {
+        }
+
+        public record CategoryBudgetUsage(
+                Long categoryId,
+                String categoryName,
+                String categoryIcon,
+                BigDecimal budgetAmount,
+                BigDecimal spentAmount,
+                BigDecimal remainingAmount,
+                BigDecimal usageRate,
+                boolean exceeded
+        ) {
         }
     }
 
@@ -191,9 +218,15 @@ public final class ApiDtos {
     ) {
     }
 
-    public record ReceiptDto(Long id, String originalFilename, String storedPath) {
+    public record ReceiptDto(Long id, String originalFilename, String storedPath, String contentType, long size) {
         public static ReceiptDto from(ReceiptAttachment attachment) {
-            return new ReceiptDto(attachment.getId(), attachment.getOriginalFilename(), attachment.getStoredPath());
+            return new ReceiptDto(
+                    attachment.getId(),
+                    attachment.getOriginalFilename(),
+                    attachment.getStoredPath(),
+                    attachment.getContentType(),
+                    attachment.getSize()
+            );
         }
     }
 
@@ -205,6 +238,19 @@ public final class ApiDtos {
     ) {
     }
 
+    public record YearlySummaryDto(
+            int year,
+            BigDecimal income,
+            BigDecimal expense,
+            BigDecimal transfer,
+            List<MonthlyTotals> monthlyTotals,
+            List<MonthlySummaryDto.CategorySpend> categorySpends,
+            List<MonthlySummaryDto.TagSpend> tagSpends
+    ) {
+        public record MonthlyTotals(String month, BigDecimal income, BigDecimal expense, BigDecimal transfer) {
+        }
+    }
+
     public record AssetSummaryDto(BigDecimal totalAssets, BigDecimal totalLiabilities, BigDecimal netWorth) {
     }
 
@@ -213,7 +259,9 @@ public final class ApiDtos {
             Long cardAssetId,
             LocalDate scheduledDate,
             BigDecimal amount,
-            String status
+            String status,
+            LocalDateTime completedAt,
+            String failureReason
     ) {
         public static CardPaymentScheduleDto from(com.comfortableledger.ledger.domain.CardPaymentSchedule schedule) {
             return new CardPaymentScheduleDto(
@@ -221,7 +269,9 @@ public final class ApiDtos {
                     schedule.getCardAsset().getId(),
                     schedule.getScheduledDate(),
                     schedule.getAmount(),
-                    schedule.getStatus().toString()
+                    schedule.getStatus().toString(),
+                    schedule.getCompletedAt(),
+                    schedule.getFailureReason()
             );
         }
     }

@@ -138,6 +138,7 @@ public class RecurringTransactionService {
                         rule.getToAsset() == null ? null : rule.getToAsset().getId(),
                         rule.getTitle(),
                         rule.getMemo(),
+                        null,
                         rule.getInstallmentMonths()
                 ));
                 generatedCount++;

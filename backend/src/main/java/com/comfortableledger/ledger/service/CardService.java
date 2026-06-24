@@ -28,13 +28,16 @@ public class CardService {
     private final CardProfileRepository cardProfileRepository;
     private final TransactionRepository transactionRepository;
     private final CardPaymentScheduleRepository cardPaymentScheduleRepository;
+    private final KoreanHolidayCalendar holidayCalendar;
 
     public CardService(AssetRepository assetRepository, CardProfileRepository cardProfileRepository,
-                       TransactionRepository transactionRepository, CardPaymentScheduleRepository cardPaymentScheduleRepository) {
+                       TransactionRepository transactionRepository, CardPaymentScheduleRepository cardPaymentScheduleRepository,
+                       KoreanHolidayCalendar holidayCalendar) {
         this.assetRepository = assetRepository;
         this.cardProfileRepository = cardProfileRepository;
         this.transactionRepository = transactionRepository;
         this.cardPaymentScheduleRepository = cardPaymentScheduleRepository;
+        this.holidayCalendar = holidayCalendar;
     }
 
     @Transactional(readOnly = true)
@@ -50,7 +53,8 @@ public class CardService {
         }
 
         BigDecimal unpaidAmount = calculateUnpaidAmount(cardAsset);
-        BigDecimal paymentScheduleAmount = calculatePaymentScheduleAmount(cardAsset);
+        BillingCycle billingCycle = calculateBillingCycle(cardProfile, LocalDate.now());
+        BigDecimal paymentScheduleAmount = calculatePaymentScheduleAmount(cardAsset, billingCycle);
 
         return new CardDetailDto(
                 cardAsset.getId(),
@@ -61,7 +65,12 @@ public class CardService {
                 cardProfile.getPaymentDay(),
                 cardProfile.isAutoPayment(),
                 unpaidAmount,
-                paymentScheduleAmount
+                paymentScheduleAmount,
+                billingCycle.paymentDate(),
+                billingCycle.originalPaymentDate(),
+                !billingCycle.paymentDate().equals(billingCycle.originalPaymentDate()),
+                billingCycle.startDate(),
+                billingCycle.endDate()
         );
     }
 
@@ -80,7 +89,11 @@ public class CardService {
         if (cardAsset.getType() != AssetType.CARD) {
             throw new IllegalArgumentException("Card asset type expected");
         }
-        return calculatePaymentScheduleAmount(cardAsset);
+        CardProfile cardProfile = cardAsset.getCardProfile();
+        if (cardProfile == null) {
+            return BigDecimal.ZERO;
+        }
+        return calculatePaymentScheduleAmount(cardAsset, calculateBillingCycle(cardProfile, LocalDate.now()));
     }
 
     @Transactional(readOnly = true)
@@ -95,13 +108,12 @@ public class CardService {
             throw new IllegalArgumentException("Card profile not found");
         }
 
-        LocalDate billingStart = calculateBillingPeriodStart(cardProfile.getStatementClosingDay());
-        LocalDate billingEnd = calculateBillingPeriodEnd(cardProfile.getStatementClosingDay());
+        BillingCycle billingCycle = calculateBillingCycle(cardProfile, LocalDate.now());
 
         return transactionRepository.findByHouseholdIdAndTransactionDateBetweenOrderByTransactionDateDescIdDesc(
                 cardAsset.getHousehold().getId(),
-                billingStart,
-                billingEnd
+                billingCycle.startDate(),
+                billingCycle.endDate()
         ).stream()
                 .filter(record -> record.getType() == TransactionType.EXPENSE && record.getAsset() != null && record.getAsset().getId().equals(cardAssetId))
                 .map(TransactionDto::from)
@@ -128,19 +140,11 @@ public class CardService {
         return cardExpenses.subtract(completedPayments).max(BigDecimal.ZERO);
     }
 
-    private BigDecimal calculatePaymentScheduleAmount(Asset cardAsset) {
-        CardProfile cardProfile = cardAsset.getCardProfile();
-        if (cardProfile == null) {
-            return BigDecimal.ZERO;
-        }
-
-        LocalDate billingStart = calculateBillingPeriodStart(cardProfile.getStatementClosingDay());
-        LocalDate billingEnd = calculateBillingPeriodEnd(cardProfile.getStatementClosingDay());
-
+    private BigDecimal calculatePaymentScheduleAmount(Asset cardAsset, BillingCycle billingCycle) {
         return transactionRepository.findByHouseholdIdAndTransactionDateBetweenOrderByTransactionDateDescIdDesc(
                 cardAsset.getHousehold().getId(),
-                billingStart,
-                billingEnd
+                billingCycle.startDate(),
+                billingCycle.endDate()
         ).stream()
                 .filter(record -> record.getType() == TransactionType.EXPENSE && 
                         record.getAsset() != null && record.getAsset().getId().equals(cardAsset.getId()))
@@ -148,20 +152,25 @@ public class CardService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private LocalDate calculateBillingPeriodStart(int statementClosingDay) {
-        LocalDate today = LocalDate.now();
-        LocalDate lastMonthClosingDay = LocalDate.of(today.getYear(), today.getMonth(), 1)
-                .minusDays(1)
-                .withDayOfMonth(Math.min(statementClosingDay, today.minusMonths(1).lengthOfMonth()));
+    private BillingCycle calculateBillingCycle(CardProfile cardProfile, LocalDate referenceDate) {
+        LocalDate originalPaymentDate = adjustedDay(YearMonth.from(referenceDate), cardProfile.getPaymentDay());
+        LocalDate paymentDate = holidayCalendar.nextBusinessDay(originalPaymentDate);
+        if (paymentDate.isBefore(referenceDate)) {
+            originalPaymentDate = adjustedDay(YearMonth.from(referenceDate).plusMonths(1), cardProfile.getPaymentDay());
+            paymentDate = holidayCalendar.nextBusinessDay(originalPaymentDate);
+        }
 
-        return lastMonthClosingDay.plusDays(1);
+        YearMonth billingEndMonth = YearMonth.from(originalPaymentDate).minusMonths(1);
+        LocalDate billingEndDate = adjustedDay(billingEndMonth, cardProfile.getStatementClosingDay());
+        LocalDate billingStartDate = adjustedDay(billingEndMonth.minusMonths(1), cardProfile.getStatementClosingDay()).plusDays(1);
+        return new BillingCycle(originalPaymentDate, paymentDate, billingStartDate, billingEndDate);
     }
 
-    private LocalDate calculateBillingPeriodEnd(int statementClosingDay) {
-        LocalDate today = LocalDate.now();
-        int maxDayOfMonth = today.lengthOfMonth();
-        int closingDay = Math.min(statementClosingDay, maxDayOfMonth);
-        return today.withDayOfMonth(closingDay);
+    private LocalDate adjustedDay(YearMonth yearMonth, int day) {
+        return yearMonth.atDay(Math.min(day, yearMonth.lengthOfMonth()));
+    }
+
+    private record BillingCycle(LocalDate originalPaymentDate, LocalDate paymentDate, LocalDate startDate, LocalDate endDate) {
     }
 
     /**
@@ -216,21 +225,43 @@ public class CardService {
         cardPaymentScheduleRepository.delete(schedule);
     }
 
+    @Transactional
+    public CardPaymentScheduleDto rescheduleFailedPayment(Long scheduleId) {
+        CardPaymentSchedule schedule = cardPaymentScheduleRepository.findById(scheduleId).orElseThrow();
+        if (schedule.getStatus() != PaymentStatus.FAILED) {
+            throw new IllegalStateException("Only failed payments can be rescheduled");
+        }
+        schedule.reschedule();
+        return CardPaymentScheduleDto.from(cardPaymentScheduleRepository.save(schedule));
+    }
+
+    @Transactional
+    public CardPaymentScheduleDto retryFailedPayment(Long scheduleId, LedgerService ledgerService) {
+        rescheduleFailedPayment(scheduleId);
+        return executePaymentSchedule(scheduleId, ledgerService);
+    }
+
     /**
      * 결제 예약 실행 (거래 생성)
      */
     @Transactional
-    public void executePaymentSchedule(Long scheduleId, LedgerService ledgerService) {
+    public CardPaymentScheduleDto executePaymentSchedule(Long scheduleId, LedgerService ledgerService) {
         CardPaymentSchedule schedule = cardPaymentScheduleRepository.findById(scheduleId).orElseThrow();
         
         if (schedule.getStatus() != PaymentStatus.SCHEDULED) {
             throw new IllegalStateException("Only scheduled payments can be executed");
         }
 
-        Asset cardAsset = schedule.getCardAsset();
-        Asset paymentAccount = cardAsset.getCardProfile().getPaymentAccount();
+        schedule.markProcessing();
+        cardPaymentScheduleRepository.saveAndFlush(schedule);
 
         try {
+            Asset cardAsset = schedule.getCardAsset();
+            if (cardAsset.getCardProfile() == null || cardAsset.getCardProfile().getPaymentAccount() == null) {
+                throw new IllegalStateException("Card payment account not configured");
+            }
+            Asset paymentAccount = cardAsset.getCardProfile().getPaymentAccount();
+
             ledgerService.createTransaction(new CreateTransactionRequest(
                     TransactionType.TRANSFER,
                     schedule.getScheduledDate(),
@@ -241,17 +272,25 @@ public class CardService {
                     null,
                     "카드 자동 결제",
                     cardAsset.getName(),
+                    null,
                     0
             ));
 
-            schedule.setStatus(PaymentStatus.COMPLETED);
-            schedule.setCompletedAt(java.time.LocalDateTime.now());
+            schedule.markCompleted();
             cardPaymentScheduleRepository.save(schedule);
-        } catch (Exception e) {
-            schedule.setStatus(PaymentStatus.FAILED);
-            schedule.setFailureReason(e.getMessage());
+        } catch (RuntimeException e) {
+            schedule.markFailed(failureMessage(e));
             cardPaymentScheduleRepository.save(schedule);
-            throw e;
         }
+
+        return CardPaymentScheduleDto.from(schedule);
+    }
+
+    private String failureMessage(RuntimeException exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) {
+            message = exception.getClass().getSimpleName();
+        }
+        return message.length() > 500 ? message.substring(0, 500) : message;
     }
 }

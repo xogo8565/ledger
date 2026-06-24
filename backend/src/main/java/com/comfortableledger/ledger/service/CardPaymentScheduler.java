@@ -28,7 +28,10 @@ public class CardPaymentScheduler {
         List<CardPaymentScheduleDto> duePayments = cardService.getScheduledPayments(today);
         for (CardPaymentScheduleDto duePayment : duePayments) {
             try {
-                cardService.executePaymentSchedule(duePayment.id(), ledgerService);
+                CardPaymentScheduleDto result = cardService.executePaymentSchedule(duePayment.id(), ledgerService);
+                if ("FAILED".equals(result.status())) {
+                    log.warn("Failed to execute card payment schedule {}: {}", result.id(), result.failureReason());
+                }
             } catch (RuntimeException exception) {
                 log.warn("Failed to execute card payment schedule {}", duePayment.id(), exception);
             }

@@ -8,6 +8,7 @@ import com.comfortableledger.ledger.web.ApiDtos.ReceiptDto;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -44,5 +45,35 @@ public class ReceiptService {
                 file.getSize()
         ));
         return ReceiptDto.from(attachment);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ReceiptDto> receipts(Long transactionId) {
+        return receiptAttachmentRepository.findByTransactionId(transactionId).stream()
+                .map(ReceiptDto::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ReceiptFile receiptFile(Long receiptId) throws IOException {
+        ReceiptAttachment attachment = receiptAttachmentRepository.findById(receiptId).orElseThrow();
+        return new ReceiptFile(
+                attachment.getOriginalFilename(),
+                attachment.getContentType() == null || attachment.getContentType().isBlank()
+                        ? "application/octet-stream"
+                        : attachment.getContentType(),
+                Files.readAllBytes(Path.of(attachment.getStoredPath()))
+        );
+    }
+
+    @Transactional
+    public void delete(Long receiptId) throws IOException {
+        ReceiptAttachment attachment = receiptAttachmentRepository.findById(receiptId).orElseThrow();
+        Path path = Path.of(attachment.getStoredPath());
+        receiptAttachmentRepository.delete(attachment);
+        Files.deleteIfExists(path);
+    }
+
+    public record ReceiptFile(String filename, String contentType, byte[] bytes) {
     }
 }

@@ -54,6 +54,7 @@ public class TransactionRecord {
 
     private String title;
     private String memo;
+    private String spendingTag;
     private int installmentMonths;
     private int installmentIndex;
     private String installmentGroupId;
@@ -65,7 +66,7 @@ public class TransactionRecord {
 
     public TransactionRecord(Household household, Member author, TransactionType type, LocalDate transactionDate,
                              BigDecimal amount, Category category, Asset asset, Asset fromAsset, Asset toAsset,
-                             String title, String memo, int installmentMonths) {
+                             String title, String memo, String spendingTag, int installmentMonths) {
         this.household = household;
         this.author = author;
         this.type = type;
@@ -77,6 +78,7 @@ public class TransactionRecord {
         this.toAsset = toAsset;
         this.title = title;
         this.memo = memo;
+        this.spendingTag = spendingTag;
         this.installmentMonths = installmentMonths;
         this.installmentIndex = installmentMonths > 1 ? 1 : 0;
         this.createdAt = OffsetDateTime.now();
@@ -123,6 +125,10 @@ public class TransactionRecord {
         return memo;
     }
 
+    public String getSpendingTag() {
+        return spendingTag;
+    }
+
     public int getInstallmentMonths() {
         return installmentMonths;
     }
@@ -143,7 +149,7 @@ public class TransactionRecord {
 
     public void update(TransactionType type, LocalDate transactionDate, BigDecimal amount, 
                        Category category, Asset asset, Asset fromAsset, Asset toAsset,
-                       String title, String memo, int installmentMonths) {
+                       String title, String memo, String spendingTag, int installmentMonths) {
         this.type = type;
         this.transactionDate = transactionDate;
         this.amount = amount;
@@ -153,6 +159,7 @@ public class TransactionRecord {
         this.toAsset = toAsset;
         this.title = title;
         this.memo = memo;
+        this.spendingTag = spendingTag;
         this.installmentMonths = installmentMonths;
         this.installmentIndex = installmentMonths > 1 && this.installmentIndex == 0 ? 1 : this.installmentIndex;
         this.updatedAt = OffsetDateTime.now();

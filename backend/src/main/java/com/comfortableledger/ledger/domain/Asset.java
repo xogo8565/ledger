@@ -37,6 +37,7 @@ public class Asset {
     private BigDecimal balance;
 
     private String groupName;
+    private String ownerName;
     private String memo;
     private int sortOrder;
     private boolean hidden;
@@ -79,6 +80,10 @@ public class Asset {
         return groupName;
     }
 
+    public String getOwnerName() {
+        return ownerName;
+    }
+
     public String getMemo() {
         return memo;
     }
@@ -95,15 +100,20 @@ public class Asset {
         return cardProfile;
     }
 
+    public void setCardProfile(CardProfile cardProfile) {
+        this.cardProfile = cardProfile;
+    }
+
     public void changeBalance(BigDecimal delta) {
         this.balance = this.balance.add(delta);
     }
 
-    public void update(AssetType type, String name, BigDecimal balance, String groupName, String memo) {
+    public void update(AssetType type, String name, BigDecimal balance, String groupName, String ownerName, String memo) {
         this.type = type;
         this.name = name;
         this.balance = balance;
         this.groupName = groupName;
+        this.ownerName = ownerName;
         this.memo = memo;
     }
 

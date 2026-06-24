@@ -77,15 +77,22 @@ function transactionTone(type) {
 function App() {
   const [mainTab, setMainTab] = useState('ledger');
   const [ledgerMode, setLedgerMode] = useState('daily');
+  const [ledgerFilters, setLedgerFilters] = useState(emptyLedgerFilters());
   const [statsMode, setStatsMode] = useState('stats');
+  const [statsPeriod, setStatsPeriod] = useState('monthly');
+  const [statsBreakdown, setStatsBreakdown] = useState('category');
   const [month, setMonth] = useState(currentMonth);
   const [data, setData] = useState({ assets: [], categories: [], transactions: [], summary: null });
+  const [rangeTransactions, setRangeTransactions] = useState(null);
+  const [yearlySummary, setYearlySummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [panel, setPanel] = useState(null);
   const [editingAsset, setEditingAsset] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [editingTransaction, setEditingTransaction] = useState(null);
+  const [editingInstallmentGroup, setEditingInstallmentGroup] = useState(null);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [transactionReceipts, setTransactionReceipts] = useState([]);
   const [entryExpression, setEntryExpression] = useState('');
   const [form, setForm] = useState(emptyTransactionForm());
   const [assetForm, setAssetForm] = useState(emptyAssetForm());
@@ -119,6 +126,33 @@ function App() {
     });
   }, [month]);
 
+  useEffect(() => {
+    loadYearlySummary().catch((error) => console.error(error));
+  }, [month]);
+
+  useEffect(() => {
+    loadRangeTransactions().catch((error) => console.error(error));
+  }, [ledgerFilters.startDate, ledgerFilters.endDate]);
+
+  async function loadRangeTransactions() {
+    if (!ledgerFilters.startDate || !ledgerFilters.endDate) {
+      setRangeTransactions(null);
+      return;
+    }
+    if (ledgerFilters.endDate < ledgerFilters.startDate) {
+      setRangeTransactions([]);
+      return;
+    }
+    const response = await fetch(`${API}/transactions/range?startDate=${ledgerFilters.startDate}&endDate=${ledgerFilters.endDate}`);
+    setRangeTransactions(await response.json());
+  }
+
+  async function loadYearlySummary() {
+    const year = Number(month.slice(0, 4));
+    const response = await fetch(`${API}/summary/yearly?year=${year}`);
+    setYearlySummary(await response.json());
+  }
+
   async function openBudgetSettings() {
     const response = await fetch(`${API}/budgets/settings?month=${month}`);
     setBudgetSettings(await response.json());
@@ -127,6 +161,7 @@ function App() {
 
   function openEntry(type = 'EXPENSE') {
     setEditingTransaction(null);
+    setEditingInstallmentGroup(null);
     const nextForm = { ...emptyTransactionForm(), type };
     setForm(nextForm);
     setEntryExpression('');
@@ -134,14 +169,27 @@ function App() {
     setPanel('entry');
   }
 
-  function openTransactionDetail(transaction) {
+  async function openTransactionDetail(transaction) {
     setSelectedTransaction(transaction);
+    const response = await fetch(`${API}/transactions/${transaction.id}/receipts`);
+    setTransactionReceipts(await response.json());
     setPanel('transactionDetail');
+  }
+
+  async function deleteReceipt(receipt) {
+    if (!selectedTransaction) return;
+    const confirmed = window.confirm(`${receipt.originalFilename || '영수증'} 파일을 삭제할까요?`);
+    if (!confirmed) return;
+    await fetch(`${API}/transactions/${selectedTransaction.id}/receipts/${receipt.id}`, { method: 'DELETE' });
+    const response = await fetch(`${API}/transactions/${selectedTransaction.id}/receipts`);
+    setTransactionReceipts(await response.json());
   }
 
   function editTransaction(transaction) {
     setEditingTransaction(transaction);
+    setEditingInstallmentGroup(null);
     setSelectedTransaction(null);
+    setTransactionReceipts([]);
     setForm(transactionToForm(transaction));
     setEntryExpression(String(Number(transaction.amount || 0) || ''));
     setReceiptFile(null);
@@ -153,13 +201,14 @@ function App() {
     setAssetForm(asset ? {
       type: asset.type,
       groupName: asset.groupName || assetTypeLabels[asset.type] || '기타',
+      ownerName: asset.ownerName || '',
       name: asset.name || '',
       balance: String(Number(asset.balance || 0)),
       memo: asset.memo || '',
-      paymentAccountId: '',
-      statementClosingDay: 1,
-      paymentDay: 1,
-      autoPayment: true
+      paymentAccountId: asset.card?.paymentAccountId ? String(asset.card.paymentAccountId) : '',
+      statementClosingDay: asset.card?.statementClosingDay || 1,
+      paymentDay: asset.card?.paymentDay || 1,
+      autoPayment: asset.card?.autoPayment ?? true
     } : emptyAssetForm());
     setPanel('assetForm');
   }
@@ -192,9 +241,38 @@ function App() {
     setPanel('installments');
   }
 
+  function editInstallmentGroup() {
+    if (!selectedInstallment?.installmentGroupId || !installmentSchedule.length) return;
+    const first = installmentSchedule[0];
+    const total = installmentSchedule.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const nextForm = {
+      ...transactionToForm(first),
+      transactionDate: first.transactionDate,
+      amount: total,
+      installmentMonths: installmentSchedule.length
+    };
+    setEditingTransaction(null);
+    setEditingInstallmentGroup(selectedInstallment.installmentGroupId);
+    setForm(nextForm);
+    setEntryExpression(String(total || ''));
+    setReceiptFile(null);
+    setPanel('entry');
+  }
+
+  async function deleteInstallmentGroup() {
+    if (!selectedInstallment?.installmentGroupId) return;
+    const title = selectedInstallment.title || selectedInstallment.categoryName || '할부 거래';
+    const confirmed = window.confirm(`${title} 할부 전체를 삭제할까요? 모든 회차의 자산 잔액도 다시 계산됩니다.`);
+    if (!confirmed) return;
+    await fetch(`${API}/transactions/installments/${selectedInstallment.installmentGroupId}`, { method: 'DELETE' });
+    closePanel();
+    await load();
+  }
+
   function closePanel() {
     setPanel(null);
     setEditingTransaction(null);
+    setEditingInstallmentGroup(null);
     setSelectedTransaction(null);
     setEditingAsset(null);
     setEditingCategory(null);
@@ -208,6 +286,71 @@ function App() {
 
   function updateForm(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function openLedgerCategory(category) {
+    const categoryId = category?.categoryId || category?.id;
+    setLedgerFilters({
+      ...emptyLedgerFilters(),
+      type: 'EXPENSE',
+      categoryId: categoryId ? String(categoryId) : ''
+    });
+    setLedgerMode('daily');
+    setMainTab('ledger');
+  }
+
+  function openLedgerTag(tag) {
+    setLedgerFilters({
+      ...emptyLedgerFilters(),
+      query: tag?.tagName || '',
+      type: 'EXPENSE'
+    });
+    setLedgerMode('daily');
+    setMainTab('ledger');
+  }
+
+  async function exportMonthlyTransactions() {
+    const response = await fetch(`${API}/export/transactions.csv?month=${month}`);
+    if (!response.ok) {
+      window.alert('내보내기에 실패했습니다.');
+      return;
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ledger-transactions-${month}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  }
+
+  function exportFilteredTransactions(transactions, filters) {
+    const assetNames = new Map(data.assets.map((asset) => [String(asset.id), asset.name]));
+    const period = filteredPeriodLabel(filters, month);
+    const rows = [...transactions]
+      .sort((a, b) => a.transactionDate.localeCompare(b.transactionDate) || Number(a.id) - Number(b.id))
+      .map((item) => [
+        period,
+        item.transactionDate,
+        typeLabels[item.type] || item.type,
+        Number(item.amount || 0),
+        item.categoryName || '',
+        item.spendingTag || '',
+        item.assetName || '',
+        assetNames.get(String(item.fromAssetId)) || '',
+        assetNames.get(String(item.toAssetId)) || '',
+        item.title || '',
+        item.memo || '',
+        item.installmentIndex || '',
+        item.installmentMonths || ''
+      ]);
+    const csv = [
+      ['기간', '거래일', '유형', '금액', '카테고리', '소비태그', '자산', '출금자산', '입금자산', '제목', '메모', '할부회차', '할부개월'],
+      ...rows
+    ].map((row) => row.map(csvCell).join(',')).join('\r\n');
+    downloadTextFile(`ledger-transactions-${filteredFileLabel(filters, month)}.csv`, `\uFEFF${csv}`, 'text/csv;charset=utf-8');
   }
 
   async function submitTransaction(event) {
@@ -225,8 +368,10 @@ function App() {
       installmentMonths: Number(form.installmentMonths || 0)
     };
 
-    const url = editingTransaction ? `${API}/transactions/${editingTransaction.id}` : `${API}/transactions`;
-    const method = editingTransaction ? 'PUT' : 'POST';
+    const url = editingInstallmentGroup
+      ? `${API}/transactions/installments/${editingInstallmentGroup}`
+      : editingTransaction ? `${API}/transactions/${editingTransaction.id}` : `${API}/transactions`;
+    const method = editingTransaction || editingInstallmentGroup ? 'PUT' : 'POST';
     const response = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
@@ -234,14 +379,23 @@ function App() {
     });
     const created = await response.json();
 
-    if (receiptFile && !editingTransaction) {
+    if (receiptFile && !editingInstallmentGroup) {
+      const receiptTransactionId = created.id || editingTransaction?.id;
+      if (!receiptTransactionId) {
+        window.alert('영수증을 첨부할 거래를 찾지 못했습니다.');
+        return;
+      }
       const upload = new FormData();
       upload.append('file', receiptFile);
-      await fetch(`${API}/transactions/${created.id}/receipts`, { method: 'POST', body: upload });
+      const uploadResponse = await fetch(`${API}/transactions/${receiptTransactionId}/receipts`, { method: 'POST', body: upload });
+      if (!uploadResponse.ok) {
+        window.alert('영수증 첨부에 실패했습니다.');
+        return;
+      }
     }
 
     const fee = Number(form.fee || 0);
-    if (!editingTransaction && form.type === 'TRANSFER' && fee > 0 && form.fromAssetId) {
+    if (!editingTransaction && !editingInstallmentGroup && form.type === 'TRANSFER' && fee > 0 && form.fromAssetId) {
       await fetch(`${API}/transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -260,6 +414,7 @@ function App() {
     setEntryExpression('');
     setReceiptFile(null);
     setEditingTransaction(null);
+    setEditingInstallmentGroup(null);
     closePanel();
     await load();
   }
@@ -283,8 +438,10 @@ function App() {
       paymentDay: Number(assetForm.paymentDay || 1),
       autoPayment: Boolean(assetForm.autoPayment)
     };
-    const isNewCard = !editingAsset && assetForm.type === 'CARD';
-    const url = editingAsset ? `${API}/assets/${editingAsset.id}` : isNewCard ? `${API}/assets/card` : `${API}/assets`;
+    const isCardAsset = assetForm.type === 'CARD';
+    const url = editingAsset
+      ? isCardAsset ? `${API}/assets/${editingAsset.id}/card` : `${API}/assets/${editingAsset.id}`
+      : isCardAsset ? `${API}/assets/card` : `${API}/assets`;
     const method = editingAsset ? 'PUT' : 'POST';
     await fetch(url, {
       method,
@@ -336,6 +493,17 @@ function App() {
       })
     });
     closePanel();
+    await load();
+  }
+
+  async function copyPreviousBudget() {
+    if (!budgetSettings?.month) return;
+    const response = await fetch(`${API}/budgets/settings/copy-previous?month=${budgetSettings.month}`, { method: 'POST' });
+    if (!response.ok) {
+      window.alert('전월 예산을 찾을 수 없습니다.');
+      return;
+    }
+    setBudgetSettings(await response.json());
     await load();
   }
 
@@ -422,6 +590,19 @@ function App() {
     await load();
   }
 
+  async function retryCardSchedule(schedule) {
+    if (!selectedCard) return;
+    await fetch(`${API}/cards/payment-schedules/${schedule.id}/retry`, { method: 'POST' });
+    await loadCardPaymentData(selectedCard.id);
+    await load();
+  }
+
+  async function rescheduleCardSchedule(schedule) {
+    if (!selectedCard) return;
+    await fetch(`${API}/cards/payment-schedules/${schedule.id}/reschedule`, { method: 'POST' });
+    await loadCardPaymentData(selectedCard.id);
+  }
+
   async function cancelCardSchedule(schedule) {
     if (!selectedCard) return;
     await fetch(`${API}/cards/payment-schedules/${schedule.id}`, { method: 'DELETE' });
@@ -457,15 +638,22 @@ function App() {
     });
     const parsed = await response.json();
     setPreview(parsed);
-    setForm((prev) => ({
-      ...prev,
-      type: parsed.type || 'EXPENSE',
-      transactionDate: parsed.transactionDate || today,
-      amount: parsed.amount || '',
-      title: parsed.merchant || prev.title,
-      memo: parsed.memo || ''
-    }));
-    setEntryExpression(String(parsed.amount || ''));
+  }
+
+  function confirmTextImport() {
+    if (!preview) return;
+    setEditingTransaction(null);
+    setEditingInstallmentGroup(null);
+    setForm({
+      ...emptyTransactionForm(),
+      type: preview.type || 'EXPENSE',
+      transactionDate: preview.transactionDate || today,
+      amount: preview.amount || '',
+      title: preview.merchant || '',
+      memo: preview.memo || ''
+    });
+    setEntryExpression(String(preview.amount || ''));
+    setReceiptFile(null);
     setPanel('entry');
   }
 
@@ -496,6 +684,11 @@ function App() {
             {...screenProps}
             ledgerMode={ledgerMode}
             setLedgerMode={setLedgerMode}
+            filters={ledgerFilters}
+            setFilters={setLedgerFilters}
+            rangeTransactions={rangeTransactions}
+            exportMonthlyTransactions={exportMonthlyTransactions}
+            exportFilteredTransactions={exportFilteredTransactions}
             openInstallmentSchedule={openInstallmentSchedule}
             openTransactionDetail={openTransactionDetail}
           />
@@ -505,7 +698,14 @@ function App() {
             {...screenProps}
             statsMode={statsMode}
             setStatsMode={setStatsMode}
+            statsPeriod={statsPeriod}
+            setStatsPeriod={setStatsPeriod}
+            statsBreakdown={statsBreakdown}
+            setStatsBreakdown={setStatsBreakdown}
+            yearlySummary={yearlySummary}
             openBudgetSettings={openBudgetSettings}
+            openLedgerCategory={openLedgerCategory}
+            openLedgerTag={openLedgerTag}
           />
         )}
         {mainTab === 'assets' && (
@@ -522,6 +722,8 @@ function App() {
             setRawText={setRawText}
             preview={preview}
             parseText={parseText}
+            confirmTextImport={confirmTextImport}
+            exportMonthlyTransactions={exportMonthlyTransactions}
             openCategoryManager={openCategoryManager}
             openRecurringManager={openRecurringManager}
           />
@@ -549,14 +751,17 @@ function App() {
             setExpression={setEntryExpression}
             submitTransaction={submitTransaction}
             editingTransaction={editingTransaction}
+            editingInstallmentGroup={editingInstallmentGroup}
             onClose={closePanel}
           />
         )}
         {panel === 'transactionDetail' && (
           <TransactionDetailScreen
             transaction={selectedTransaction}
+            receipts={transactionReceipts}
             editTransaction={editTransaction}
             deleteTransaction={deleteTransaction}
+            deleteReceipt={deleteReceipt}
             openInstallmentSchedule={openInstallmentSchedule}
             onClose={closePanel}
           />
@@ -596,6 +801,7 @@ function App() {
             month={month}
             setMonth={setMonth}
             saveBudget={saveBudget}
+            copyPreviousBudget={copyPreviousBudget}
             onClose={closePanel}
           />
         )}
@@ -624,6 +830,8 @@ function App() {
             setForm={setCardScheduleForm}
             saveSchedule={saveCardSchedule}
             executeSchedule={executeCardSchedule}
+            retrySchedule={retryCardSchedule}
+            rescheduleSchedule={rescheduleCardSchedule}
             cancelSchedule={cancelCardSchedule}
             onClose={closePanel}
           />
@@ -632,6 +840,8 @@ function App() {
           <InstallmentScheduleScreen
             transaction={selectedInstallment}
             schedule={installmentSchedule}
+            editGroup={editInstallmentGroup}
+            deleteGroup={deleteInstallmentGroup}
             onClose={closePanel}
           />
         )}
@@ -652,6 +862,7 @@ function emptyTransactionForm() {
     toAssetId: '',
     title: '',
     memo: '',
+    spendingTag: '',
     installmentMonths: 0
   };
 }
@@ -668,6 +879,7 @@ function transactionToForm(transaction) {
     toAssetId: transaction.toAssetId ? String(transaction.toAssetId) : '',
     title: transaction.title || '',
     memo: transaction.memo || '',
+    spendingTag: transaction.spendingTag || '',
     installmentMonths: Number(transaction.installmentMonths || 0)
   };
 }
@@ -676,6 +888,7 @@ function emptyAssetForm() {
   return {
     type: 'CASH',
     groupName: '현금',
+    ownerName: '',
     name: '',
     balance: '',
     memo: '',
@@ -721,6 +934,67 @@ function emptyCardScheduleForm() {
   };
 }
 
+function emptyLedgerFilters() {
+  return {
+    query: '',
+    type: 'ALL',
+    categoryId: '',
+    startDate: '',
+    endDate: ''
+  };
+}
+
+function filterTransactions(transactions, filters) {
+  const query = (filters.query || '').trim().toLowerCase();
+  return transactions.filter((item) => {
+    if (filters.type !== 'ALL' && item.type !== filters.type) return false;
+    if (filters.categoryId && String(item.categoryId || '') !== String(filters.categoryId)) return false;
+    if (filters.startDate && item.transactionDate < filters.startDate) return false;
+    if (filters.endDate && item.transactionDate > filters.endDate) return false;
+    if (!query) return true;
+    const haystack = [
+      item.title,
+      item.memo,
+      item.spendingTag,
+      item.categoryName,
+      item.assetName,
+      item.transactionDate,
+      transferLabel(item)
+    ].filter(Boolean).join(' ').toLowerCase();
+    return haystack.includes(query);
+  });
+}
+
+function csvCell(value) {
+  return `"${String(value ?? '').replaceAll('"', '""')}"`;
+}
+
+function downloadTextFile(filename, contents, type) {
+  const blob = new Blob([contents], { type });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+function filteredPeriodLabel(filters, month) {
+  if (filters.startDate && filters.endDate) return `${filters.startDate} ~ ${filters.endDate}`;
+  if (filters.startDate) return `${filters.startDate} 이후`;
+  if (filters.endDate) return `${filters.endDate} 이전`;
+  return month;
+}
+
+function filteredFileLabel(filters, month) {
+  const period = filters.startDate || filters.endDate
+    ? `${filters.startDate || 'start'}_${filters.endDate || 'end'}`
+    : month;
+  return `${period}-filtered`;
+}
+
 function AppHeader({ title, left, right }) {
   return (
     <header className="app-header">
@@ -747,8 +1021,13 @@ function IconButton({ label, children, onClick }) {
   );
 }
 
-function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, loading, openInstallmentSchedule, openTransactionDetail }) {
+function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, filters, setFilters, rangeTransactions, loading, exportFilteredTransactions, openInstallmentSchedule, openTransactionDetail }) {
   const summary = data.summary || {};
+  const sourceTransactions = rangeTransactions || data.transactions || [];
+  const filteredTransactions = useMemo(() => filterTransactions(sourceTransactions, filters), [sourceTransactions, filters]);
+  const filterCategories = data.categories.filter((category) => filters.type === 'ALL' || category.type === filters.type);
+  const hasActiveFilter = Boolean(filters.query || filters.categoryId || filters.startDate || filters.endDate || filters.type !== 'ALL');
+  const rangeActive = Boolean(filters.startDate && filters.endDate);
   const tabs = [
     ['daily', '일일'],
     ['calendar', '달력'],
@@ -761,6 +1040,7 @@ function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, loadin
     <div className="screen ledger-screen">
       <AppHeader title="가계부" />
       <MonthNav month={month} setMonth={setMonth} />
+      {rangeActive && <div className="range-banner">{filters.startDate} ~ {filters.endDate}</div>}
 
       <nav className="view-tabs" aria-label="가계부 보기">
         {tabs.map(([key, label]) => (
@@ -771,19 +1051,79 @@ function LedgerScreen({ data, month, setMonth, ledgerMode, setLedgerMode, loadin
       </nav>
 
       <MonthTotals summary={summary} />
+      <LedgerFilters
+        filters={filters}
+        setFilters={setFilters}
+        categories={filterCategories}
+        resultCount={filteredTransactions.length}
+        hasActiveFilter={hasActiveFilter}
+        exportFilteredTransactions={() => exportFilteredTransactions(filteredTransactions, filters)}
+      />
 
       {loading ? (
         <EmptyState label="불러오는 중입니다." />
       ) : (
         <>
-          {ledgerMode === 'daily' && <DailyLedger transactions={data.transactions} openInstallmentSchedule={openInstallmentSchedule} openTransactionDetail={openTransactionDetail} />}
-          {ledgerMode === 'calendar' && <CalendarLedger transactions={data.transactions} month={month} />}
+          {ledgerMode === 'daily' && <DailyLedger transactions={filteredTransactions} openInstallmentSchedule={openInstallmentSchedule} openTransactionDetail={openTransactionDetail} />}
+          {ledgerMode === 'calendar' && <CalendarLedger transactions={filteredTransactions} month={month} />}
           {ledgerMode === 'monthly' && <MonthlyLedger summary={summary} month={month} />}
-          {ledgerMode === 'summary' && <LedgerSummary summary={summary} transactions={data.transactions} />}
-          {ledgerMode === 'memo' && <MemoLedger transactions={data.transactions} openInstallmentSchedule={openInstallmentSchedule} openTransactionDetail={openTransactionDetail} />}
+          {ledgerMode === 'summary' && (
+            <LedgerSummary
+              summary={summary}
+              hasActiveFilter={hasActiveFilter}
+              exportTransactions={() => exportFilteredTransactions(filteredTransactions, filters)}
+            />
+          )}
+          {ledgerMode === 'memo' && <MemoLedger transactions={filteredTransactions} openInstallmentSchedule={openInstallmentSchedule} openTransactionDetail={openTransactionDetail} />}
         </>
       )}
     </div>
+  );
+}
+
+function LedgerFilters({ filters, setFilters, categories, resultCount, hasActiveFilter, exportFilteredTransactions }) {
+  function updateFilter(key, value) {
+    setFilters((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === 'type') next.categoryId = '';
+      return next;
+    });
+  }
+
+  return (
+    <section className="ledger-filters">
+      <input
+        value={filters.query}
+        onChange={(event) => updateFilter('query', event.target.value)}
+        placeholder="검색"
+        aria-label="거래 검색"
+      />
+      <div>
+        <select value={filters.type} onChange={(event) => updateFilter('type', event.target.value)} aria-label="거래 유형 필터">
+          <option value="ALL">전체</option>
+          <option value="INCOME">수입</option>
+          <option value="EXPENSE">지출</option>
+          <option value="TRANSFER">이체</option>
+        </select>
+        <select value={filters.categoryId} onChange={(event) => updateFilter('categoryId', event.target.value)} aria-label="카테고리 필터">
+          <option value="">분류 전체</option>
+          {categories.map((category) => (
+            <option value={category.id} key={category.id}>{category.icon} {category.name}</option>
+          ))}
+        </select>
+        {hasActiveFilter && (
+          <button type="button" onClick={() => setFilters(emptyLedgerFilters())}>초기화</button>
+        )}
+      </div>
+      <div className="date-filter-row">
+        <input type="date" value={filters.startDate} onChange={(event) => updateFilter('startDate', event.target.value)} aria-label="시작일" />
+        <input type="date" value={filters.endDate} onChange={(event) => updateFilter('endDate', event.target.value)} aria-label="종료일" />
+      </div>
+      <div className="filter-result-row">
+        <span>{hasActiveFilter ? `${resultCount}건` : `이번 달 ${resultCount}건`}</span>
+        <button type="button" onClick={exportFilteredTransactions} disabled={resultCount === 0}>결과 CSV</button>
+      </div>
+    </section>
   );
 }
 
@@ -962,7 +1302,7 @@ function MonthlyLedger({ summary, month }) {
   );
 }
 
-function LedgerSummary({ summary }) {
+function LedgerSummary({ summary, hasActiveFilter, exportTransactions }) {
   const budgetUsage = Math.min(100, Number(summary.budgetUsageRate || 0));
   return (
     <section className="summary-sections">
@@ -981,9 +1321,9 @@ function LedgerSummary({ summary }) {
         </div>
       </SummaryBlock>
 
-      <button className="export-button" type="button">
+      <button className="export-button" type="button" onClick={exportTransactions}>
         <span>▦</span>
-        메일로 엑셀파일 내보내기
+        {hasActiveFilter ? '필터 결과 CSV 내보내기' : '월 거래 CSV 내보내기'}
       </button>
     </section>
   );
@@ -1027,8 +1367,9 @@ function MemoLedger({ transactions, openInstallmentSchedule, openTransactionDeta
   );
 }
 
-function StatsScreen({ data, month, setMonth, statsMode, setStatsMode, categoryByName, spendMax, loading, openBudgetSettings }) {
+function StatsScreen({ data, month, setMonth, statsMode, setStatsMode, statsPeriod, setStatsPeriod, statsBreakdown, setStatsBreakdown, yearlySummary, categoryByName, spendMax, loading, openBudgetSettings, openLedgerCategory, openLedgerTag }) {
   const summary = data.summary || {};
+  const activeSummary = statsPeriod === 'yearly' ? yearlySummary || {} : summary;
   const tabs = [
     ['stats', '통계'],
     ['budget', '예산'],
@@ -1045,17 +1386,38 @@ function StatsScreen({ data, month, setMonth, statsMode, setStatsMode, categoryB
             </button>
           ))}
         </nav>
-        <button className="period-button" type="button">월별⌄</button>
+        <button className="period-button" type="button" onClick={() => setStatsPeriod((prev) => prev === 'monthly' ? 'yearly' : 'monthly')}>
+          {statsPeriod === 'yearly' ? '연별' : '월별'}
+        </button>
       </header>
 
       <MonthNav month={month} setMonth={setMonth} />
-      <IncomeExpenseSwitch summary={summary} />
+      <IncomeExpenseSwitch summary={activeSummary} />
+      {statsMode === 'stats' && (
+        <nav className="stats-breakdown-tabs" aria-label="지출 통계 기준">
+          <button type="button" className={statsBreakdown === 'category' ? 'active' : ''} onClick={() => setStatsBreakdown('category')}>카테고리</button>
+          <button type="button" className={statsBreakdown === 'tag' ? 'active' : ''} onClick={() => setStatsBreakdown('tag')}>소비 태그</button>
+        </nav>
+      )}
 
       {loading ? (
         <EmptyState label="불러오는 중입니다." />
       ) : (
         <>
-          {statsMode === 'stats' && <CategoryStats summary={summary} categoryByName={categoryByName} />}
+          {statsMode === 'stats' && statsPeriod === 'monthly' && (
+            statsBreakdown === 'category'
+              ? <CategoryStats summary={summary} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />
+              : <TagStats summary={summary} openLedgerTag={openLedgerTag} />
+          )}
+          {statsMode === 'stats' && statsPeriod === 'yearly' && (
+            <YearlyStats
+              summary={yearlySummary || {}}
+              categoryByName={categoryByName}
+              breakdown={statsBreakdown}
+              openLedgerCategory={openLedgerCategory}
+              openLedgerTag={openLedgerTag}
+            />
+          )}
           {statsMode === 'budget' && <BudgetStats summary={summary} categoryByName={categoryByName} spendMax={spendMax} openBudgetSettings={openBudgetSettings} />}
           {statsMode === 'details' && <DetailStats transactions={data.transactions} />}
         </>
@@ -1073,7 +1435,7 @@ function IncomeExpenseSwitch({ summary }) {
   );
 }
 
-function CategoryStats({ summary, categoryByName }) {
+function CategoryStats({ summary, categoryByName, openLedgerCategory }) {
   const spends = summary.categorySpends || [];
   const total = spends.reduce((sum, item) => sum + Number(item.amount), 0);
   const chartStyle = { background: buildChartGradient(spends, total, categoryByName) };
@@ -1085,7 +1447,47 @@ function CategoryStats({ summary, categoryByName }) {
           <span>{total ? '지출' : '0원'}</span>
         </div>
       </div>
-      <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} />
+      <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />
+    </section>
+  );
+}
+
+function TagStats({ summary, openLedgerTag }) {
+  const tags = summary.tagSpends || [];
+  return (
+    <section className="stats-content">
+      <TagRanking tags={tags} expenseTotal={Number(summary.expense || 0)} openLedgerTag={openLedgerTag} />
+    </section>
+  );
+}
+
+function YearlyStats({ summary, categoryByName, breakdown, openLedgerCategory, openLedgerTag }) {
+  const spends = summary.categorySpends || [];
+  const total = spends.reduce((sum, item) => sum + Number(item.amount), 0);
+  const rows = summary.monthlyTotals || [];
+  const maxExpense = Math.max(1, ...rows.map((item) => Number(item.expense || 0)));
+
+  return (
+    <section className="stats-content yearly-stats">
+      <div className="yearly-headline">
+        <span>{summary.year || ''}년</span>
+        <strong>{money(summary.expense)}</strong>
+      </div>
+      <div className="yearly-month-list">
+        {rows.map((item) => {
+          const width = Math.round((Number(item.expense || 0) / maxExpense) * 100);
+          return (
+            <div className="yearly-month-row" key={item.month}>
+              <span>{Number(item.month.slice(5, 7))}월</span>
+              <div><i style={{ width: `${width}%` }} /></div>
+              <b>{money(item.expense)}</b>
+            </div>
+          );
+        })}
+      </div>
+      {breakdown === 'tag'
+        ? <TagRanking tags={summary.tagSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerTag={openLedgerTag} />
+        : <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />}
     </section>
   );
 }
@@ -1104,7 +1506,7 @@ function buildChartGradient(spends, total, categoryByName) {
   return `conic-gradient(${segments.join(', ')})`;
 }
 
-function CategoryRanking({ spends, total, categoryByName }) {
+function CategoryRanking({ spends, total, categoryByName, openLedgerCategory }) {
   if (!spends.length) return <EmptyState label="통계 데이터가 없습니다." compact />;
   return (
     <div className="ranking-list">
@@ -1113,11 +1515,30 @@ function CategoryRanking({ spends, total, categoryByName }) {
         const percent = total ? Math.round((Number(item.amount) / total) * 100) : 0;
         const color = category?.color || palette[index % palette.length];
         return (
-          <div className="ranking-row" key={item.categoryName}>
+          <button className="ranking-row" type="button" key={item.categoryName} onClick={() => openLedgerCategory(item)}>
             <span className="percent-badge" style={{ backgroundColor: color }}>{percent}%</span>
             <strong>{category?.icon || '•'} {item.categoryName}</strong>
             <b>{money(item.amount)}</b>
-          </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TagRanking({ tags, expenseTotal, openLedgerTag }) {
+  if (!tags.length) return <EmptyState label="소비 태그 통계가 없습니다." compact />;
+  return (
+    <div className="ranking-list tag-ranking-list">
+      {tags.map((item, index) => {
+        const percent = expenseTotal ? Math.round((Number(item.amount) / expenseTotal) * 100) : 0;
+        const color = palette[index % palette.length];
+        return (
+          <button className="ranking-row tag-ranking-row" type="button" key={item.tagName} onClick={() => openLedgerTag(item)}>
+            <span className="percent-badge" style={{ backgroundColor: color }}>{percent}%</span>
+            <strong>#{item.tagName}<small>{item.transactionCount}건</small></strong>
+            <b>{money(item.amount)}</b>
+          </button>
         );
       })}
     </div>
@@ -1126,6 +1547,7 @@ function CategoryRanking({ spends, total, categoryByName }) {
 
 function BudgetStats({ summary, categoryByName, spendMax, openBudgetSettings }) {
   const usage = Math.min(100, Number(summary.budgetUsageRate || 0));
+  const categoryBudgets = summary.categoryBudgetUsages || [];
   return (
     <section className="budget-screen">
       <div className="budget-headline">
@@ -1144,16 +1566,22 @@ function BudgetStats({ summary, categoryByName, spendMax, openBudgetSettings }) 
         </div>
       </div>
       <div className="budget-category-list">
-        {(summary.categorySpends || []).map((item, index) => {
+        {categoryBudgets.map((item, index) => {
           const category = categoryByName.get(item.categoryName);
+          const percent = Number(item.usageRate || 0);
+          const barWidth = Math.min(100, percent);
+          const amountLabel = item.exceeded ? `${numberOnly(Math.abs(Number(item.remainingAmount || 0)))} 초과` : `${numberOnly(item.remainingAmount)} 남음`;
           return (
-            <div className="budget-category-row" key={item.categoryName}>
+            <div className={`budget-category-row ${item.exceeded ? 'over' : ''}`} key={item.categoryId || item.categoryName}>
               <span>{category?.icon || '•'} {item.categoryName}</span>
-              <div><i style={{ width: `${(Number(item.amount) / spendMax) * 100}%`, backgroundColor: category?.color || palette[index % palette.length] }} /></div>
-              <b>{numberOnly(item.amount)}</b>
+              <div><i style={{ width: `${barWidth}%`, backgroundColor: item.exceeded ? 'var(--accent)' : category?.color || palette[index % palette.length] }} /></div>
+              <b>{percent}%</b>
+              <small>{numberOnly(item.spentAmount)} / {numberOnly(item.budgetAmount)}</small>
+              <em>{amountLabel}</em>
             </div>
           );
         })}
+        {!categoryBudgets.length && <EmptyState label="카테고리 예산 데이터가 없습니다." compact />}
       </div>
     </section>
   );
@@ -1243,7 +1671,7 @@ function AssetsScreen({ data, loading, openAssetForm, openCardPaymentManager, de
                   <div className="asset-row" key={asset.id}>
                     <button type="button" onClick={() => openAssetForm(asset)}>
                       <strong>{asset.name}</strong>
-                      <span>{assetTypeLabels[asset.type] || asset.type}</span>
+                      <span>{asset.ownerName ? `${asset.ownerName} · ${assetTypeLabels[asset.type] || asset.type}` : assetTypeLabels[asset.type] || asset.type}</span>
                     </button>
                     <b className={asset.type === 'CARD' || asset.type === 'DEBT' ? 'expense' : 'income'}>{money(asset.balance)}</b>
                     {asset.type === 'CARD' && (
@@ -1263,9 +1691,9 @@ function AssetsScreen({ data, loading, openAssetForm, openCardPaymentManager, de
   );
 }
 
-function CardPaymentManagerScreen({ card, detail, schedules, form, setForm, saveSchedule, executeSchedule, cancelSchedule, onClose }) {
-  const scheduled = schedules.filter((schedule) => schedule.status === 'SCHEDULED');
-  const completed = schedules.filter((schedule) => schedule.status !== 'SCHEDULED');
+function CardPaymentManagerScreen({ card, detail, schedules, form, setForm, saveSchedule, executeSchedule, retrySchedule, rescheduleSchedule, cancelSchedule, onClose }) {
+  const pending = schedules.filter((schedule) => schedule.status === 'SCHEDULED' || schedule.status === 'PROCESSING');
+  const completed = schedules.filter((schedule) => schedule.status !== 'SCHEDULED' && schedule.status !== 'PROCESSING');
 
   return (
     <div className="full-panel">
@@ -1277,6 +1705,13 @@ function CardPaymentManagerScreen({ card, detail, schedules, form, setForm, save
             <Metric label="미결제" value={money(detail?.unpaidAmount)} tone="expense" />
             <Metric label="예정" value={money(detail?.paymentScheduleAmount)} tone="total" />
           </div>
+          {detail?.billingStartDate && detail?.billingEndDate && (
+            <p className="card-billing-note">
+              {detail.billingStartDate} ~ {detail.billingEndDate}
+              {detail.nextPaymentDate ? ` · ${detail.nextPaymentDate} 결제 예정` : ''}
+              {detail.paymentDateAdjusted && detail.originalPaymentDate ? ` (${detail.originalPaymentDate} 영업일 보정)` : ''}
+            </p>
+          )}
         </section>
         <form className="card-payment-form" onSubmit={saveSchedule}>
           <LineField label="결제일">
@@ -1289,28 +1724,37 @@ function CardPaymentManagerScreen({ card, detail, schedules, form, setForm, save
         </form>
         <section className="card-payment-list">
           <h2>결제 예약</h2>
-          {scheduled.map((schedule) => (
+          {pending.map((schedule) => (
             <div className="card-payment-row" key={schedule.id}>
               <div>
                 <strong>{schedule.scheduledDate}</strong>
-                <span>{schedule.status}</span>
+                <span>{paymentStatusLabel(schedule)}</span>
               </div>
               <b>{money(schedule.amount)}</b>
-              <div className="card-payment-row-actions">
-                <button type="button" onClick={() => executeSchedule(schedule)}>실행</button>
-                <button className="secondary" type="button" onClick={() => cancelSchedule(schedule)}>취소</button>
-              </div>
+              {schedule.status === 'SCHEDULED' ? (
+                <div className="card-payment-row-actions">
+                  <button type="button" onClick={() => executeSchedule(schedule)}>실행</button>
+                  <button className="secondary" type="button" onClick={() => cancelSchedule(schedule)}>취소</button>
+                </div>
+              ) : <span className="payment-status-badge">처리 중</span>}
             </div>
           ))}
-          {!scheduled.length && <EmptyState label="예약된 결제가 없습니다." compact />}
+          {!pending.length && <EmptyState label="예약된 결제가 없습니다." compact />}
           {!!completed.length && <h2>처리 내역</h2>}
           {completed.map((schedule) => (
-            <div className="card-payment-row muted" key={schedule.id}>
+            <div className={`card-payment-row muted ${schedule.status === 'FAILED' ? 'failed' : ''}`} key={schedule.id}>
               <div>
                 <strong>{schedule.scheduledDate}</strong>
-                <span>{schedule.status}</span>
+                <span>{paymentStatusLabel(schedule)}</span>
+                {schedule.failureReason && <small>{schedule.failureReason}</small>}
               </div>
               <b>{money(schedule.amount)}</b>
+              {schedule.status === 'FAILED' && (
+                <div className="card-payment-row-actions">
+                  <button type="button" onClick={() => retrySchedule(schedule)}>재시도</button>
+                  <button className="secondary" type="button" onClick={() => rescheduleSchedule(schedule)}>재예약</button>
+                </div>
+              )}
             </div>
           ))}
         </section>
@@ -1319,20 +1763,35 @@ function CardPaymentManagerScreen({ card, detail, schedules, form, setForm, save
   );
 }
 
-function InstallmentScheduleScreen({ transaction, schedule, onClose }) {
+function paymentStatusLabel(schedule) {
+  if (schedule.status === 'SCHEDULED') return '예약됨';
+  if (schedule.status === 'PROCESSING') return '처리 중';
+  if (schedule.status === 'COMPLETED') {
+    return schedule.completedAt ? `완료 ${schedule.completedAt.slice(0, 10)}` : '완료';
+  }
+  if (schedule.status === 'FAILED') return '실패';
+  return schedule.status;
+}
+
+function InstallmentScheduleScreen({ transaction, schedule, editGroup, deleteGroup, onClose }) {
   const total = schedule.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const title = transaction?.title || transaction?.categoryName || '할부 거래';
 
   return (
     <div className="full-panel">
       <section className="installment-manager">
-        <AppHeader title="할부 일정" left={<BackButton label="가계부" onClick={onClose} />} />
+        <AppHeader
+          title="할부 일정"
+          left={<BackButton label="가계부" onClick={onClose} />}
+          right={<button className="text-action" type="button" onClick={editGroup}>수정</button>}
+        />
         <section className="installment-summary">
           <strong>{title}</strong>
           <div>
             <Metric label="총액" value={money(total)} tone="expense" />
             <Metric label="개월" value={`${schedule.length || transaction?.installmentMonths || 0}`} tone="total" />
           </div>
+          <button className="danger-outline-button" type="button" onClick={deleteGroup}>전체 삭제</button>
         </section>
         <section className="installment-list">
           {schedule.map((item) => (
@@ -1351,7 +1810,7 @@ function InstallmentScheduleScreen({ transaction, schedule, onClose }) {
   );
 }
 
-function MoreScreen({ rawText, setRawText, preview, parseText, openCategoryManager, openRecurringManager }) {
+function MoreScreen({ rawText, setRawText, preview, parseText, confirmTextImport, exportMonthlyTransactions, openCategoryManager, openRecurringManager }) {
   return (
     <div className="screen more-screen">
       <AppHeader title="더보기" />
@@ -1365,8 +1824,21 @@ function MoreScreen({ rawText, setRawText, preview, parseText, openCategoryManag
         <button className="primary-button" type="button" onClick={parseText}>문자 분석</button>
         {preview && (
           <div className="preview-card">
-            <strong>{preview.merchant || '가맹점 후보 없음'}</strong>
-            <span>{preview.transactionDate} · {typeLabels[preview.type]} · {money(preview.amount)}</span>
+            <div>
+              <strong>{preview.merchant || '가맹점 후보 없음'}</strong>
+              <span>{preview.transactionDate} · {typeLabels[preview.type]} · {money(preview.amount)}</span>
+            </div>
+            <dl className="preview-detail">
+              <div>
+                <dt>메모</dt>
+                <dd>{preview.memo || '-'}</dd>
+              </div>
+              <div>
+                <dt>원문</dt>
+                <dd>{preview.rawText || rawText}</dd>
+              </div>
+            </dl>
+            <button className="secondary-button" type="button" onClick={confirmTextImport}>거래 입력으로 이동</button>
           </div>
         )}
       </section>
@@ -1375,7 +1847,7 @@ function MoreScreen({ rawText, setRawText, preview, parseText, openCategoryManag
         <button type="button" onClick={openCategoryManager}>카테고리 관리<span>›</span></button>
         <button type="button" onClick={openRecurringManager}>반복 거래<span>›</span></button>
         <button type="button">영수증 사진<span>›</span></button>
-        <button type="button">백업 및 내보내기<span>›</span></button>
+        <button type="button" onClick={exportMonthlyTransactions}>월 거래 CSV 내보내기<span>›</span></button>
       </section>
     </div>
   );
@@ -1508,7 +1980,7 @@ function frequencyLabel(frequency) {
   }[frequency] || frequency;
 }
 
-function TransactionDetailScreen({ transaction, editTransaction, deleteTransaction, openInstallmentSchedule, onClose }) {
+function TransactionDetailScreen({ transaction, receipts, editTransaction, deleteTransaction, deleteReceipt, openInstallmentSchedule, onClose }) {
   if (!transaction) return null;
   const hasInstallment = transaction.installmentGroupId && transaction.installmentMonths > 1;
   return (
@@ -1529,8 +2001,22 @@ function TransactionDetailScreen({ transaction, editTransaction, deleteTransacti
           <KeyValue label="날짜" value={transaction.transactionDate} />
           <KeyValue label="분류" value={transaction.categoryName || '미분류'} />
           <KeyValue label="자산" value={transaction.assetName || transferLabel(transaction) || '자산 미지정'} />
+          {transaction.spendingTag && <KeyValue label="소비 태그" value={transaction.spendingTag} />}
           {hasInstallment && <KeyValue label="할부" value={`${transaction.installmentIndex}/${transaction.installmentMonths}개월`} />}
           {transaction.memo && <KeyValue label="메모" value={transaction.memo} />}
+          <section className="receipt-preview-list">
+            <h2>영수증</h2>
+            {receipts.map((receipt) => (
+              <div className="receipt-preview-row" key={receipt.id}>
+                <a href={`${API}/transactions/${transaction.id}/receipts/${receipt.id}/file`} target="_blank" rel="noreferrer">
+                  <img src={`${API}/transactions/${transaction.id}/receipts/${receipt.id}/file`} alt={receipt.originalFilename || '영수증'} />
+                  <span>{receipt.originalFilename || '영수증'}</span>
+                </a>
+                <button type="button" onClick={() => deleteReceipt(receipt)}>삭제</button>
+              </div>
+            ))}
+            {!receipts.length && <EmptyState label="첨부된 영수증이 없습니다." compact />}
+          </section>
         </section>
         <div className="transaction-detail-actions">
           {hasInstallment && (
@@ -1547,14 +2033,16 @@ function TransactionDetailScreen({ transaction, editTransaction, deleteTransacti
   );
 }
 
-function EntryScreen({ form, expression, assets, categories, receiptFile, updateForm, setReceiptFile, setExpression, submitTransaction, editingTransaction, onClose }) {
+function EntryScreen({ form, expression, assets, categories, receiptFile, updateForm, setReceiptFile, setExpression, submitTransaction, editingTransaction, editingInstallmentGroup, onClose }) {
   const tone = form.type === 'INCOME' ? 'income' : form.type === 'TRANSFER' ? 'transfer' : 'expense';
+  const isEditing = Boolean(editingTransaction || editingInstallmentGroup);
 
   function setType(type) {
     updateForm('type', type);
     updateForm('categoryId', '');
     if (type !== 'EXPENSE') {
       updateForm('installmentMonths', 0);
+      updateForm('spendingTag', '');
     }
     if (type === 'TRANSFER') {
       updateForm('assetId', '');
@@ -1584,9 +2072,9 @@ function EntryScreen({ form, expression, assets, categories, receiptFile, update
     <div className="full-panel">
       <form className="entry-screen-form" onSubmit={submitTransaction}>
         <AppHeader
-          title={editingTransaction ? '거래 수정' : typeLabels[form.type]}
+          title={editingInstallmentGroup ? '할부 전체 수정' : editingTransaction ? '거래 수정' : typeLabels[form.type]}
           left={<BackButton label="가계부" onClick={onClose} />}
-          right={!editingTransaction && <IconButton label="즐겨찾기">☆</IconButton>}
+          right={!isEditing && <IconButton label="즐겨찾기">☆</IconButton>}
         />
 
         <div className="entry-tabs">
@@ -1658,17 +2146,22 @@ function EntryScreen({ form, expression, assets, categories, receiptFile, update
           <LineField label="내용" side={<span className="memo-alert">!</span>}>
             <input value={form.title} onChange={(event) => updateForm('title', event.target.value)} placeholder="내용" />
           </LineField>
+          {form.type === 'EXPENSE' && (
+            <LineField label="태그">
+              <input value={form.spendingTag} onChange={(event) => updateForm('spendingTag', event.target.value)} placeholder="식비, 생활, 고정비" />
+            </LineField>
+          )}
 
-          {!editingTransaction && (
+          {!editingInstallmentGroup && (
             <label className="receipt-compact">
-              영수증 사진
+              {editingTransaction ? '영수증 추가' : '영수증 사진'}
               <input type="file" accept="image/*" onChange={(event) => setReceiptFile(event.target.files?.[0] || null)} />
               {receiptFile && <span>{receiptFile.name}</span>}
             </label>
           )}
         </section>
 
-        <CalculatorPad onKey={handleKey} submitLabel={editingTransaction ? '저장' : '확인'} />
+        <CalculatorPad onKey={handleKey} submitLabel={isEditing ? '저장' : '확인'} />
       </form>
     </div>
   );
@@ -1734,13 +2227,16 @@ function AssetFormScreen({ form, setForm, assets, editingAsset, saveAsset, onClo
           <LineField label="이름">
             <input autoFocus value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
           </LineField>
+          <LineField label="명의">
+            <input value={form.ownerName} onChange={(event) => setForm((prev) => ({ ...prev, ownerName: event.target.value }))} placeholder="본인" />
+          </LineField>
           <LineField label="금액">
             <input inputMode="numeric" value={form.balance} onChange={(event) => setForm((prev) => ({ ...prev, balance: event.target.value }))} />
           </LineField>
           <LineField label="메모">
             <input value={form.memo} onChange={(event) => setForm((prev) => ({ ...prev, memo: event.target.value }))} />
           </LineField>
-          {form.type === 'CARD' && !editingAsset && (
+          {form.type === 'CARD' && (
             <section className="card-profile-fields">
               <h2>카드 결제 설정</h2>
               <LineField label="결제계좌">
@@ -1831,7 +2327,7 @@ function CategoryManagerScreen({ categories, categoryType, setCategoryType, form
   );
 }
 
-function BudgetSettingsScreen({ settings, setSettings, month, setMonth, saveBudget, onClose }) {
+function BudgetSettingsScreen({ settings, setSettings, month, setMonth, saveBudget, copyPreviousBudget, onClose }) {
   const categories = settings?.categories || [];
 
   return (
@@ -1839,6 +2335,7 @@ function BudgetSettingsScreen({ settings, setSettings, month, setMonth, saveBudg
       <form className="budget-settings-screen" onSubmit={saveBudget}>
         <AppHeader title="예산설정" left={<BackButton label="뒤로" onClick={onClose} />} />
         <MonthNav month={month} setMonth={setMonth} />
+        <button className="budget-copy-button" type="button" onClick={copyPreviousBudget}>전월 예산 복사</button>
         <div className="budget-total-edit">
           <span>전체 예산</span>
           <input inputMode="numeric" value={settings?.totalAmount || 0} onChange={(event) => setSettings((prev) => ({ ...prev, totalAmount: event.target.value }))} />

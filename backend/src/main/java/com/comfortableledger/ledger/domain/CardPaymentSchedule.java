@@ -35,6 +35,9 @@ public class CardPaymentSchedule {
     @Column
     private String failureReason;
 
+    @Version
+    private long version;
+
     // Constructor
     public CardPaymentSchedule() {
     }
@@ -110,5 +113,31 @@ public class CardPaymentSchedule {
 
     public void setFailureReason(String failureReason) {
         this.failureReason = failureReason;
+    }
+
+    public long getVersion() {
+        return version;
+    }
+
+    public void markProcessing() {
+        this.status = PaymentStatus.PROCESSING;
+        this.failureReason = null;
+    }
+
+    public void markCompleted() {
+        this.status = PaymentStatus.COMPLETED;
+        this.completedAt = LocalDateTime.now();
+        this.failureReason = null;
+    }
+
+    public void markFailed(String failureReason) {
+        this.status = PaymentStatus.FAILED;
+        this.failureReason = failureReason;
+    }
+
+    public void reschedule() {
+        this.status = PaymentStatus.SCHEDULED;
+        this.completedAt = null;
+        this.failureReason = null;
     }
 }

@@ -56,4 +56,16 @@ public class ReceiptAttachment {
     public String getStoredPath() {
         return storedPath;
     }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public long getSize() {
+        return size;
+    }
+
+    public OffsetDateTime getCreatedAt() {
+        return createdAt;
+    }
 }
