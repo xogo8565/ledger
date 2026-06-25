@@ -14,6 +14,7 @@ import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Objects;
 
 @Entity
 @Table(name = "transactions")
@@ -164,6 +165,20 @@ public class TransactionRecord {
 
     public Member getConsumer() {
         return normalizedConsumer(type, getConsumptionScope(), consumer);
+    }
+
+    public boolean assignConsumerIfUnassignedPersonalExpense(Member member) {
+        if (type != TransactionType.EXPENSE
+                || getConsumptionScope() != ConsumptionScope.PERSONAL
+                || consumer != null
+                || member == null
+                || (!Objects.equals(household.getId(), member.getHousehold().getId())
+                    && household != member.getHousehold())) {
+            return false;
+        }
+        consumer = member;
+        updatedAt = OffsetDateTime.now();
+        return true;
     }
 
     public int getInstallmentMonths() {

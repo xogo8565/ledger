@@ -6,6 +6,7 @@ import com.comfortableledger.ledger.domain.CardProfile;
 import com.comfortableledger.ledger.domain.Category;
 import com.comfortableledger.ledger.domain.CategoryBudget;
 import com.comfortableledger.ledger.domain.CategoryType;
+import com.comfortableledger.ledger.domain.ConsumptionScope;
 import com.comfortableledger.ledger.domain.Household;
 import com.comfortableledger.ledger.domain.Member;
 import com.comfortableledger.ledger.domain.MemberRole;
@@ -28,6 +29,7 @@ import com.comfortableledger.ledger.web.ApiDtos.BudgetSettingsDto;
 import com.comfortableledger.ledger.web.ApiDtos.CategoryBudgetDto;
 import com.comfortableledger.ledger.web.ApiDtos.CategoryDto;
 import com.comfortableledger.ledger.web.ApiDtos.CreateTransactionRequest;
+import com.comfortableledger.ledger.web.ApiDtos.ConsumerMigrationDto;
 import com.comfortableledger.ledger.web.ApiDtos.MonthlySummaryDto;
 import com.comfortableledger.ledger.web.ApiDtos.MemberDto;
 import com.comfortableledger.ledger.web.ApiDtos.PeriodSummaryDto;
@@ -38,10 +40,12 @@ import com.comfortableledger.ledger.web.ApiDtos.SaveCategoryRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveMemberRequest;
 import com.comfortableledger.ledger.web.ApiDtos.TransactionDto;
 import com.comfortableledger.ledger.web.ApiDtos.YearlySummaryDto;
+import com.comfortableledger.ledger.web.ApiDtos.YearlyBudgetSummaryDto;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.temporal.TemporalAdjusters;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,6 +53,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -217,6 +224,32 @@ public class LedgerService {
         memberRepository.delete(member);
     }
 
+    @Transactional(readOnly = true)
+    public ConsumerMigrationDto consumerMigrationStatus() {
+        Household household = defaultHousehold();
+        Member owner = ownerMember(household);
+        long eligibleCount = transactionRepository.findUnassignedPersonalExpenses(household.getId()).size();
+        return new ConsumerMigrationDto(owner.getId(), owner.getName(), eligibleCount, 0);
+    }
+
+    @Transactional
+    public ConsumerMigrationDto migrateUnassignedPersonalExpenses() {
+        Household household = defaultHousehold();
+        Member owner = ownerMember(household);
+        List<TransactionRecord> eligible = transactionRepository.findUnassignedPersonalExpenses(household.getId());
+        long migratedCount = eligible.stream()
+                .filter(record -> record.assignConsumerIfUnassignedPersonalExpense(owner))
+                .count();
+        return new ConsumerMigrationDto(owner.getId(), owner.getName(), 0, migratedCount);
+    }
+
+    private Member ownerMember(Household household) {
+        return memberRepository.findByHouseholdId(household.getId()).stream()
+                .filter(member -> member.getRole() == MemberRole.OWNER)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Owner member not found"));
+    }
+
     private String normalizedMemberName(String name) {
         String normalized = normalizedMemberNameOrEmpty(name);
         if (normalized.isBlank()) {
@@ -259,6 +292,73 @@ public class LedgerService {
                 start,
                 end
         ).stream().map(TransactionDto::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransactionDto> searchTransactions(
+            LocalDate startDate,
+            LocalDate endDate,
+            TransactionType type,
+            Long categoryId,
+            ConsumptionScope consumptionScope,
+            Long consumerMemberId,
+            Long assetId,
+            BigDecimal minAmount,
+            BigDecimal maxAmount,
+            String query
+    ) {
+        if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+        if (minAmount != null && minAmount.signum() < 0 || maxAmount != null && maxAmount.signum() < 0) {
+            throw new IllegalArgumentException("Amount filters cannot be negative");
+        }
+        if (minAmount != null && maxAmount != null && maxAmount.compareTo(minAmount) < 0) {
+            throw new IllegalArgumentException("Maximum amount cannot be less than minimum amount");
+        }
+
+        Long householdId = defaultHousehold().getId();
+        Specification<TransactionRecord> specification = (root, criteriaQuery, builder) -> {
+            List<Predicate> predicates = new java.util.ArrayList<>();
+            predicates.add(builder.equal(root.get("household").get("id"), householdId));
+            if (startDate != null) predicates.add(builder.greaterThanOrEqualTo(root.get("transactionDate"), startDate));
+            if (endDate != null) predicates.add(builder.lessThanOrEqualTo(root.get("transactionDate"), endDate));
+            if (type != null) predicates.add(builder.equal(root.get("type"), type));
+            if (categoryId != null) predicates.add(builder.equal(root.get("category").get("id"), categoryId));
+            if (consumptionScope != null) predicates.add(builder.equal(root.get("consumptionScope"), consumptionScope));
+            if (consumerMemberId != null) predicates.add(builder.equal(root.get("consumer").get("id"), consumerMemberId));
+            if (minAmount != null) predicates.add(builder.greaterThanOrEqualTo(root.get("amount"), minAmount));
+            if (maxAmount != null) predicates.add(builder.lessThanOrEqualTo(root.get("amount"), maxAmount));
+            if (assetId != null) {
+                predicates.add(builder.or(
+                        builder.equal(root.get("asset").get("id"), assetId),
+                        builder.equal(root.get("fromAsset").get("id"), assetId),
+                        builder.equal(root.get("toAsset").get("id"), assetId)
+                ));
+            }
+            String keyword = query == null ? "" : query.trim().toLowerCase();
+            if (!keyword.isBlank()) {
+                String pattern = "%" + keyword + "%";
+                var category = root.join("category", JoinType.LEFT);
+                var asset = root.join("asset", JoinType.LEFT);
+                var fromAsset = root.join("fromAsset", JoinType.LEFT);
+                var toAsset = root.join("toAsset", JoinType.LEFT);
+                var consumer = root.join("consumer", JoinType.LEFT);
+                predicates.add(builder.or(
+                        builder.like(builder.lower(root.get("title")), pattern),
+                        builder.like(builder.lower(root.get("memo")), pattern),
+                        builder.like(builder.lower(root.get("spendingTag")), pattern),
+                        builder.like(builder.lower(category.get("name")), pattern),
+                        builder.like(builder.lower(asset.get("name")), pattern),
+                        builder.like(builder.lower(fromAsset.get("name")), pattern),
+                        builder.like(builder.lower(toAsset.get("name")), pattern),
+                        builder.like(builder.lower(consumer.get("name")), pattern)
+                ));
+            }
+            criteriaQuery.orderBy(builder.desc(root.get("transactionDate")), builder.desc(root.get("id")));
+            return builder.and(predicates.toArray(Predicate[]::new));
+        };
+        return transactionRepository.findAll(specification).stream().map(TransactionDto::from).toList();
     }
 
     @Transactional(readOnly = true)
@@ -771,8 +871,42 @@ public class LedgerService {
                 tagSpends(records),
                 scopeSpends(records),
                 memberSpends(records),
-                categoryBudgetUsages
+                categoryBudgetUsages,
+                weeklyTotals(yearMonth, records)
         );
+    }
+
+    static List<MonthlySummaryDto.WeeklyTotals> weeklyTotals(YearMonth yearMonth, List<TransactionRecord> records) {
+        LocalDate monthStart = yearMonth.atDay(1);
+        LocalDate monthEnd = yearMonth.atEndOfMonth();
+        List<MonthlySummaryDto.WeeklyTotals> totals = new java.util.ArrayList<>();
+        LocalDate weekStart = monthStart;
+        int weekIndex = 1;
+        while (!weekStart.isAfter(monthEnd)) {
+            LocalDate weekEnd = weekStart.with(TemporalAdjusters.nextOrSame(java.time.DayOfWeek.SUNDAY));
+            if (weekEnd.isAfter(monthEnd)) {
+                weekEnd = monthEnd;
+            }
+            LocalDate currentStart = weekStart;
+            LocalDate currentEnd = weekEnd;
+            List<TransactionRecord> weekRecords = records.stream()
+                    .filter(record -> !record.getTransactionDate().isBefore(currentStart))
+                    .filter(record -> !record.getTransactionDate().isAfter(currentEnd))
+                    .toList();
+            long expenseCount = weekRecords.stream()
+                    .filter(record -> record.getType() == TransactionType.EXPENSE)
+                    .count();
+            totals.add(new MonthlySummaryDto.WeeklyTotals(
+                    weekIndex,
+                    currentStart,
+                    currentEnd,
+                    sum(weekRecords, TransactionType.EXPENSE),
+                    expenseCount
+            ));
+            weekStart = weekEnd.plusDays(1);
+            weekIndex++;
+        }
+        return totals;
     }
 
     @Transactional(readOnly = true)
@@ -812,6 +946,64 @@ public class LedgerService {
                 scopeSpends(records),
                 memberSpends(records)
         );
+    }
+
+    @Transactional(readOnly = true)
+    public YearlyBudgetSummaryDto yearlyBudgetSummary(Integer year) {
+        int targetYear = year == null ? LocalDate.now().getYear() : year;
+        Household household = defaultHousehold();
+        List<TransactionRecord> records = transactionRepository
+                .findByHouseholdIdAndTransactionDateBetweenOrderByTransactionDateDescIdDesc(
+                        household.getId(),
+                        LocalDate.of(targetYear, 1, 1),
+                        LocalDate.of(targetYear, 12, 31)
+                );
+        Map<String, BigDecimal> budgets = monthlyBudgetRepository
+                .findByHouseholdIdAndBudgetMonthBetweenOrderByBudgetMonthAsc(
+                        household.getId(),
+                        YearMonth.of(targetYear, 1).toString(),
+                        YearMonth.of(targetYear, 12).toString()
+                )
+                .stream()
+                .collect(Collectors.toMap(MonthlyBudget::getBudgetMonth, MonthlyBudget::getTotalAmount));
+        List<YearlyBudgetSummaryDto.MonthlyBudgetUsage> monthlyUsages = java.util.stream.IntStream.rangeClosed(1, 12)
+                .mapToObj(monthNumber -> {
+                    YearMonth yearMonth = YearMonth.of(targetYear, monthNumber);
+                    BigDecimal monthlyBudget = budgets.getOrDefault(yearMonth.toString(), BigDecimal.ZERO);
+                    BigDecimal monthlyExpense = sum(records.stream()
+                            .filter(record -> YearMonth.from(record.getTransactionDate()).equals(yearMonth))
+                            .toList(), TransactionType.EXPENSE);
+                    BigDecimal usageRate = usageRate(monthlyExpense, monthlyBudget);
+                    return new YearlyBudgetSummaryDto.MonthlyBudgetUsage(
+                            yearMonth.toString(),
+                            monthlyBudget,
+                            monthlyExpense,
+                            monthlyBudget.subtract(monthlyExpense),
+                            usageRate,
+                            monthlyBudget.signum() > 0 && monthlyExpense.compareTo(monthlyBudget) > 0
+                    );
+                })
+                .toList();
+        BigDecimal totalBudget = monthlyUsages.stream()
+                .map(YearlyBudgetSummaryDto.MonthlyBudgetUsage::budget)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalExpense = monthlyUsages.stream()
+                .map(YearlyBudgetSummaryDto.MonthlyBudgetUsage::expense)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new YearlyBudgetSummaryDto(
+                targetYear,
+                totalBudget,
+                totalExpense,
+                totalBudget.subtract(totalExpense),
+                usageRate(totalExpense, totalBudget),
+                monthlyUsages
+        );
+    }
+
+    private static BigDecimal usageRate(BigDecimal spent, BigDecimal budget) {
+        return budget.signum() == 0
+                ? BigDecimal.ZERO
+                : spent.multiply(new BigDecimal("100")).divide(budget, 1, RoundingMode.HALF_UP);
     }
 
     @Transactional(readOnly = true)

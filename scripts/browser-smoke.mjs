@@ -257,6 +257,11 @@ try {
 
   await page.locator('.more-list button').nth(1).click();
   await assertVisible(page, '.member-manager', 'member manager did not open');
+  await assertVisible(page, '.consumer-migration-card', 'consumer migration status did not render');
+  const migrationStatusResponse = await api.get('/api/members/consumer-migration');
+  await assertResponseOk(migrationStatusResponse, 'consumer migration status');
+  const migrationStatus = await migrationStatusResponse.json();
+  assert(typeof migrationStatus.eligibleCount === 'number', 'consumer migration status did not return eligibleCount');
   const ownerDeleteButton = page.locator('.member-row', { hasText: '기본 명의' }).getByRole('button', { name: '삭제' });
   assert(await ownerDeleteButton.isDisabled(), 'owner member delete button was not disabled');
   const memberName = `browser-smoke-member-${Date.now()}`;
@@ -309,6 +314,7 @@ try {
   ]);
   await assertResponseOk(recurringCreateResponse, 'recurring UI creation');
   const recurringRule = await recurringCreateResponse.json();
+  assert(recurringRule.title === recurringTitle, `recurring title was not saved: ${recurringRule.title}`);
   cleanup.recurringRuleIds.push(recurringRule.id);
   await page.waitForSelector(`.recurring-row:has-text("${recurringTitle}")`, { timeout: 15000 });
 
@@ -467,6 +473,26 @@ try {
   await page.locator('.full-panel .back-button').first().click();
   await assertVisible(page, '.ledger-screen', 'ledger screen did not return after clipboard entry');
 
+  const advancedSearchResponse = await api.get(
+    `/api/transactions/search?startDate=${transaction.transactionDate}&endDate=${transaction.transactionDate}`
+    + `&type=EXPENSE&assetId=${cashAsset.id}&minAmount=${transaction.amount}&maxAmount=${transaction.amount}`
+    + `&query=${encodeURIComponent(transactionTitle)}`
+  );
+  await assertResponseOk(advancedSearchResponse, 'advanced transaction search');
+  const advancedSearchRows = await advancedSearchResponse.json();
+  assert(advancedSearchRows.some((item) => item.id === transaction.id), 'advanced search did not return matching transaction');
+
+  const [advancedFilterResponse] = await Promise.all([
+    page.waitForResponse((response) => response.url().includes('/api/transactions/search?')),
+    page.getByLabel('자산 필터').selectOption(String(cashAsset.id))
+  ]);
+  await assertResponseOk(advancedFilterResponse, 'asset filter search');
+  await page.getByLabel('최소 금액').fill(String(transaction.amount));
+  await page.getByLabel('최대 금액').fill(String(transaction.amount));
+  await page.waitForResponse((response) => response.url().includes('/api/transactions/search?') && response.url().includes('minAmount='));
+  await page.waitForSelector(`.transaction-row:has-text("${transactionTitle}")`, { timeout: 15000 });
+  await page.locator('.ledger-filters button', { hasText: '초기화' }).click();
+
   await clickBottomTab(page, 1, '.stats-screen');
   await page.getByRole('button', { name: '기간' }).click();
   await assertVisible(page, '.stats-range-filter', 'range stats filter did not render');
@@ -493,6 +519,17 @@ try {
   await clickBottomTab(page, 1, '.stats-screen');
   await page.locator('.segmented-tabs button').nth(1).click();
   await assertVisible(page, '.budget-screen', 'budget stats screen did not open');
+  await assertVisible(page, '.weekly-budget-stats', 'weekly budget statistics did not render');
+  const yearlyBudgetResponse = await api.get(`/api/budgets/summary/yearly?year=${new Date().getFullYear()}`);
+  await assertResponseOk(yearlyBudgetResponse, 'yearly budget summary');
+  const yearlyBudget = await yearlyBudgetResponse.json();
+  assert(Array.isArray(yearlyBudget.monthlyUsages) && yearlyBudget.monthlyUsages.length === 12, 'yearly budget summary did not return 12 months');
+  await page.getByRole('button', { name: '연간' }).click();
+  await assertVisible(page, '.yearly-budget-screen', 'yearly budget screen did not render');
+  await assertVisible(page, '.year-nav', 'year navigation did not render for yearly budget');
+  assert(await page.locator('.yearly-budget-row').count() === 12, 'yearly budget screen did not render 12 months');
+  await page.getByRole('button', { name: '월별' }).click();
+  await assertVisible(page, '.weekly-budget-stats', 'monthly budget screen did not return from yearly budget');
   const budgetSettingsResponse = await api.get(`/api/budgets/settings?month=${new Date().toISOString().slice(0, 7)}`);
   await assertResponseOk(budgetSettingsResponse, 'budget settings snapshot');
   cleanup.originalBudgetSettings = await budgetSettingsResponse.json();

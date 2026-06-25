@@ -1,0 +1,353 @@
+import { AppHeader, BackButton, EmptyState, IconButton, LineField } from '../components/ui';
+import { iconForType, KeyValue, transferLabel } from './LedgerScreen';
+import { money, transactionTone } from '../utils/format';
+
+const API = '/api';
+const typeLabels = { INCOME: '수입', EXPENSE: '지출', TRANSFER: '이체' };
+const consumptionScopeLabels = { PERSONAL: '개인', SHARED: '공동' };
+
+function defaultConsumerMemberId(members) {
+  const member = members.find((item) => item.role === 'OWNER') || members[0];
+  return member ? String(member.id) : '';
+}
+export function EntryChoiceSheet({ openEntry, openClipboardEntry, onClose }) {
+  return (
+    <div className="sheet-backdrop entry-choice-backdrop" role="presentation" onClick={onClose}>
+      <section className="entry-choice-sheet" role="dialog" aria-modal="true" aria-label="거래 입력 방식" onClick={(event) => event.stopPropagation()}>
+        <header>
+          <div>
+            <strong>거래 추가</strong>
+            <span>입력 방식을 선택하세요.</span>
+          </div>
+          <button type="button" onClick={onClose} aria-label="닫기">×</button>
+        </header>
+        <button type="button" className="entry-choice-button" onClick={() => openEntry('EXPENSE')}>
+          <span>✎</span>
+          <div>
+            <strong>직접 입력</strong>
+            <small>수입·지출·이체를 직접 작성합니다.</small>
+          </div>
+        </button>
+        <button type="button" className="entry-choice-button" onClick={openClipboardEntry}>
+          <span>▤</span>
+          <div>
+            <strong>문자 자동 입력</strong>
+            <small>클립보드의 카드·은행 문자를 분석합니다.</small>
+          </div>
+        </button>
+      </section>
+    </div>
+  );
+}
+
+export function TransactionDetailScreen({ transaction, receipts, editTransaction, deleteTransaction, deleteReceipt, openInstallmentSchedule, onClose }) {
+  if (!transaction) return null;
+  const hasInstallment = transaction.installmentGroupId && transaction.installmentMonths > 1;
+  return (
+    <div className="full-panel">
+      <section className="transaction-detail-screen">
+        <AppHeader
+          title="거래 상세"
+          left={<BackButton label="가계부" onClick={onClose} />}
+          right={<IconButton label="수정" onClick={() => editTransaction(transaction)}>✎</IconButton>}
+        />
+        <section className={`transaction-detail-hero ${transactionTone(transaction.type)}`}>
+          <span>{transaction.categoryIcon || iconForType(transaction.type)}</span>
+          <strong>{money(transaction.amount)}</strong>
+          <em>{transaction.title || transaction.categoryName || typeLabels[transaction.type]}</em>
+        </section>
+        <section className="transaction-detail-list">
+          <KeyValue label="유형" value={typeLabels[transaction.type]} />
+          <KeyValue label="날짜" value={transaction.transactionDate} />
+          <KeyValue label="분류" value={transaction.categoryName || '미분류'} />
+          <KeyValue label="자산" value={transaction.assetName || transferLabel(transaction) || '자산 미지정'} />
+          {transaction.spendingTag && <KeyValue label="소비 태그" value={transaction.spendingTag} />}
+          {transaction.type === 'EXPENSE' && (
+            <KeyValue label="소비 구분" value={consumptionScopeLabels[transaction.consumptionScope] || '개인'} />
+          )}
+          {transaction.type === 'EXPENSE' && transaction.consumptionScope === 'PERSONAL' && (
+            <KeyValue label="소비 명의" value={transaction.consumerMemberName || '기본 명의'} />
+          )}
+          {hasInstallment && <KeyValue label="할부" value={`${transaction.installmentIndex}/${transaction.installmentMonths}개월`} />}
+          {transaction.memo && <KeyValue label="메모" value={transaction.memo} />}
+          <section className="receipt-preview-list">
+            <h2>영수증</h2>
+            {receipts.map((receipt) => (
+              <div className="receipt-preview-row" key={receipt.id}>
+                <a href={`${API}/transactions/${transaction.id}/receipts/${receipt.id}/file`} target="_blank" rel="noreferrer">
+                  <img src={`${API}/transactions/${transaction.id}/receipts/${receipt.id}/file`} alt={receipt.originalFilename || '영수증'} />
+                  <span>{receipt.originalFilename || '영수증'}</span>
+                </a>
+                <button type="button" onClick={() => deleteReceipt(receipt)}>삭제</button>
+              </div>
+            ))}
+            {!receipts.length && <EmptyState label="첨부된 영수증이 없습니다." compact />}
+          </section>
+        </section>
+        <div className="transaction-detail-actions">
+          {hasInstallment && (
+            <button className="secondary-action" type="button" onClick={() => openInstallmentSchedule(transaction)}>
+              할부 내역
+            </button>
+          )}
+          <button className="danger-action" type="button" onClick={() => deleteTransaction(transaction)}>
+            삭제
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export function EntryScreen({
+  form,
+  expression,
+  assets,
+  categories,
+  members,
+  receiptFiles,
+  updateForm,
+  setReceiptFiles,
+  setExpression,
+  submitTransaction,
+  editingTransaction,
+  editingInstallmentGroup,
+  installmentReceiptTargetIndex,
+  setInstallmentReceiptTargetIndex,
+  onClose
+}) {
+  const tone = form.type === 'INCOME' ? 'income' : form.type === 'TRANSFER' ? 'transfer' : 'expense';
+  const isEditing = Boolean(editingTransaction || editingInstallmentGroup);
+  const installmentReceiptOptions = Array.from(
+    { length: Math.max(Number(form.installmentMonths || 0), 0) },
+    (_, index) => index + 1
+  );
+  const installmentReceiptTargetValue = Math.min(
+    Math.max(Number(installmentReceiptTargetIndex || 1), 1),
+    Math.max(installmentReceiptOptions.length, 1)
+  );
+
+  function setType(type) {
+    updateForm('type', type);
+    updateForm('categoryId', '');
+    if (type !== 'EXPENSE') {
+      updateForm('installmentMonths', 0);
+      updateForm('spendingTag', '');
+      updateForm('consumptionScope', 'PERSONAL');
+      updateForm('consumerMemberId', '');
+    } else if (!form.consumerMemberId) {
+      updateForm('consumerMemberId', defaultConsumerMemberId(members));
+    }
+    if (type === 'TRANSFER') {
+      updateForm('assetId', '');
+    }
+  }
+
+  function handleKey(value) {
+    if (value === '확인' || value === '저장') return;
+    if (value === '⌫') {
+      const next = expression.slice(0, -1);
+      setExpression(next);
+      updateForm('amount', amountFromExpression(next));
+      return;
+    }
+    if (value === '=') {
+      const result = amountFromExpression(expression);
+      setExpression(result ? String(result) : expression);
+      updateForm('amount', result);
+      return;
+    }
+    const next = `${expression}${value}`;
+    setExpression(next);
+    updateForm('amount', amountFromExpression(next));
+  }
+
+  return (
+    <div className="full-panel">
+      <form className="entry-screen-form" onSubmit={submitTransaction}>
+        <AppHeader
+          title={editingInstallmentGroup ? '할부 전체 수정' : editingTransaction ? '거래 수정' : typeLabels[form.type]}
+          left={<BackButton label="가계부" onClick={onClose} />}
+          right={!isEditing && <IconButton label="즐겨찾기">☆</IconButton>}
+        />
+
+        <div className="entry-tabs">
+          {['INCOME', 'EXPENSE', 'TRANSFER'].map((type) => (
+            <button key={type} type="button" className={`${form.type === type ? 'active' : ''} ${type.toLowerCase()}`} onClick={() => setType(type)}>
+              {typeLabels[type]}
+            </button>
+          ))}
+        </div>
+
+        <section className={`entry-fields ${tone}`}>
+          <LineField label="날짜">
+            <input type="date" value={form.transactionDate} onChange={(event) => updateForm('transactionDate', event.target.value)} />
+          </LineField>
+
+          <LineField label="금액" side={form.type === 'TRANSFER' ? <span className="fee-pill">수수료</span> : <span className="repeat-pill">반복/할부</span>}>
+            <input value={expression || form.amount} inputMode="decimal" onChange={(event) => {
+              setExpression(event.target.value);
+              updateForm('amount', amountFromExpression(event.target.value));
+            }} placeholder="0" />
+          </LineField>
+
+          {form.type === 'TRANSFER' ? (
+            <>
+              <LineField label="출금" side={<span className="swap-icon">⇅</span>}>
+                <select value={form.fromAssetId} onChange={(event) => updateForm('fromAssetId', event.target.value)}>
+                  <option value="">선택</option>
+                  {assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
+                </select>
+              </LineField>
+              <LineField label="입금">
+                <select value={form.toAssetId} onChange={(event) => updateForm('toAssetId', event.target.value)}>
+                  <option value="">선택</option>
+                  {assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
+                </select>
+              </LineField>
+              <LineField label="수수료">
+                <input inputMode="numeric" value={form.fee} onChange={(event) => updateForm('fee', event.target.value)} placeholder="0" />
+              </LineField>
+            </>
+          ) : (
+            <>
+              <LineField label="분류">
+                <select value={form.categoryId} onChange={(event) => updateForm('categoryId', event.target.value)}>
+                  <option value="">선택</option>
+                  {categories.map((category) => <option value={category.id} key={category.id}>{category.icon} {category.name}</option>)}
+                </select>
+              </LineField>
+              <LineField label="자산">
+                <select value={form.assetId} onChange={(event) => updateForm('assetId', event.target.value)}>
+                  <option value="">선택</option>
+                  {assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
+                </select>
+              </LineField>
+              {form.type === 'EXPENSE' && (
+                <LineField label="할부">
+                  <select value={form.installmentMonths} onChange={(event) => {
+                    const months = Number(event.target.value);
+                    updateForm('installmentMonths', months);
+                    if (editingInstallmentGroup && Number(installmentReceiptTargetIndex || 1) > months) {
+                      setInstallmentReceiptTargetIndex(Math.max(months, 1));
+                    }
+                  }}>
+                    <option value={0}>일시불</option>
+                    <option value={2}>2개월</option>
+                    <option value={3}>3개월</option>
+                    <option value={6}>6개월</option>
+                    <option value={12}>12개월</option>
+                  </select>
+                </LineField>
+              )}
+            </>
+          )}
+
+          <LineField label="내용" side={<span className="memo-alert">!</span>}>
+            <input value={form.title} onChange={(event) => updateForm('title', event.target.value)} placeholder="내용" />
+          </LineField>
+          {form.type === 'EXPENSE' && (
+            <>
+              <LineField label="태그">
+                <input value={form.spendingTag} onChange={(event) => updateForm('spendingTag', event.target.value)} placeholder="식비, 생활, 고정비" />
+              </LineField>
+              <LineField label="소비 구분">
+                <select value={form.consumptionScope} onChange={(event) => {
+                  const scope = event.target.value;
+                  updateForm('consumptionScope', scope);
+                  updateForm('consumerMemberId', scope === 'PERSONAL' ? form.consumerMemberId || defaultConsumerMemberId(members) : '');
+                }}>
+                  <option value="PERSONAL">개인 소비</option>
+                  <option value="SHARED">공동 소비</option>
+                </select>
+              </LineField>
+              {form.consumptionScope === 'PERSONAL' && (
+                <LineField label="소비 명의">
+                  <select required value={form.consumerMemberId} onChange={(event) => updateForm('consumerMemberId', event.target.value)}>
+                    <option value="">명의 선택</option>
+                    {members.map((member) => (
+                      <option value={member.id} key={member.id}>
+                        {member.name}{member.role === 'OWNER' ? ' · 기본' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </LineField>
+              )}
+            </>
+          )}
+
+          {editingInstallmentGroup && (
+            <LineField label="첨부 회차">
+              <select
+                value={installmentReceiptTargetValue}
+                onChange={(event) => setInstallmentReceiptTargetIndex(Number(event.target.value))}
+              >
+                {installmentReceiptOptions.map((index) => (
+                  <option value={index} key={index}>{index}회차</option>
+                ))}
+              </select>
+            </LineField>
+          )}
+
+          <label className="receipt-compact">
+            <strong>{isEditing ? '영수증 추가' : '영수증 사진'}</strong>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(event) => setReceiptFiles(Array.from(event.target.files || []).slice(0, 10))}
+            />
+            <em>최대 10장</em>
+            {receiptFiles.length > 0 && (
+              <span className="receipt-selection-list">
+                {receiptFiles.map((file, index) => (
+                  <button type="button" key={`${file.name}-${file.lastModified}-${index}`} onClick={(event) => {
+                    event.preventDefault();
+                    setReceiptFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+                  }}>
+                    {file.name} ×
+                  </button>
+                ))}
+              </span>
+            )}
+          </label>
+        </section>
+
+        <CalculatorPad onKey={handleKey} submitLabel={isEditing ? '저장' : '확인'} />
+      </form>
+    </div>
+  );
+}
+
+function CalculatorPad({ onKey, submitLabel = '확인' }) {
+  const keys = ['+', '-', '×', '÷', '7', '8', '9', '=', '4', '5', '6', '.', '1', '2', '3', '⌫', '', '0', '', submitLabel];
+  return (
+    <section className="calculator">
+      <header>
+        <span>금액</span>
+        <button type="button">◎</button>
+        <button type="button">×</button>
+      </header>
+      <div className="calculator-grid">
+        {keys.map((key, index) => key ? (
+          <button key={`${key}-${index}`} type={key === submitLabel ? 'submit' : 'button'} className={key === submitLabel ? 'confirm' : ''} onClick={() => onKey(key)}>
+            {key}
+          </button>
+        ) : <span key={`blank-${index}`} />)}
+      </div>
+    </section>
+  );
+}
+
+function amountFromExpression(value) {
+  const expression = String(value || '').replaceAll('×', '*').replaceAll('÷', '/').trim();
+  if (!expression) return '';
+  if (!/^[0-9+\-*/. ()]+$/.test(expression)) return '';
+  try {
+    const result = Function(`"use strict"; return (${expression})`)();
+    return Number.isFinite(result) ? Math.max(0, Math.round(result)) : '';
+  } catch {
+    return '';
+  }
+}
+

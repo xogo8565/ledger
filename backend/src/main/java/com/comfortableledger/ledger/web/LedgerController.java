@@ -10,6 +10,7 @@ import com.comfortableledger.ledger.web.ApiDtos.CardPaymentScheduleDto;
 import com.comfortableledger.ledger.web.ApiDtos.CategoryDto;
 import com.comfortableledger.ledger.web.ApiDtos.CreatePaymentScheduleRequest;
 import com.comfortableledger.ledger.web.ApiDtos.CreateTransactionRequest;
+import com.comfortableledger.ledger.web.ApiDtos.ConsumerMigrationDto;
 import com.comfortableledger.ledger.web.ApiDtos.MonthlySummaryDto;
 import com.comfortableledger.ledger.web.ApiDtos.MemberDto;
 import com.comfortableledger.ledger.web.ApiDtos.PeriodSummaryDto;
@@ -21,6 +22,10 @@ import com.comfortableledger.ledger.web.ApiDtos.SaveMemberRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SchedulePaymentRequest;
 import com.comfortableledger.ledger.web.ApiDtos.TransactionDto;
 import com.comfortableledger.ledger.web.ApiDtos.YearlySummaryDto;
+import com.comfortableledger.ledger.web.ApiDtos.YearlyBudgetSummaryDto;
+import com.comfortableledger.ledger.domain.ConsumptionScope;
+import com.comfortableledger.ledger.domain.TransactionType;
+import java.math.BigDecimal;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -136,6 +141,16 @@ public class LedgerController {
         ledgerService.deleteMember(id);
     }
 
+    @GetMapping("/members/consumer-migration")
+    public ConsumerMigrationDto consumerMigrationStatus() {
+        return ledgerService.consumerMigrationStatus();
+    }
+
+    @PostMapping("/members/consumer-migration")
+    public ConsumerMigrationDto migrateUnassignedPersonalExpenses() {
+        return ledgerService.migrateUnassignedPersonalExpenses();
+    }
+
     @GetMapping("/transactions")
     public List<TransactionDto> transactions(@RequestParam(required = false) String month) {
         return ledgerService.transactions(month);
@@ -147,6 +162,25 @@ public class LedgerController {
             @RequestParam LocalDate endDate
     ) {
         return ledgerService.transactionsBetween(startDate, endDate);
+    }
+
+    @GetMapping("/transactions/search")
+    public List<TransactionDto> searchTransactions(
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(required = false) LocalDate endDate,
+            @RequestParam(required = false) TransactionType type,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) ConsumptionScope consumptionScope,
+            @RequestParam(required = false) Long consumerMemberId,
+            @RequestParam(required = false) Long assetId,
+            @RequestParam(required = false) BigDecimal minAmount,
+            @RequestParam(required = false) BigDecimal maxAmount,
+            @RequestParam(required = false) String query
+    ) {
+        return ledgerService.searchTransactions(
+                startDate, endDate, type, categoryId, consumptionScope,
+                consumerMemberId, assetId, minAmount, maxAmount, query
+        );
     }
 
     @GetMapping("/transactions/daily")
@@ -200,6 +234,11 @@ public class LedgerController {
     @GetMapping("/summary/yearly")
     public YearlySummaryDto yearlySummary(@RequestParam(required = false) Integer year) {
         return ledgerService.yearlySummary(year);
+    }
+
+    @GetMapping("/budgets/summary/yearly")
+    public YearlyBudgetSummaryDto yearlyBudgetSummary(@RequestParam(required = false) Integer year) {
+        return ledgerService.yearlyBudgetSummary(year);
     }
 
     @GetMapping("/summary/range")

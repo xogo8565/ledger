@@ -109,6 +109,14 @@ public final class ApiDtos {
     public record SaveMemberRequest(@NotBlank String name) {
     }
 
+    public record ConsumerMigrationDto(
+            Long ownerMemberId,
+            String ownerMemberName,
+            long eligibleCount,
+            long migratedCount
+    ) {
+    }
+
     public record SaveCategoryRequest(
             @NotNull CategoryType type,
             @NotBlank String name,
@@ -197,7 +205,8 @@ public final class ApiDtos {
             List<TagSpend> tagSpends,
             List<ScopeSpend> scopeSpends,
             List<MemberSpend> memberSpends,
-            List<CategoryBudgetUsage> categoryBudgetUsages
+            List<CategoryBudgetUsage> categoryBudgetUsages,
+            List<WeeklyTotals> weeklyTotals
     ) {
         public record CategorySpend(Long categoryId, String categoryName, BigDecimal amount) {
         }
@@ -209,6 +218,15 @@ public final class ApiDtos {
         }
 
         public record MemberSpend(Long memberId, String memberName, BigDecimal amount, long transactionCount) {
+        }
+
+        public record WeeklyTotals(
+                int weekIndex,
+                LocalDate startDate,
+                LocalDate endDate,
+                BigDecimal expense,
+                long transactionCount
+        ) {
         }
 
         public record CategoryBudgetUsage(
@@ -286,6 +304,25 @@ public final class ApiDtos {
             List<MonthlySummaryDto.MemberSpend> memberSpends
     ) {
         public record MonthlyTotals(String month, BigDecimal income, BigDecimal expense, BigDecimal transfer) {
+        }
+    }
+
+    public record YearlyBudgetSummaryDto(
+            int year,
+            BigDecimal budget,
+            BigDecimal expense,
+            BigDecimal remainingBudget,
+            BigDecimal budgetUsageRate,
+            List<MonthlyBudgetUsage> monthlyUsages
+    ) {
+        public record MonthlyBudgetUsage(
+                String month,
+                BigDecimal budget,
+                BigDecimal expense,
+                BigDecimal remainingBudget,
+                BigDecimal budgetUsageRate,
+                boolean exceeded
+        ) {
         }
     }
 
