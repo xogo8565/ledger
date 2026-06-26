@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class LedgerServiceTagStatsTest {
+class StatisticsServiceTagStatsTest {
 
     @Test
     void aggregatesCommaSeparatedExpenseTagsAndCountsTransactions() {
@@ -22,7 +22,7 @@ class LedgerServiceTagStatsTest {
                 transaction(household, TransactionType.EXPENSE, " ", "3000")
         );
 
-        assertThat(LedgerService.tagSpends(records))
+        assertThat(StatisticsService.tagSpends(records))
                 .extracting("tagName", "amount", "transactionCount")
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("생활", new BigDecimal("20000"), 2L),

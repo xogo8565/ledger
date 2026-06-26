@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class LedgerServiceAssetSummaryTest {
+class AssetManagementServiceAssetSummaryTest {
 
     @Test
     void aggregatesAssetsAndLiabilitiesByNormalizedOwnerName() {
@@ -19,7 +19,7 @@ class LedgerServiceAssetSummaryTest {
         Asset sharedCash = asset(household, AssetType.CASH, "공동 현금", "300000", "공동");
         Asset unassignedCard = asset(household, AssetType.CARD, "미지정 카드", "50000", " ");
 
-        var summary = LedgerService.summarizeAssets(List.of(ownBank, ownDebt, sharedCash, unassignedCard));
+        var summary = AssetManagementService.summarizeAssets(List.of(ownBank, ownDebt, sharedCash, unassignedCard));
 
         assertThat(summary.totalAssets()).isEqualByComparingTo("1300000");
         assertThat(summary.totalLiabilities()).isEqualByComparingTo("250000");

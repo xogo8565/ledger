@@ -425,7 +425,8 @@ button {
 }
 
 .ledger-filters > .date-filter-row,
-.ledger-filters > .amount-filter-row {
+.ledger-filters > .amount-filter-row,
+.ledger-filters > .search-options-row {
   grid-template-columns: 1fr 1fr;
 }
 
@@ -449,9 +450,28 @@ button {
   align-items: center;
 }
 
+.ledger-filters > .search-page-row {
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+.search-page-row span {
+  color: var(--subtle);
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
 .filter-result-row span {
   color: var(--subtle);
   font-size: 12px;
+  font-weight: 800;
+}
+
+.csv-scope-hint {
+  margin: -2px 0 0;
+  color: var(--subtle);
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -463,6 +483,210 @@ button {
   font-size: 12px;
   font-weight: 900;
 }
+
+.receipt-ocr-cta {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin: 0 18px 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fff7ed, #eff6ff);
+}
+
+.receipt-ocr-cta strong,
+.receipt-ocr-card strong {
+  display: block;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.receipt-ocr-cta span,
+.receipt-ocr-card p {
+  display: block;
+  margin-top: 4px;
+  color: var(--subtle);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.receipt-ocr-cta button,
+.receipt-ocr-card button,
+.receipt-ocr-result > button {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: white;
+  font-weight: 900;
+}
+
+.receipt-ocr-screen {
+  min-height: 100%;
+  background: var(--surface-soft);
+}
+
+.receipt-ocr-card,
+.receipt-ocr-result {
+  display: grid;
+  gap: 12px;
+  margin: 14px 18px;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.receipt-ocr-card input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.ocr-error {
+    color: var(--danger);
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 900;
+  }
+
+  .ocr-error-box,
+  .ocr-help-card {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 12px;
+    background: var(--surface-soft);
+  }
+
+  .ocr-help-card {
+    border: 1px dashed var(--line-strong);
+  }
+
+  .ocr-help-card strong {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 900;
+  }
+
+  .ocr-help-card span {
+    color: var(--subtle);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.5;
+  }
+
+  .ocr-candidate-card {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface-soft);
+  }
+
+  .ocr-candidate-card > strong {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 900;
+  }
+
+  .ocr-candidate-group {
+    display: grid;
+    gap: 6px;
+  }
+
+  .ocr-candidate-group > span {
+    color: var(--subtle);
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .ocr-candidate-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .ocr-candidate-chip {
+    min-height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .ocr-candidate-chip.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: white;
+  }
+
+.receipt-ocr-result h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.ocr-preview-grid {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 8px 10px;
+  font-size: 13px;
+}
+
+.ocr-preview-grid span {
+  color: var(--subtle);
+  font-weight: 900;
+}
+
+.ocr-preview-grid strong {
+  overflow-wrap: anywhere;
+}
+
+.ocr-warnings {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.receipt-ocr-result pre {
+    max-height: 180px;
+    overflow: auto;
+    white-space: pre-wrap;
+    padding: 10px;
+  border-radius: 10px;
+  background: var(--surface-soft);
+    color: var(--text);
+    font-size: 12px;
+  }
+
+  .ocr-raw-text-editor {
+    width: 100%;
+    min-height: 160px;
+    resize: vertical;
+    padding: 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: var(--surface-soft);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.5;
+  }
 
 .transfer {
   color: var(--transfer);

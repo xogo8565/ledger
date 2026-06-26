@@ -1,7 +1,14 @@
 package com.comfortableledger.ledger.web;
 
+import com.comfortableledger.ledger.service.BudgetService;
 import com.comfortableledger.ledger.service.CardService;
-import com.comfortableledger.ledger.service.LedgerService;
+import com.comfortableledger.ledger.service.AssetManagementService;
+import com.comfortableledger.ledger.service.MemberService;
+import com.comfortableledger.ledger.service.StatisticsService;
+import com.comfortableledger.ledger.service.TransactionQueryService;
+import com.comfortableledger.ledger.service.TransactionSearchCriteria;
+import com.comfortableledger.ledger.service.TransactionSearchSort;
+import com.comfortableledger.ledger.service.TransactionCommandService;
 import com.comfortableledger.ledger.web.ApiDtos.AssetDto;
 import com.comfortableledger.ledger.web.ApiDtos.AssetSummaryDto;
 import com.comfortableledger.ledger.web.ApiDtos.BootstrapDto;
@@ -21,6 +28,7 @@ import com.comfortableledger.ledger.web.ApiDtos.SaveCategoryRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SaveMemberRequest;
 import com.comfortableledger.ledger.web.ApiDtos.SchedulePaymentRequest;
 import com.comfortableledger.ledger.web.ApiDtos.TransactionDto;
+import com.comfortableledger.ledger.web.ApiDtos.TransactionSearchResultDto;
 import com.comfortableledger.ledger.web.ApiDtos.YearlySummaryDto;
 import com.comfortableledger.ledger.web.ApiDtos.YearlyBudgetSummaryDto;
 import com.comfortableledger.ledger.domain.ConsumptionScope;
@@ -47,11 +55,24 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api")
 public class LedgerController {
-    private final LedgerService ledgerService;
+    private final AssetManagementService assetManagementService;
+    private final StatisticsService statisticsService;
+    private final MemberService memberService;
+    private final BudgetService budgetService;
+    private final TransactionQueryService transactionQueryService;
+    private final TransactionCommandService transactionCommandService;
     private final CardService cardService;
 
-    public LedgerController(LedgerService ledgerService, CardService cardService) {
-        this.ledgerService = ledgerService;
+    public LedgerController(AssetManagementService assetManagementService, StatisticsService statisticsService,
+                            MemberService memberService,
+                            BudgetService budgetService, TransactionQueryService transactionQueryService,
+                            TransactionCommandService transactionCommandService, CardService cardService) {
+        this.assetManagementService = assetManagementService;
+        this.statisticsService = statisticsService;
+        this.memberService = memberService;
+        this.budgetService = budgetService;
+        this.transactionQueryService = transactionQueryService;
+        this.transactionCommandService = transactionCommandService;
         this.cardService = cardService;
     }
 
@@ -59,101 +80,101 @@ public class LedgerController {
     public BootstrapDto bootstrap(@RequestParam(required = false) String month) {
         String targetMonth = month == null ? YearMonth.now().toString() : month;
         return new BootstrapDto(
-                ledgerService.assets(),
-                ledgerService.categories(),
-                ledgerService.transactions(targetMonth),
-                ledgerService.monthlySummary(targetMonth)
+                assetManagementService.assets(),
+                assetManagementService.categories(),
+                transactionQueryService.transactions(targetMonth),
+                statisticsService.monthlySummary(targetMonth)
         );
     }
 
     @GetMapping("/assets")
     public List<AssetDto> assets() {
-        return ledgerService.assets();
+        return assetManagementService.assets();
     }
 
     @GetMapping("/assets/summary")
     public AssetSummaryDto assetSummary() {
-        return ledgerService.assetSummary();
+        return assetManagementService.assetSummary();
     }
 
     @PostMapping("/assets")
     public AssetDto createAsset(@Valid @RequestBody SaveAssetRequest request) {
-        return ledgerService.createAsset(request);
+        return assetManagementService.createAsset(request);
     }
 
     @PostMapping("/assets/card")
     public AssetDto createCardAsset(@Valid @RequestBody SaveCardAssetRequest request) {
-        return ledgerService.createCardAsset(request);
+        return assetManagementService.createCardAsset(request);
     }
 
     @PutMapping("/assets/{id}/card")
     public AssetDto updateCardAsset(@PathVariable Long id, @Valid @RequestBody SaveCardAssetRequest request) {
-        return ledgerService.updateCardAsset(id, request);
+        return assetManagementService.updateCardAsset(id, request);
     }
 
     @PutMapping("/assets/{id}")
     public AssetDto updateAsset(@PathVariable Long id, @Valid @RequestBody SaveAssetRequest request) {
-        return ledgerService.updateAsset(id, request);
+        return assetManagementService.updateAsset(id, request);
     }
 
     @DeleteMapping("/assets/{id}")
     public void deleteAsset(@PathVariable Long id) {
-        ledgerService.deleteAsset(id);
+        assetManagementService.deleteAsset(id);
     }
 
     @GetMapping("/categories")
     public List<CategoryDto> categories() {
-        return ledgerService.categories();
+        return assetManagementService.categories();
     }
 
     @PostMapping("/categories")
     public CategoryDto createCategory(@Valid @RequestBody SaveCategoryRequest request) {
-        return ledgerService.createCategory(request);
+        return assetManagementService.createCategory(request);
     }
 
     @PutMapping("/categories/{id}")
     public CategoryDto updateCategory(@PathVariable Long id, @Valid @RequestBody SaveCategoryRequest request) {
-        return ledgerService.updateCategory(id, request);
+        return assetManagementService.updateCategory(id, request);
     }
 
     @DeleteMapping("/categories/{id}")
     public void deleteCategory(@PathVariable Long id) {
-        ledgerService.deleteCategory(id);
+        assetManagementService.deleteCategory(id);
     }
 
     @GetMapping("/members")
     public List<MemberDto> members() {
-        return ledgerService.members();
+        return memberService.members();
     }
 
     @PostMapping("/members")
     public MemberDto createMember(@Valid @RequestBody SaveMemberRequest request) {
-        return ledgerService.createMember(request);
+        return memberService.createMember(request);
     }
 
     @PutMapping("/members/{id}")
     public MemberDto updateMember(@PathVariable Long id, @Valid @RequestBody SaveMemberRequest request) {
-        return ledgerService.updateMember(id, request);
+        return memberService.updateMember(id, request);
     }
 
     @DeleteMapping("/members/{id}")
     public void deleteMember(@PathVariable Long id) {
-        ledgerService.deleteMember(id);
+        memberService.deleteMember(id);
     }
 
     @GetMapping("/members/consumer-migration")
     public ConsumerMigrationDto consumerMigrationStatus() {
-        return ledgerService.consumerMigrationStatus();
+        return memberService.consumerMigrationStatus();
     }
 
     @PostMapping("/members/consumer-migration")
     public ConsumerMigrationDto migrateUnassignedPersonalExpenses() {
-        return ledgerService.migrateUnassignedPersonalExpenses();
+        return memberService.migrateUnassignedPersonalExpenses();
     }
 
     @GetMapping("/transactions")
     public List<TransactionDto> transactions(@RequestParam(required = false) String month) {
-        return ledgerService.transactions(month);
+        return transactionQueryService.transactions(month);
     }
 
     @GetMapping("/transactions/range")
@@ -161,11 +182,11 @@ public class LedgerController {
             @RequestParam LocalDate startDate,
             @RequestParam LocalDate endDate
     ) {
-        return ledgerService.transactionsBetween(startDate, endDate);
+        return transactionQueryService.transactionsBetween(startDate, endDate);
     }
 
     @GetMapping("/transactions/search")
-    public List<TransactionDto> searchTransactions(
+    public TransactionSearchResultDto searchTransactions(
             @RequestParam(required = false) LocalDate startDate,
             @RequestParam(required = false) LocalDate endDate,
             @RequestParam(required = false) TransactionType type,
@@ -175,27 +196,30 @@ public class LedgerController {
             @RequestParam(required = false) Long assetId,
             @RequestParam(required = false) BigDecimal minAmount,
             @RequestParam(required = false) BigDecimal maxAmount,
-            @RequestParam(required = false) String query
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) TransactionSearchSort sort
     ) {
-        return ledgerService.searchTransactions(
+        return transactionQueryService.searchTransactions(new TransactionSearchCriteria(
                 startDate, endDate, type, categoryId, consumptionScope,
-                consumerMemberId, assetId, minAmount, maxAmount, query
-        );
+                consumerMemberId, assetId, minAmount, maxAmount, query,
+                page, size, sort));
     }
 
     @GetMapping("/transactions/daily")
     public List<TransactionDto> dailyTransactions(@RequestParam(required = false) String date) {
-        return ledgerService.dailyTransactions(date);
+        return transactionQueryService.dailyTransactions(date);
     }
 
     @GetMapping("/transactions/{id}")
     public TransactionDto getTransaction(@PathVariable Long id) {
-        return ledgerService.getTransaction(id);
+        return transactionQueryService.getTransaction(id);
     }
 
     @GetMapping("/transactions/installments/{installmentGroupId}")
     public List<TransactionDto> installmentTransactions(@PathVariable String installmentGroupId) {
-        return ledgerService.installmentTransactions(installmentGroupId);
+        return transactionQueryService.installmentTransactions(installmentGroupId);
     }
 
     @PutMapping("/transactions/installments/{installmentGroupId}")
@@ -203,42 +227,42 @@ public class LedgerController {
             @PathVariable String installmentGroupId,
             @Valid @RequestBody CreateTransactionRequest request
     ) {
-        return ledgerService.updateInstallmentTransactions(installmentGroupId, request);
+        return transactionCommandService.updateInstallmentTransactions(installmentGroupId, request);
     }
 
     @DeleteMapping("/transactions/installments/{installmentGroupId}")
     public void deleteInstallmentTransactions(@PathVariable String installmentGroupId) {
-        ledgerService.deleteInstallmentTransactions(installmentGroupId);
+        transactionCommandService.deleteInstallmentTransactions(installmentGroupId);
     }
 
     @PostMapping("/transactions")
     public TransactionDto createTransaction(@Valid @RequestBody CreateTransactionRequest request) {
-        return ledgerService.createTransaction(request);
+        return transactionCommandService.createTransaction(request);
     }
 
     @PutMapping("/transactions/{id}")
     public TransactionDto updateTransaction(@PathVariable Long id, @Valid @RequestBody CreateTransactionRequest request) {
-        return ledgerService.updateTransaction(id, request);
+        return transactionCommandService.updateTransaction(id, request);
     }
 
     @DeleteMapping("/transactions/{id}")
     public void deleteTransaction(@PathVariable Long id) {
-        ledgerService.deleteTransaction(id);
+        transactionCommandService.deleteTransaction(id);
     }
 
     @GetMapping("/summary/monthly")
     public MonthlySummaryDto monthlySummary(@RequestParam(required = false) String month) {
-        return ledgerService.monthlySummary(month);
+        return statisticsService.monthlySummary(month);
     }
 
     @GetMapping("/summary/yearly")
     public YearlySummaryDto yearlySummary(@RequestParam(required = false) Integer year) {
-        return ledgerService.yearlySummary(year);
+        return statisticsService.yearlySummary(year);
     }
 
     @GetMapping("/budgets/summary/yearly")
     public YearlyBudgetSummaryDto yearlyBudgetSummary(@RequestParam(required = false) Integer year) {
-        return ledgerService.yearlyBudgetSummary(year);
+        return statisticsService.yearlyBudgetSummary(year);
     }
 
     @GetMapping("/summary/range")
@@ -246,7 +270,7 @@ public class LedgerController {
             @RequestParam LocalDate startDate,
             @RequestParam LocalDate endDate
     ) {
-        return ledgerService.rangeSummary(startDate, endDate);
+        return statisticsService.rangeSummary(startDate, endDate);
     }
 
     @GetMapping("/export/transactions.csv")
@@ -254,7 +278,7 @@ public class LedgerController {
             @RequestParam(required = false) String month,
             @RequestParam(required = false) Integer year
     ) {
-        String csv = "\uFEFF" + ledgerService.exportTransactionsCsv(month, year);
+        String csv = "\uFEFF" + transactionQueryService.exportTransactionsCsv(month, year);
         String period = year != null ? String.valueOf(year) : month == null || month.isBlank() ? YearMonth.now().toString() : month;
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"ledger-transactions-" + period + ".csv\"")
@@ -264,16 +288,16 @@ public class LedgerController {
 
     @GetMapping("/budgets/settings")
     public BudgetSettingsDto budgetSettings(@RequestParam(required = false) String month) {
-        return ledgerService.budgetSettings(month);
+        return budgetService.budgetSettings(month);
     }
 
     @PostMapping("/budgets/settings")
     public BudgetSettingsDto saveBudget(@Valid @RequestBody SaveBudgetRequest request) {
-        return ledgerService.saveBudget(request);
+        return budgetService.saveBudget(request);
     }
 
     @PostMapping("/budgets/settings/copy-previous")
     public BudgetSettingsDto copyPreviousBudget(@RequestParam(required = false) String month) {
-        return ledgerService.copyPreviousBudget(month);
+        return budgetService.copyPreviousBudget(month);
     }
 }

@@ -24,17 +24,17 @@ public class RecurringTransactionService {
     private final AssetRepository assetRepository;
     private final CategoryRepository categoryRepository;
     private final RecurringTransactionRepository recurringTransactionRepository;
-    private final LedgerService ledgerService;
+    private final TransactionCommandService transactionCommandService;
 
     public RecurringTransactionService(HouseholdRepository householdRepository, AssetRepository assetRepository,
                                        CategoryRepository categoryRepository,
                                        RecurringTransactionRepository recurringTransactionRepository,
-                                       LedgerService ledgerService) {
+                                       TransactionCommandService transactionCommandService) {
         this.householdRepository = householdRepository;
         this.assetRepository = assetRepository;
         this.categoryRepository = categoryRepository;
         this.recurringTransactionRepository = recurringTransactionRepository;
-        this.ledgerService = ledgerService;
+        this.transactionCommandService = transactionCommandService;
     }
 
     @Transactional(readOnly = true)
@@ -128,7 +128,7 @@ public class RecurringTransactionService {
                     rule.deactivate();
                     break;
                 }
-                ledgerService.createTransaction(new CreateTransactionRequest(
+                transactionCommandService.createTransaction(new CreateTransactionRequest(
                         rule.getType(),
                         rule.getNextRunDate(),
                         rule.getAmount(),

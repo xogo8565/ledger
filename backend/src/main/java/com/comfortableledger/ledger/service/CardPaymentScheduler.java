@@ -15,11 +15,9 @@ public class CardPaymentScheduler {
     private static final Logger log = LoggerFactory.getLogger(CardPaymentScheduler.class);
 
     private final CardService cardService;
-    private final LedgerService ledgerService;
 
-    public CardPaymentScheduler(CardService cardService, LedgerService ledgerService) {
+    public CardPaymentScheduler(CardService cardService) {
         this.cardService = cardService;
-        this.ledgerService = ledgerService;
     }
 
     @Scheduled(cron = "${app.card-payment.auto-execute-cron:0 10 4 * * *}", zone = "${app.card-payment.zone:Asia/Seoul}")
@@ -28,7 +26,7 @@ public class CardPaymentScheduler {
         List<CardPaymentScheduleDto> duePayments = cardService.getScheduledPayments(today);
         for (CardPaymentScheduleDto duePayment : duePayments) {
             try {
-                CardPaymentScheduleDto result = cardService.executePaymentSchedule(duePayment.id(), ledgerService);
+                CardPaymentScheduleDto result = cardService.executePaymentSchedule(duePayment.id());
                 if ("FAILED".equals(result.status())) {
                     log.warn("Failed to execute card payment schedule {}: {}", result.id(), result.failureReason());
                 }

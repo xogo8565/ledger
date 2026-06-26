@@ -1,7 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
-import { AppHeader, BackButton } from './components/ui';
+import * as ledgerApi from './api/ledgerApi';
+import * as managementApi from './api/managementApi';
+import * as scheduleApi from './api/scheduleApi';
+import { AppShell } from './components/AppShell';
+import { useLedgerData } from './hooks/useLedgerData';
+import { useManagementMutations } from './hooks/useManagementMutations';
+import { useScheduleMutations } from './hooks/useScheduleMutations';
+import { useTransactionMutations } from './hooks/useTransactionMutations';
 import {
   assetTypeLabels,
   AssetFormScreen,
@@ -11,10 +18,9 @@ import {
 import {
   emptyLedgerFilters,
   filteredPeriodLabel,
-  hasLedgerFilters,
-  LedgerScreen,
-  MonthNav
+  LedgerScreen
 } from './screens/LedgerScreen';
+import { BudgetSettingsScreen } from './screens/BudgetSettingsScreen';
 import { CategoryManagerScreen, MemberManagerScreen, MoreScreen } from './screens/MoreScreens';
 import {
   emptyRecurringForm,
@@ -22,11 +28,10 @@ import {
   RecurringManagerScreen
 } from './screens/ScheduleScreens';
 import { StatsScreen } from './screens/StatsScreen';
-import { EntryChoiceSheet, EntryScreen, TransactionDetailScreen } from './screens/TransactionScreens';
+import { EntryChoiceSheet, EntryScreen, ReceiptOcrScreen, TransactionDetailScreen } from './screens/TransactionScreens';
 import { csvCell, downloadTextFile, filteredFileLabel } from './utils/csv';
 import { formatDate } from './utils/format';
 
-const API = '/api';
 const today = formatDate(new Date());
 const currentMonth = today.slice(0, 7);
 const typeLabels = {
@@ -49,13 +54,7 @@ function App() {
   const [budgetPeriod, setBudgetPeriod] = useState('monthly');
   const [statsBreakdown, setStatsBreakdown] = useState('category');
   const [month, setMonth] = useState(currentMonth);
-  const [data, setData] = useState({ assets: [], categories: [], transactions: [], summary: null, assetSummary: null });
-  const [searchTransactions, setSearchTransactions] = useState(null);
-  const [yearlySummary, setYearlySummary] = useState(null);
-  const [yearlyBudgetSummary, setYearlyBudgetSummary] = useState(null);
   const [statsRange, setStatsRange] = useState({ startDate: `${currentMonth}-01`, endDate: today });
-  const [rangeSummary, setRangeSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [panel, setPanel] = useState(null);
   const [editingAsset, setEditingAsset] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -68,7 +67,6 @@ function App() {
   const [assetForm, setAssetForm] = useState(emptyAssetForm());
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm());
   const [categoryType, setCategoryType] = useState('EXPENSE');
-  const [members, setMembers] = useState([]);
   const [memberForm, setMemberForm] = useState({ name: '' });
   const [editingMember, setEditingMember] = useState(null);
   const [consumerMigration, setConsumerMigration] = useState(null);
@@ -84,93 +82,106 @@ function App() {
   const [selectedInstallment, setSelectedInstallment] = useState(null);
   const [receiptFiles, setReceiptFiles] = useState([]);
   const [installmentReceiptTargetIndex, setInstallmentReceiptTargetIndex] = useState(1);
-
-  async function load() {
-    setLoading(true);
-    const [bootstrapResponse, assetSummaryResponse, membersResponse] = await Promise.all([
-      fetch(`${API}/bootstrap?month=${month}`),
-      fetch(`${API}/assets/summary`),
-      fetch(`${API}/members`)
-    ]);
-    const bootstrap = await bootstrapResponse.json();
-    const assetSummary = await assetSummaryResponse.json();
-    setMembers(await membersResponse.json());
-    setData({ ...bootstrap, assetSummary });
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load().catch((error) => {
-      console.error(error);
-      setLoading(false);
-    });
-  }, [month]);
-
-  useEffect(() => {
-    Promise.all([loadYearlySummary(), loadYearlyBudgetSummary()]).catch((error) => console.error(error));
-  }, [month]);
-
-  useEffect(() => {
-    loadRangeSummary().catch((error) => console.error(error));
-  }, [statsRange.startDate, statsRange.endDate]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      loadSearchTransactions().catch((error) => console.error(error));
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [ledgerFilters, month]);
-
-  async function loadSearchTransactions() {
-    if (!hasLedgerFilters(ledgerFilters)) {
-      setSearchTransactions(null);
-      return;
-    }
-    if (ledgerFilters.startDate && ledgerFilters.endDate && ledgerFilters.endDate < ledgerFilters.startDate) {
-      setSearchTransactions([]);
-      return;
-    }
-    if (ledgerFilters.minAmount && ledgerFilters.maxAmount
-      && Number(ledgerFilters.maxAmount) < Number(ledgerFilters.minAmount)) {
-      setSearchTransactions([]);
-      return;
-    }
-    const params = new URLSearchParams();
-    params.set('startDate', ledgerFilters.startDate || `${month}-01`);
-    params.set('endDate', ledgerFilters.endDate || formatDate(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)));
-    if (ledgerFilters.query.trim()) params.set('query', ledgerFilters.query.trim());
-    if (ledgerFilters.type !== 'ALL') params.set('type', ledgerFilters.type);
-    ['categoryId', 'consumptionScope', 'consumerMemberId', 'assetId', 'minAmount', 'maxAmount'].forEach((key) => {
-      if (ledgerFilters[key] !== '') params.set(key, ledgerFilters[key]);
-    });
-    const response = await fetch(`${API}/transactions/search?${params}`);
-    setSearchTransactions(response.ok ? await response.json() : []);
-  }
-
-  async function loadYearlySummary() {
-    const year = Number(month.slice(0, 4));
-    const response = await fetch(`${API}/summary/yearly?year=${year}`);
-    setYearlySummary(await response.json());
-  }
-
-  async function loadYearlyBudgetSummary() {
-    const year = Number(month.slice(0, 4));
-    const response = await fetch(`${API}/budgets/summary/yearly?year=${year}`);
-    setYearlyBudgetSummary(await response.json());
-  }
-
-  async function loadRangeSummary() {
-    if (!statsRange.startDate || !statsRange.endDate || statsRange.endDate < statsRange.startDate) {
-      setRangeSummary(null);
-      return;
-    }
-    const response = await fetch(`${API}/summary/range?startDate=${statsRange.startDate}&endDate=${statsRange.endDate}`);
-    setRangeSummary(await response.json());
-  }
+  const {
+    data,
+    loading,
+    members,
+    rangeSummary,
+    reload: load,
+    reloadMembers: loadMembers,
+    searchResult,
+    searchTransactions,
+    yearlyBudgetSummary,
+    yearlySummary
+  } = useLedgerData({ month, ledgerFilters, statsRange });
+  const {
+    copyPreviousBudget,
+    deleteAsset,
+    deleteCategory,
+    deleteMember,
+    loadConsumerMigration,
+    migrateUnassignedPersonalExpenses,
+    saveAsset,
+    saveBudget,
+    saveCategory,
+    saveMember
+  } = useManagementMutations({
+    assetForm,
+    editingAsset,
+    categoryForm,
+    categoryType,
+    editingCategory,
+    setEditingCategory,
+    setCategoryForm,
+    consumerMigration,
+    setConsumerMigration,
+    memberForm,
+    editingMember,
+    setEditingMember,
+    setMemberForm,
+    budgetSettings,
+    setBudgetSettings,
+    reload: load,
+    reloadMembers: loadMembers,
+    closePanel,
+    emptyCategoryForm
+  });
+  const {
+    cancelCardSchedule,
+    deleteRecurringRule,
+    executeCardSchedule,
+    generateRecurringDue,
+    loadCardPaymentData,
+    loadRecurringRules,
+    rescheduleCardSchedule,
+    retryCardSchedule,
+    saveCardSchedule,
+    saveRecurringRule
+  } = useScheduleMutations({
+    recurringForm,
+    editingRecurringRule,
+    setRecurringRules,
+    setEditingRecurringRule,
+    setRecurringForm,
+    emptyRecurringForm,
+    selectedCard,
+    cardScheduleForm,
+    setCardScheduleForm,
+    emptyCardScheduleForm,
+    setCardDetail,
+    setCardSchedules,
+    reload: load
+  });
+  const {
+    deleteInstallmentGroup,
+    deleteReceipt,
+    deleteTransaction,
+    submitTransaction
+  } = useTransactionMutations({
+    form,
+    editingTransaction,
+    editingInstallmentGroup,
+    receiptFiles,
+    installmentReceiptTargetIndex,
+    selectedTransaction,
+    selectedInstallment,
+    setTransactionReceipts,
+    setForm,
+    setEntryExpression,
+    setReceiptFiles,
+    setInstallmentReceiptTargetIndex,
+    setEditingTransaction,
+    setEditingInstallmentGroup,
+    emptyTransactionForm,
+    closePanel,
+    reload: load,
+    transactionLabel: (transaction) => (
+      transaction.title || transaction.categoryName || typeLabels[transaction.type] || '거래'
+    )
+  });
 
   async function openBudgetSettings() {
-    const response = await fetch(`${API}/budgets/settings?month=${month}`);
-    setBudgetSettings(await response.json());
+    setBudgetSettings(await managementApi.getBudgetSettings(month));
     setPanel('budget');
   }
 
@@ -193,20 +204,18 @@ function App() {
     setPanel('entryChoice');
   }
 
-  async function openTransactionDetail(transaction) {
-    setSelectedTransaction(transaction);
-    const response = await fetch(`${API}/transactions/${transaction.id}/receipts`);
-    setTransactionReceipts(await response.json());
-    setPanel('transactionDetail');
+  function openReceiptOcr() {
+    setEditingTransaction(null);
+    setEditingInstallmentGroup(null);
+    setReceiptFiles([]);
+    setInstallmentReceiptTargetIndex(1);
+    setPanel('receiptOcr');
   }
 
-  async function deleteReceipt(receipt) {
-    if (!selectedTransaction) return;
-    const confirmed = window.confirm(`${receipt.originalFilename || '영수증'} 파일을 삭제할까요?`);
-    if (!confirmed) return;
-    await fetch(`${API}/transactions/${selectedTransaction.id}/receipts/${receipt.id}`, { method: 'DELETE' });
-    const response = await fetch(`${API}/transactions/${selectedTransaction.id}/receipts`);
-    setTransactionReceipts(await response.json());
+  async function openTransactionDetail(transaction) {
+    setSelectedTransaction(transaction);
+    setTransactionReceipts(await ledgerApi.getTransactionReceipts(transaction.id));
+    setPanel('transactionDetail');
   }
 
   function editTransaction(transaction) {
@@ -268,8 +277,7 @@ function App() {
   async function openInstallmentSchedule(transaction) {
     if (!transaction.installmentGroupId) return;
     setSelectedInstallment(transaction);
-    const response = await fetch(`${API}/transactions/installments/${transaction.installmentGroupId}`);
-    setInstallmentSchedule(await response.json());
+    setInstallmentSchedule(await scheduleApi.getInstallmentSchedule(transaction.installmentGroupId));
     setPanel('installments');
   }
 
@@ -290,16 +298,6 @@ function App() {
     setEntryExpression(String(total || ''));
     setReceiptFiles([]);
     setPanel('entry');
-  }
-
-  async function deleteInstallmentGroup() {
-    if (!selectedInstallment?.installmentGroupId) return;
-    const title = selectedInstallment.title || selectedInstallment.categoryName || '할부 거래';
-    const confirmed = window.confirm(`${title} 할부 전체를 삭제할까요? 모든 회차의 자산 잔액도 다시 계산됩니다.`);
-    if (!confirmed) return;
-    await fetch(`${API}/transactions/installments/${selectedInstallment.installmentGroupId}`, { method: 'DELETE' });
-    closePanel();
-    await load();
   }
 
   function closePanel() {
@@ -366,7 +364,7 @@ function App() {
   }
 
   async function exportMonthlyTransactions() {
-    const response = await fetch(`${API}/export/transactions.csv?month=${month}`);
+    const response = await ledgerApi.exportTransactions(month);
     if (!response.ok) {
       window.alert('내보내기에 실패했습니다.');
       return;
@@ -382,7 +380,7 @@ function App() {
     window.URL.revokeObjectURL(url);
   }
 
-  function exportFilteredTransactions(transactions, filters) {
+  function exportFilteredTransactions(transactions, filters, searchResult = null) {
     const assetNames = new Map(data.assets.map((asset) => [String(asset.id), asset.name]));
     const period = filteredPeriodLabel(filters, month);
     const rows = [...transactions]
@@ -408,339 +406,8 @@ function App() {
       ['기간', '거래일', '유형', '금액', '카테고리', '소비태그', '소비구분', '소비명의', '자산', '출금자산', '입금자산', '제목', '메모', '할부회차', '할부개월'],
       ...rows
     ].map((row) => row.map(csvCell).join(',')).join('\r\n');
-    downloadTextFile(`ledger-transactions-${filteredFileLabel(filters, month)}.csv`, `\uFEFF${csv}`, 'text/csv;charset=utf-8');
-  }
-
-  async function submitTransaction(event) {
-    event.preventDefault();
-    const amount = Number(form.amount);
-    if (!amount) return;
-
-    const payload = {
-      ...form,
-      amount,
-      categoryId: form.categoryId ? Number(form.categoryId) : null,
-      assetId: form.assetId ? Number(form.assetId) : null,
-      fromAssetId: form.fromAssetId ? Number(form.fromAssetId) : null,
-      toAssetId: form.toAssetId ? Number(form.toAssetId) : null,
-      consumerMemberId: form.consumerMemberId ? Number(form.consumerMemberId) : null,
-      installmentMonths: Number(form.installmentMonths || 0)
-    };
-
-    const url = editingInstallmentGroup
-      ? `${API}/transactions/installments/${editingInstallmentGroup}`
-      : editingTransaction ? `${API}/transactions/${editingTransaction.id}` : `${API}/transactions`;
-    const method = editingTransaction || editingInstallmentGroup ? 'PUT' : 'POST';
-    const response = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const created = await response.json();
-
-    if (receiptFiles.length) {
-      const updatedInstallments = Array.isArray(created) ? created : [];
-      const requestedTargetIndex = Math.min(
-        Math.max(Number(installmentReceiptTargetIndex || 1), 1),
-        Math.max(Number(form.installmentMonths || 1), 1)
-      );
-      const receiptTransactionId = editingInstallmentGroup
-        ? updatedInstallments.find((item) => Number(item.installmentIndex) === requestedTargetIndex)?.id
-          || updatedInstallments.at(-1)?.id
-        : created.id || editingTransaction?.id;
-      if (!receiptTransactionId) {
-        window.alert('영수증을 첨부할 거래를 찾지 못했습니다.');
-        return;
-      }
-      const upload = new FormData();
-      receiptFiles.forEach((file) => upload.append('files', file));
-      const uploadResponse = await fetch(`${API}/transactions/${receiptTransactionId}/receipts/batch`, { method: 'POST', body: upload });
-      if (!uploadResponse.ok) {
-        window.alert('영수증 일괄 첨부에 실패했습니다. 파일 형식과 개수를 확인해 주세요.');
-        return;
-      }
-    }
-
-    const fee = Number(form.fee || 0);
-    if (!editingTransaction && !editingInstallmentGroup && form.type === 'TRANSFER' && fee > 0 && form.fromAssetId) {
-      await fetch(`${API}/transactions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'EXPENSE',
-          transactionDate: form.transactionDate,
-          amount: fee,
-          assetId: Number(form.fromAssetId),
-          title: '이체 수수료',
-          memo: form.memo || ''
-        })
-      });
-    }
-
-    setForm(emptyTransactionForm());
-    setEntryExpression('');
-    setReceiptFiles([]);
-    setInstallmentReceiptTargetIndex(1);
-    setEditingTransaction(null);
-    setEditingInstallmentGroup(null);
-    closePanel();
-    await load();
-  }
-
-  async function deleteTransaction(transaction) {
-    const label = transaction.title || transaction.categoryName || typeLabels[transaction.type] || '거래';
-    const confirmed = window.confirm(`${label} 거래를 삭제할까요? 삭제하면 자산 잔액도 다시 계산됩니다.`);
-    if (!confirmed) return;
-    await fetch(`${API}/transactions/${transaction.id}`, { method: 'DELETE' });
-    closePanel();
-    await load();
-  }
-
-  async function saveAsset(event) {
-    event.preventDefault();
-    const payload = {
-      ...assetForm,
-      balance: Number(assetForm.balance || 0),
-      paymentAccountId: assetForm.paymentAccountId ? Number(assetForm.paymentAccountId) : null,
-      statementClosingDay: Number(assetForm.statementClosingDay || 1),
-      paymentDay: Number(assetForm.paymentDay || 1),
-      autoPayment: Boolean(assetForm.autoPayment)
-    };
-    const isCardAsset = assetForm.type === 'CARD';
-    const url = editingAsset
-      ? isCardAsset ? `${API}/assets/${editingAsset.id}/card` : `${API}/assets/${editingAsset.id}`
-      : isCardAsset ? `${API}/assets/card` : `${API}/assets`;
-    const method = editingAsset ? 'PUT' : 'POST';
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    closePanel();
-    await load();
-  }
-
-  async function deleteAsset(asset) {
-    await fetch(`${API}/assets/${asset.id}`, { method: 'DELETE' });
-    await load();
-  }
-
-  async function saveCategory(event) {
-    event.preventDefault();
-    const payload = { ...categoryForm, type: categoryType };
-    const url = editingCategory ? `${API}/categories/${editingCategory.id}` : `${API}/categories`;
-    const method = editingCategory ? 'PUT' : 'POST';
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    setEditingCategory(null);
-    setCategoryForm(emptyCategoryForm(categoryType));
-    await load();
-  }
-
-  async function deleteCategory(category) {
-    await fetch(`${API}/categories/${category.id}`, { method: 'DELETE' });
-    await load();
-  }
-
-  async function loadMembers() {
-    const response = await fetch(`${API}/members`);
-    setMembers(await response.json());
-  }
-
-  async function loadConsumerMigration() {
-    const response = await fetch(`${API}/members/consumer-migration`);
-    if (!response.ok) return;
-    setConsumerMigration(await response.json());
-  }
-
-  async function migrateUnassignedPersonalExpenses() {
-    if (!consumerMigration?.eligibleCount) return;
-    const confirmed = window.confirm(
-      `명의가 없는 개인 지출 ${consumerMigration.eligibleCount}건을 ${consumerMigration.ownerMemberName} 명의로 연결할까요?`
-    );
-    if (!confirmed) return;
-    const response = await fetch(`${API}/members/consumer-migration`, { method: 'POST' });
-    if (!response.ok) {
-      window.alert('기존 개인 지출 명의 연결에 실패했습니다.');
-      return;
-    }
-    const result = await response.json();
-    window.alert(`${result.migratedCount}건을 ${result.ownerMemberName} 명의로 연결했습니다.`);
-    await Promise.all([loadConsumerMigration(), load()]);
-  }
-
-  async function saveMember(event) {
-    event.preventDefault();
-    const name = memberForm.name.trim();
-    if (!name) return;
-    const response = await fetch(editingMember ? `${API}/members/${editingMember.id}` : `${API}/members`, {
-      method: editingMember ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
-    });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      window.alert(error.error || '명의 저장에 실패했습니다.');
-      return;
-    }
-    setEditingMember(null);
-    setMemberForm({ name: '' });
-    await Promise.all([loadMembers(), load()]);
-  }
-
-  async function deleteMember(member) {
-    const confirmed = window.confirm(`${member.name} 명의를 삭제할까요?`);
-    if (!confirmed) return;
-    const response = await fetch(`${API}/members/${member.id}`, { method: 'DELETE' });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      window.alert(error.error === 'Member is used by an asset'
-        ? '이 명의를 사용하는 자산이 있습니다. 자산 명의를 먼저 변경해 주세요.'
-        : error.error || '명의 삭제에 실패했습니다.');
-      return;
-    }
-    await loadMembers();
-  }
-
-  async function saveBudget(event) {
-    event.preventDefault();
-    if (!budgetSettings) return;
-    await fetch(`${API}/budgets/settings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        month: budgetSettings.month,
-        totalAmount: Number(budgetSettings.totalAmount || 0),
-        categories: budgetSettings.categories.map((item) => ({
-          categoryId: item.categoryId,
-          amount: Number(item.amount || 0)
-        }))
-      })
-    });
-    closePanel();
-    await load();
-  }
-
-  async function copyPreviousBudget() {
-    if (!budgetSettings?.month) return;
-    const response = await fetch(`${API}/budgets/settings/copy-previous?month=${budgetSettings.month}`, { method: 'POST' });
-    if (!response.ok) {
-      window.alert('전월 예산을 찾을 수 없습니다.');
-      return;
-    }
-    setBudgetSettings(await response.json());
-    await load();
-  }
-
-  async function loadRecurringRules() {
-    const response = await fetch(`${API}/recurring-transactions`);
-    setRecurringRules(await response.json());
-  }
-
-  async function saveRecurringRule(event) {
-    event.preventDefault();
-    const amount = Number(recurringForm.amount || 0);
-    if (!amount || amount <= 0 || !recurringForm.startDate || !recurringForm.nextRunDate) return;
-
-    const payload = {
-      ...recurringForm,
-      amount,
-      categoryId: recurringForm.categoryId ? Number(recurringForm.categoryId) : null,
-      assetId: recurringForm.assetId ? Number(recurringForm.assetId) : null,
-      fromAssetId: recurringForm.fromAssetId ? Number(recurringForm.fromAssetId) : null,
-      toAssetId: recurringForm.toAssetId ? Number(recurringForm.toAssetId) : null,
-      intervalValue: Number(recurringForm.intervalValue || 1),
-      installmentMonths: Number(recurringForm.installmentMonths || 0),
-      endDate: recurringForm.endDate || null,
-      nextRunDate: recurringForm.nextRunDate || recurringForm.startDate
-    };
-    const url = editingRecurringRule ? `${API}/recurring-transactions/${editingRecurringRule.id}` : `${API}/recurring-transactions`;
-    const method = editingRecurringRule ? 'PUT' : 'POST';
-    const response = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const savedRule = await response.json();
-    setRecurringRules((current) => {
-      const next = editingRecurringRule
-        ? current.map((rule) => rule.id === savedRule.id ? savedRule : rule)
-        : [...current.filter((rule) => rule.id !== savedRule.id), savedRule];
-      return next.sort((a, b) => a.nextRunDate.localeCompare(b.nextRunDate) || Number(a.id) - Number(b.id));
-    });
-    setEditingRecurringRule(null);
-    setRecurringForm(emptyRecurringForm());
-  }
-
-  async function deleteRecurringRule(rule) {
-    await fetch(`${API}/recurring-transactions/${rule.id}`, { method: 'DELETE' });
-    await loadRecurringRules();
-  }
-
-  async function generateRecurringDue() {
-    await fetch(`${API}/recurring-transactions/generate-due`, { method: 'POST' });
-    await loadRecurringRules();
-    await load();
-  }
-
-  async function loadCardPaymentData(cardAssetId) {
-    const [detailResponse, schedulesResponse] = await Promise.all([
-      fetch(`${API}/cards/${cardAssetId}`),
-      fetch(`${API}/cards/${cardAssetId}/payment-schedules`)
-    ]);
-    setCardDetail(await detailResponse.json());
-    setCardSchedules(await schedulesResponse.json());
-  }
-
-  async function saveCardSchedule(event) {
-    event.preventDefault();
-    if (!selectedCard) return;
-    const amount = Number(cardScheduleForm.amount || 0);
-    if (!amount || amount <= 0 || !cardScheduleForm.scheduledDate) return;
-
-    await fetch(`${API}/cards/${selectedCard.id}/payment-schedules`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        scheduledDate: cardScheduleForm.scheduledDate,
-        amount
-      })
-    });
-    setCardScheduleForm(emptyCardScheduleForm());
-    await loadCardPaymentData(selectedCard.id);
-  }
-
-  async function executeCardSchedule(schedule) {
-    if (!selectedCard) return;
-    await fetch(`${API}/cards/payment-schedules/execute`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scheduleId: schedule.id })
-    });
-    await loadCardPaymentData(selectedCard.id);
-    await load();
-  }
-
-  async function retryCardSchedule(schedule) {
-    if (!selectedCard) return;
-    await fetch(`${API}/cards/payment-schedules/${schedule.id}/retry`, { method: 'POST' });
-    await loadCardPaymentData(selectedCard.id);
-    await load();
-  }
-
-  async function rescheduleCardSchedule(schedule) {
-    if (!selectedCard) return;
-    await fetch(`${API}/cards/payment-schedules/${schedule.id}/reschedule`, { method: 'POST' });
-    await loadCardPaymentData(selectedCard.id);
-  }
-
-  async function cancelCardSchedule(schedule) {
-    if (!selectedCard) return;
-    await fetch(`${API}/cards/payment-schedules/${schedule.id}`, { method: 'DELETE' });
-    await loadCardPaymentData(selectedCard.id);
+    const pageLabel = searchResult ? `-page-${Number(searchResult.page || 0) + 1}-of-${Math.max(Number(searchResult.totalPages || 1), 1)}` : '';
+    downloadTextFile(`ledger-transactions-${filteredFileLabel(filters, month)}${pageLabel}.csv`, `\uFEFF${csv}`, 'text/csv;charset=utf-8');
   }
 
   function editRecurringRule(rule) {
@@ -776,16 +443,12 @@ function App() {
       window.alert('클립보드에 분석할 문자 내용이 없습니다.');
       return;
     }
-    const response = await fetch(`${API}/import/text/parse`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rawText: clipboardText })
-    });
-    if (!response.ok) {
+    const result = await ledgerApi.parseTransactionText(clipboardText);
+    if (!result.ok) {
       window.alert('클립보드 문자 분석에 실패했습니다.');
       return;
     }
-    const parsed = await response.json();
+    const parsed = result.data;
     setEditingTransaction(null);
     setEditingInstallmentGroup(null);
     setForm({
@@ -803,6 +466,27 @@ function App() {
     setPanel('entry');
   }
 
+  function applyReceiptOcrPreview(result, file) {
+    const preview = result?.preview || {};
+    setEditingTransaction(null);
+    setEditingInstallmentGroup(null);
+    setForm({
+      ...emptyTransactionForm(),
+      type: preview.type || 'EXPENSE',
+      transactionDate: preview.transactionDate || today,
+      amount: preview.amount ? String(Number(preview.amount || 0)) : '',
+      title: preview.merchant || '',
+      memo: preview.memo || result?.rawText || '',
+      categoryId: preview.recommendedCategoryId ? String(preview.recommendedCategoryId) : '',
+      consumptionScope: 'PERSONAL',
+      consumerMemberId: defaultConsumerMemberId(members)
+    });
+    setEntryExpression(preview.amount ? String(Number(preview.amount || 0)) : '');
+    setReceiptFiles(file ? [file] : []);
+    setInstallmentReceiptTargetIndex(1);
+    setPanel('entry');
+  }
+
   const expenseCategories = data.categories.filter((category) => category.type === 'EXPENSE');
   const incomeCategories = data.categories.filter((category) => category.type === 'INCOME');
   const selectedCategories = form.type === 'INCOME' ? incomeCategories : expenseCategories;
@@ -816,9 +500,8 @@ function App() {
     categoryByName
   };
 
-  return (
-    <main className="page-frame">
-      <section className="phone-shell" aria-label="편한가계부 미리보기">
+  const mainContent = (
+    <>
         {mainTab === 'ledger' && (
           <LedgerScreen
             {...screenProps}
@@ -826,9 +509,11 @@ function App() {
             setLedgerMode={setLedgerMode}
             filters={ledgerFilters}
             setFilters={setLedgerFilters}
+            searchResult={searchResult}
             searchTransactions={searchTransactions}
             exportMonthlyTransactions={exportMonthlyTransactions}
             exportFilteredTransactions={exportFilteredTransactions}
+            openReceiptOcr={openReceiptOcr}
             openInstallmentSchedule={openInstallmentSchedule}
             openTransactionDetail={openTransactionDetail}
             members={members}
@@ -871,19 +556,20 @@ function App() {
             openCategoryManager={openCategoryManager}
             openRecurringManager={openRecurringManager}
             openMemberManager={openMemberManager}
+            openReceiptOcr={openReceiptOcr}
           />
         )}
+    </>
+  );
 
-        <BottomNav active={mainTab} onChange={setMainTab} />
-
-        {(mainTab === 'ledger' || mainTab === 'stats') && (
-          <div className="floating-actions">
-            <button className="fab" type="button" onClick={openEntryChoice} aria-label="거래 추가">
-              +
-            </button>
-          </div>
-        )}
-
+  return (
+    <AppShell
+      activeTab={mainTab}
+      onTabChange={setMainTab}
+      onAdd={openEntryChoice}
+      showAddAction={mainTab === 'ledger' || mainTab === 'stats'}
+      content={mainContent}
+    >
         {panel === 'entryChoice' && (
           <EntryChoiceSheet
             openEntry={openEntry}
@@ -907,6 +593,14 @@ function App() {
             editingInstallmentGroup={editingInstallmentGroup}
             installmentReceiptTargetIndex={installmentReceiptTargetIndex}
             setInstallmentReceiptTargetIndex={setInstallmentReceiptTargetIndex}
+            onClose={closePanel}
+          />
+        )}
+        {panel === 'receiptOcr' && (
+          <ReceiptOcrScreen
+            previewReceiptOcr={ledgerApi.previewReceiptOcr}
+            parseTransactionText={ledgerApi.parseTransactionText}
+            applyReceiptOcrPreview={applyReceiptOcrPreview}
             onClose={closePanel}
           />
         )}
@@ -1016,8 +710,7 @@ function App() {
             onClose={closePanel}
           />
         )}
-      </section>
-    </main>
+    </AppShell>
   );
 }
 
@@ -1093,59 +786,6 @@ function emptyCardScheduleForm() {
     scheduledDate: today,
     amount: ''
   };
-}
-
-function BudgetSettingsScreen({ settings, setSettings, month, setMonth, saveBudget, copyPreviousBudget, onClose }) {
-  const categories = settings?.categories || [];
-
-  return (
-    <div className="full-panel">
-      <form className="budget-settings-screen" onSubmit={saveBudget}>
-        <AppHeader title="예산설정" left={<BackButton label="뒤로" onClick={onClose} />} />
-        <MonthNav month={month} setMonth={setMonth} />
-        <button className="budget-copy-button" type="button" onClick={copyPreviousBudget}>전월 예산 복사</button>
-        <div className="budget-total-edit">
-          <span>전체 예산</span>
-          <input inputMode="numeric" value={settings?.totalAmount || 0} onChange={(event) => setSettings((prev) => ({ ...prev, totalAmount: event.target.value }))} />
-        </div>
-        <div className="budget-settings-list">
-          {categories.map((item, index) => (
-            <label key={item.categoryId}>
-              <span>{item.categoryIcon || '•'} {item.categoryName}</span>
-              <input inputMode="numeric" value={item.amount} onChange={(event) => {
-                const amount = event.target.value;
-                setSettings((prev) => ({
-                  ...prev,
-                  categories: prev.categories.map((category, categoryIndex) => categoryIndex === index ? { ...category, amount } : category)
-                }));
-              }} />
-            </label>
-          ))}
-        </div>
-        <button className="wide-save-button sticky" type="submit">저장</button>
-      </form>
-    </div>
-  );
-}
-
-function BottomNav({ active, onChange }) {
-  const tabs = [
-    ['ledger', '▤', '6. 22.'],
-    ['stats', '▥', '통계'],
-    ['assets', '◎', '자산'],
-    ['more', '···', '더보기']
-  ];
-
-  return (
-    <nav className="bottom-nav" aria-label="하단 메뉴">
-      {tabs.map(([key, icon, label]) => (
-        <button key={key} type="button" className={active === key ? 'active' : ''} onClick={() => onChange(key)}>
-          <span>{icon}</span>
-          {label}
-        </button>
-      ))}
-    </nav>
-  );
 }
 
 createRoot(document.getElementById('root')).render(<App />);

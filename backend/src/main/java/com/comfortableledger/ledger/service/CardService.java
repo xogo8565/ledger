@@ -29,15 +29,18 @@ public class CardService {
     private final TransactionRepository transactionRepository;
     private final CardPaymentScheduleRepository cardPaymentScheduleRepository;
     private final KoreanHolidayCalendar holidayCalendar;
+    private final TransactionCommandService transactionCommandService;
 
     public CardService(AssetRepository assetRepository, CardProfileRepository cardProfileRepository,
                        TransactionRepository transactionRepository, CardPaymentScheduleRepository cardPaymentScheduleRepository,
-                       KoreanHolidayCalendar holidayCalendar) {
+                       KoreanHolidayCalendar holidayCalendar,
+                       TransactionCommandService transactionCommandService) {
         this.assetRepository = assetRepository;
         this.cardProfileRepository = cardProfileRepository;
         this.transactionRepository = transactionRepository;
         this.cardPaymentScheduleRepository = cardPaymentScheduleRepository;
         this.holidayCalendar = holidayCalendar;
+        this.transactionCommandService = transactionCommandService;
     }
 
     @Transactional(readOnly = true)
@@ -236,16 +239,16 @@ public class CardService {
     }
 
     @Transactional
-    public CardPaymentScheduleDto retryFailedPayment(Long scheduleId, LedgerService ledgerService) {
+    public CardPaymentScheduleDto retryFailedPayment(Long scheduleId) {
         rescheduleFailedPayment(scheduleId);
-        return executePaymentSchedule(scheduleId, ledgerService);
+        return executePaymentSchedule(scheduleId);
     }
 
     /**
      * 결제 예약 실행 (거래 생성)
      */
     @Transactional
-    public CardPaymentScheduleDto executePaymentSchedule(Long scheduleId, LedgerService ledgerService) {
+    public CardPaymentScheduleDto executePaymentSchedule(Long scheduleId) {
         CardPaymentSchedule schedule = cardPaymentScheduleRepository.findById(scheduleId).orElseThrow();
         
         if (schedule.getStatus() != PaymentStatus.SCHEDULED) {
@@ -262,7 +265,7 @@ public class CardService {
             }
             Asset paymentAccount = cardAsset.getCardProfile().getPaymentAccount();
 
-            ledgerService.createTransaction(new CreateTransactionRequest(
+            transactionCommandService.createTransaction(new CreateTransactionRequest(
                     TransactionType.TRANSFER,
                     schedule.getScheduledDate(),
                     schedule.getAmount(),

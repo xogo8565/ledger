@@ -1,0 +1,107 @@
+name: CI/CD to OCI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-oci
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: Test and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Backend tests
+        run: docker run --rm -v "${PWD}/backend:/workspace" -w /workspace gradle:8.10.2-jdk21 gradle test --no-daemon
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          npm install
+          npm run build
+
+      - name: Backend image build
+        run: docker compose build backend
+
+      - name: Frontend image build
+        run: docker compose build frontend
+
+  deploy:
+    name: Deploy to OCI
+    needs: ci
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    environment: production
+    env:
+      OCI_HOST: ${{ secrets.OCI_HOST }}
+      OCI_USER: ${{ secrets.OCI_USER }}
+      OCI_APP_DIR: ${{ secrets.OCI_APP_DIR }}
+      OCI_SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+    steps:
+      - name: Validate deployment secrets
+        run: |
+          test -n "$OCI_HOST"
+          test -n "$OCI_USER"
+          test -n "$OCI_APP_DIR"
+          test -n "$OCI_SSH_PRIVATE_KEY"
+
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$OCI_SSH_PRIVATE_KEY" > ~/.ssh/oci.key
+          chmod 600 ~/.ssh/oci.key
+          ssh-keyscan -H "$OCI_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy with Docker Compose
+        run: |
+          ssh -i ~/.ssh/oci.key "$OCI_USER@$OCI_HOST" \
+            OCI_APP_DIR="$OCI_APP_DIR" \
+            'bash -s' <<'EOF'
+          set -euo pipefail
+
+          cd "$OCI_APP_DIR"
+          git fetch origin main
+          git reset --hard origin/main
+
+          docker compose up -d --build
+          docker compose ps
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/api/bootstrap >/dev/null; then
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Backend health check failed"
+              docker compose logs --tail=200 backend
+              exit 1
+            fi
+            sleep 5
+          done
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8081 >/dev/null; then
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Frontend health check failed"
+              docker compose logs --tail=200 frontend
+              exit 1
+            fi
+            sleep 5
+          done
+          EOF

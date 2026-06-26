@@ -26,6 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ImportTextService {
     private static final Pattern AMOUNT_PATTERN = Pattern.compile("([0-9,]+)\\s*원");
+    private static final Pattern RECEIPT_TOTAL_AMOUNT_PATTERN = Pattern.compile(
+            "(?:합\\s*계|총\\s*액|총액|총결제금액|결제금액|받을금액|매출금액|total)\\s*[: ]*([0-9,]+)\\s*(?:원|won)?",
+            Pattern.CASE_INSENSITIVE
+    );
     private static final Pattern YEAR_DATE_PATTERN = Pattern.compile("(20\\d{2})[./-]\\s*(\\d{1,2})[./-]\\s*(\\d{1,2})");
     private static final Pattern MONTH_DATE_PATTERN = Pattern.compile("(\\d{1,2})[./월]\\s*(\\d{1,2})\\s*일?");
     private static final Pattern SUPPORTING_AMOUNT_PATTERN = Pattern.compile("(잔액|누적|합계|한도|사용가능|총액)\\s*[: ]*([0-9,]+)\\s*원?");
@@ -70,12 +74,20 @@ public class ImportTextService {
 
     @Transactional(readOnly = true)
     public TextImportPreview preview(String rawText) {
-        String normalized = normalize(rawText);
+        String sourceText = rawText == null ? "" : rawText;
+        String normalized = normalize(sourceText);
         String primaryText = stripSupportingAmounts(normalized);
-        BigDecimal amount = extractAmount(primaryText);
+        List<ReceiptLineItem> receiptLineItems = extractReceiptLineItems(sourceText);
+        Optional<ReceiptLineItem> receiptLineItem = receiptLineItems.stream().findFirst();
+        BigDecimal amount = extractReceiptTotalAmount(normalized)
+                .or(() -> receiptLineItem.map(ReceiptLineItem::amount))
+                .orElseGet(() -> extractAmount(primaryText));
         LocalDate date = extractDate(primaryText);
         TransactionType type = extractType(primaryText);
-        String merchant = extractMerchant(primaryText);
+        String merchant = receiptLineItem
+                .map(ReceiptLineItem::name)
+                .filter(name -> !name.isBlank())
+                .orElseGet(() -> extractMerchant(sourceText, primaryText));
         CategoryRecommendation recommendation = recommendCategory(type, merchant);
         return new TextImportPreview(
                 rawText,
@@ -83,7 +95,7 @@ public class ImportTextService {
                 date,
                 amount,
                 merchant,
-                importMemo(primaryText, type),
+                importMemo(primaryText, type, isReceiptLike(sourceText), receiptLineItems),
                 recommendation.category() == null ? null : recommendation.category().getId(),
                 recommendation.category() == null ? null : recommendation.category().getName(),
                 recommendation.reason()
@@ -163,6 +175,72 @@ public class ImportTextService {
         return BigDecimal.ZERO;
     }
 
+    private Optional<BigDecimal> extractReceiptTotalAmount(String rawText) {
+        Matcher matcher = RECEIPT_TOTAL_AMOUNT_PATTERN.matcher(rawText);
+        BigDecimal selected = null;
+        while (matcher.find()) {
+            selected = new BigDecimal(matcher.group(1).replace(",", ""));
+        }
+        return Optional.ofNullable(selected);
+    }
+
+    private List<ReceiptLineItem> extractReceiptLineItems(String rawText) {
+        List<String> lines = rawText.lines()
+                .map(String::trim)
+                .map(line -> line.replaceAll("\\s+", " "))
+                .filter(line -> !line.isBlank())
+                .toList();
+        List<ReceiptLineItem> items = new java.util.ArrayList<>();
+        boolean itemTableStarted = false;
+        for (String line : lines) {
+            if (!itemTableStarted) {
+                itemTableStarted = isReceiptItemHeader(line);
+                continue;
+            }
+            if (isReceiptItemTableEnd(line)) {
+                break;
+            }
+            Optional<ReceiptLineItem> item = parseReceiptItemLine(line);
+            item.ifPresent(items::add);
+        }
+        return items;
+    }
+
+    private boolean isReceiptItemHeader(String line) {
+        String normalized = normalizeForSearch(line).replaceAll("\\s+", "");
+        return normalized.contains("품명")
+                && normalized.contains("단가")
+                && normalized.contains("수량")
+                && normalized.contains("금액");
+    }
+
+    private boolean isReceiptItemTableEnd(String line) {
+        String normalized = normalizeForSearch(line);
+        return containsAny(normalized, "합계", "총액", "결제", "받은금액", "거스름", "부가세", "과세", "면세", "total");
+    }
+
+    private Optional<ReceiptLineItem> parseReceiptItemLine(String line) {
+        Matcher amountMatcher = Pattern.compile("[0-9,]+").matcher(line);
+        int firstNumberStart = -1;
+        String lastAmount = null;
+        while (amountMatcher.find()) {
+            if (firstNumberStart < 0) {
+                firstNumberStart = amountMatcher.start();
+            }
+            lastAmount = amountMatcher.group();
+        }
+        if (firstNumberStart <= 0 || lastAmount == null) {
+            return Optional.empty();
+        }
+        String name = line.substring(0, firstNumberStart)
+                .replaceAll("[·*]", "")
+                .trim();
+        if (name.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(new ReceiptLineItem(name, new BigDecimal(lastAmount.replace(",", ""))));
+    }
+
     private LocalDate extractDate(String rawText) {
         Matcher yearMatcher = YEAR_DATE_PATTERN.matcher(rawText);
         if (yearMatcher.find()) {
@@ -187,8 +265,13 @@ public class ImportTextService {
         return TransactionType.EXPENSE;
     }
 
-    private String extractMerchant(String rawText) {
-        String candidate = rawText;
+    private String extractMerchant(String sourceText, String primaryText) {
+        String receiptMerchant = extractReceiptMerchant(sourceText);
+        if (!receiptMerchant.isBlank()) {
+            return receiptMerchant;
+        }
+
+        String candidate = primaryText;
         candidate = candidate.replaceAll("\\[[^\\]]+]", " ");
         candidate = YEAR_DATE_PATTERN.matcher(candidate).replaceAll(" ");
         candidate = MONTH_DATE_PATTERN.matcher(candidate).replaceAll(" ");
@@ -210,6 +293,33 @@ public class ImportTextService {
         return "자동 입력";
     }
 
+    private String extractReceiptMerchant(String rawText) {
+        if (!isReceiptLike(rawText)) return "";
+        return rawText.lines()
+                .map(String::trim)
+                .map(line -> line.replaceAll("\\s+", " "))
+                .filter(line -> !line.isBlank())
+                .filter(line -> !isReceiptNoiseLine(line))
+                .findFirst()
+                .orElse("");
+    }
+
+    private boolean isReceiptNoiseLine(String line) {
+        String normalized = normalizeForSearch(line);
+        if (YEAR_DATE_PATTERN.matcher(line).find() || MONTH_DATE_PATTERN.matcher(line).find()) return true;
+        if (AMOUNT_PATTERN.matcher(line).find()) return true;
+        return containsAny(normalized,
+                "영수증", "매출전표", "사업자", "대표", "주소", "전화", "tel", "품명", "단가", "수량", "금액",
+                "합계", "총액", "결제", "승인", "카드", "부가세", "과세", "면세", "거스름", "받은금액", "total"
+        );
+    }
+
+    private boolean isReceiptLike(String rawText) {
+        if (rawText == null || rawText.isBlank()) return false;
+        long lineCount = rawText.lines().filter(line -> !line.isBlank()).count();
+        return lineCount >= 3 || containsAny(rawText, "영수증", "합계", "총액", "사업자", "매출전표");
+    }
+
     private String stripSupportingAmounts(String rawText) {
         return SUPPORTING_AMOUNT_PATTERN.matcher(rawText).replaceAll(" ");
     }
@@ -218,7 +328,26 @@ public class ImportTextService {
         return rawText == null ? "" : rawText.replaceAll("\\s+", " ").trim();
     }
 
-    private String importMemo(String rawText, TransactionType type) {
+    private String receiptMemo(List<ReceiptLineItem> receiptLineItems) {
+        String baseMemo = "영수증 OCR 자동 입력 후보";
+        if (receiptLineItems == null || receiptLineItems.isEmpty()) {
+            return baseMemo;
+        }
+        String itemsSummary = receiptLineItems.stream()
+                .limit(5)
+                .map(item -> item.name() + " " + item.amount().stripTrailingZeros().toPlainString() + "원")
+                .collect(Collectors.joining(", "));
+        int remainingCount = receiptLineItems.size() - 5;
+        if (remainingCount > 0) {
+            itemsSummary += " 외 " + remainingCount + "건";
+        }
+        return baseMemo + "\n품목: " + itemsSummary;
+    }
+
+    private String importMemo(String rawText, TransactionType type, boolean receiptLike, List<ReceiptLineItem> receiptLineItems) {
+        if (receiptLike) {
+            return receiptMemo(receiptLineItems);
+        }
         if (type == TransactionType.INCOME && containsAny(rawText, "취소", "환불")) {
             return "문자 자동 입력 후보 · 취소/환불";
         }
@@ -250,5 +379,8 @@ public class ImportTextService {
         private static CategoryRecommendation empty() {
             return new CategoryRecommendation(null, null);
         }
+    }
+
+    private record ReceiptLineItem(String name, BigDecimal amount) {
     }
 }

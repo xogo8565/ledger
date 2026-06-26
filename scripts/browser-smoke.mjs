@@ -37,6 +37,10 @@ function firstByType(items, type) {
   return items.find((item) => item.type === type);
 }
 
+function transactionSearchItems(result) {
+  return Array.isArray(result) ? result : result.items || [];
+}
+
 async function selectFirstOption(locator, value) {
   await locator.selectOption(String(value));
 }
@@ -329,7 +333,14 @@ try {
   await page.locator('.full-panel .back-button').first().click();
   await assertVisible(page, '.more-screen', 'more screen did not return after closing recurring manager');
 
+  await page.getByRole('button', { name: /영수증 업로드/ }).click();
+  await assertVisible(page, '.receipt-ocr-screen', 'receipt OCR upload screen did not open');
+  await assertVisible(page, '.receipt-ocr-card', 'receipt OCR upload card did not render');
+  await page.locator('.full-panel .back-button').first().click();
+  await assertVisible(page, '.more-screen', 'more screen did not return after closing receipt OCR screen');
+
   await clickBottomTab(page, 0, '.ledger-screen');
+  await assertVisible(page, '.receipt-ocr-cta', 'receipt OCR CTA did not render on ledger screen');
   await page.locator('.fab').click();
   await assertVisible(page, '.entry-choice-sheet', 'transaction entry choice did not open');
   await page.getByRole('button', { name: '직접 입력' }).click();
@@ -479,7 +490,7 @@ try {
     + `&query=${encodeURIComponent(transactionTitle)}`
   );
   await assertResponseOk(advancedSearchResponse, 'advanced transaction search');
-  const advancedSearchRows = await advancedSearchResponse.json();
+  const advancedSearchRows = transactionSearchItems(await advancedSearchResponse.json());
   assert(advancedSearchRows.some((item) => item.id === transaction.id), 'advanced search did not return matching transaction');
 
   const [advancedFilterResponse] = await Promise.all([

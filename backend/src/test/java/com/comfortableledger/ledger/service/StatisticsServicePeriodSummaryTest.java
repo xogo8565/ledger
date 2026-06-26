@@ -15,7 +15,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class LedgerServicePeriodSummaryTest {
+class StatisticsServicePeriodSummaryTest {
 
     @Test
     void summarizesTotalsAndExpenseBreakdownsForCustomPeriodRecords() {
@@ -29,7 +29,7 @@ class LedgerServicePeriodSummaryTest {
                 transaction(household, TransactionType.TRANSFER, null, null, null, "", "30000")
         );
 
-        var summary = LedgerService.periodSummary(
+        var summary = StatisticsService.periodSummary(
                 LocalDate.of(2026, 6, 1),
                 LocalDate.of(2026, 6, 24),
                 records

@@ -11,7 +11,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class LedgerServiceScopeStatsTest {
+class StatisticsServiceScopeStatsTest {
 
     @Test
     void aggregatesExpenseAmountAndCountByConsumptionScope() {
@@ -23,7 +23,7 @@ class LedgerServiceScopeStatsTest {
                 transaction(household, TransactionType.INCOME, ConsumptionScope.SHARED, "50000")
         );
 
-        assertThat(LedgerService.scopeSpends(records))
+        assertThat(StatisticsService.scopeSpends(records))
                 .extracting("scope", "amount", "transactionCount")
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple(ConsumptionScope.PERSONAL, new BigDecimal("20000"), 2L),

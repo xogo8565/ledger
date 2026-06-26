@@ -22,13 +22,16 @@ public class ReceiptService {
 
     private final TransactionRepository transactionRepository;
     private final ReceiptAttachmentRepository receiptAttachmentRepository;
+    private final ReceiptFileStorage receiptFileStorage;
     private final Path uploadDir;
 
     public ReceiptService(TransactionRepository transactionRepository,
                           ReceiptAttachmentRepository receiptAttachmentRepository,
+                          ReceiptFileStorage receiptFileStorage,
                           @Value("${app.upload-dir}") String uploadDir) {
         this.transactionRepository = transactionRepository;
         this.receiptAttachmentRepository = receiptAttachmentRepository;
+        this.receiptFileStorage = receiptFileStorage;
         this.uploadDir = Path.of(uploadDir);
     }
 
@@ -59,13 +62,7 @@ public class ReceiptService {
             }
             return attached;
         } catch (IOException | RuntimeException exception) {
-            for (Path storedPath : storedPaths) {
-                try {
-                    Files.deleteIfExists(storedPath);
-                } catch (IOException cleanupException) {
-                    exception.addSuppressed(cleanupException);
-                }
-            }
+            receiptFileStorage.deleteNowQuietly(storedPaths);
             throw exception;
         }
     }
@@ -116,11 +113,11 @@ public class ReceiptService {
     }
 
     @Transactional
-    public void delete(Long receiptId) throws IOException {
+    public void delete(Long receiptId) {
         ReceiptAttachment attachment = receiptAttachmentRepository.findById(receiptId).orElseThrow();
-        Path path = Path.of(attachment.getStoredPath());
+        String storedPath = attachment.getStoredPath();
         receiptAttachmentRepository.delete(attachment);
-        Files.deleteIfExists(path);
+        receiptFileStorage.deleteAfterCommit(List.of(storedPath));
     }
 
     public record ReceiptFile(String filename, String contentType, byte[] bytes) {

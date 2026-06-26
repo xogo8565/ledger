@@ -13,7 +13,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class LedgerServiceMemberStatsTest {
+class StatisticsServiceMemberStatsTest {
 
     @Test
     void aggregatesOnlyPersonalExpenseAmountAndCountByConsumerMember() {
@@ -29,7 +29,7 @@ class LedgerServiceMemberStatsTest {
                 transaction(household, TransactionType.INCOME, ConsumptionScope.PERSONAL, owner, "50000")
         );
 
-        assertThat(LedgerService.memberSpends(records))
+        assertThat(StatisticsService.memberSpends(records))
                 .extracting("memberName", "amount", "transactionCount")
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("기본 명의", new BigDecimal("17000"), 2L),

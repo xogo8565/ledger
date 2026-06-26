@@ -34,6 +34,48 @@ docker compose up --build
 
 비밀번호 등 운영 설정은 `.env.example`을 복사해 `.env`로 만든 뒤 수정합니다.
 
+영수증 OCR은 Docker 백엔드 이미지에 포함된 Tesseract를 사용합니다. 기본 언어는 `kor+eng`이며 `TESSERACT_COMMAND`, `TESSERACT_LANGUAGE` 환경 변수로 조정할 수 있습니다.
+
+## CI/CD
+
+GitHub Actions workflow는 `.github/workflows/deploy-oci.yml`에 있습니다.
+
+동작:
+
+- `main` 브랜치 push 또는 수동 실행(`workflow_dispatch`) 시 실행
+- 백엔드 테스트
+- 프론트엔드 빌드
+- 백엔드/프론트엔드 Docker 이미지 빌드
+- OCI 서버 SSH 접속 후 `git reset --hard origin/main`
+- `docker compose up -d --build`
+- 백엔드 `http://localhost:8080/api/bootstrap`, 프론트엔드 `http://localhost:8081` 확인
+
+GitHub Repository Secrets:
+
+| Secret | 값 |
+| --- | --- |
+| `OCI_HOST` | OCI 서버 IP 또는 도메인 |
+| `OCI_USER` | SSH 사용자. Ubuntu 이미지 기준 `ubuntu` |
+| `OCI_SSH_PRIVATE_KEY` | SSH private key 전체 내용 |
+| `OCI_APP_DIR` | 서버 앱 경로. 예: `/opt/comfortable-ledger/app` |
+
+OCI 서버 최초 준비 예시:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git ca-certificates curl docker.io docker-compose-plugin
+sudo usermod -aG docker ubuntu
+
+sudo mkdir -p /opt/comfortable-ledger
+sudo chown -R ubuntu:ubuntu /opt/comfortable-ledger
+cd /opt/comfortable-ledger
+git clone <REPOSITORY_URL> app
+cd app
+cp .env.example .env
+```
+
+서버의 `.env`와 `data/`는 배포 workflow가 삭제하지 않습니다.
+
 ## 로컬 개발 실행
 
 백엔드:
@@ -57,6 +99,7 @@ npm run dev
 - 월 내 거래 검색/필터
 - 사용자 지정 기간 거래 조회/필터 및 필터 결과 수입·지출·합계 재계산
 - 서버 기반 거래 고급 검색: 기간·유형·카테고리·명의·소비 구분·자산·금액 범위·키워드 조합
+- 검색 결과 페이지네이션 및 최신순/오래된순/금액순 정렬
 - 거래 추가 시 직접 입력/클립보드 문자 자동 입력 선택 및 수입/지출/이체 등록
 - 거래 상세 확인, 수정, 삭제 UI
 - 자산 잔액 반영
@@ -76,18 +119,24 @@ npm run dev
 - 카드 결제 예약 관리, 청구 기간 기반 예정 금액, 주말/공휴일 결제일 보정, 중복 실행 방지, 실패 사유 표시, 실패 결제 재시도/재예약
 - 할부 거래 생성, 일정 조회, 그룹 단위 수정/삭제, 회차 수 변경
 - 반복 거래 생성/수정/삭제 및 만기 생성
-- 영수증 사진 신규/기존 거래 다중 첨부, 조회, 미리보기, 삭제
+- 영수증 사진 신규/기존 거래 다중 첨부, 조회, 미리보기, 삭제 및 거래 삭제 시 파일 정리
+- 영수증 업로드 Tesseract OCR 분석 및 거래 입력 초안 자동 채움
+- OCR 원문 편집 후 재분석 및 수정된 거래 후보 반영
+- OCR 품목표 여러 행 메모 요약
+- OCR 실패/낮은 신뢰도 경고 및 직접 입력 전환
+- OCR 임시 파일 서버 시작 시 정리
+- OCR 결과 제목/금액 후보 선택
+- OCR 결과 날짜 후보 선택
+- 백엔드 OCR 후보 DTO 기반 날짜/제목/금액 후보 제공
 - 클립보드 카드/은행 문자 자동 분석, 과거 이력·가맹점 키워드 카테고리 추천 및 거래 입력 확정
 - 지출 거래 소비 태그 입력, 상세 표시, 검색, CSV 내보내기
-- 월별 거래 및 화면 필터 결과 CSV 내보내기
+- 월별 거래 및 화면 필터/현재 검색 페이지 결과 CSV 내보내기
 - 가족/공동 가계부를 위한 Household/Member 도메인 기반
+- `initial-data/assets_*.xlsx`, `initial-data/transactions_*.xlsx` 엑셀 목록 기반 DB 첫 실행 초기 자산·거래 데이터 주입
 
 ## 다음 작업
 
-- 예산 설정 화면 컴포넌트 분리
-- 하단 탐색·앱 셸 컴포넌트 분리
-- 백엔드 프로젝트 구조 개선
-- 영수증 첨부 파일 정리 정책 고도화
+- OCI 서버 최초 패키지 설치, 앱 clone, GitHub Secrets 등록 후 `workflow_dispatch` 배포 검증
 
 ## Smoke Test
 

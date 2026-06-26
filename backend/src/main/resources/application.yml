@@ -20,6 +20,9 @@ spring:
 
 app:
   upload-dir: ${APP_UPLOAD_DIR:${APP_DATA_DIR:./data}/uploads}
+  ocr:
+    tesseract-command: ${TESSERACT_COMMAND:tesseract}
+    tesseract-language: ${TESSERACT_LANGUAGE:kor+eng}
   card-payment:
     auto-execute-enabled: ${CARD_PAYMENT_AUTO_EXECUTE_ENABLED:true}
     auto-execute-cron: ${CARD_PAYMENT_AUTO_EXECUTE_CRON:0 10 4 * * *}

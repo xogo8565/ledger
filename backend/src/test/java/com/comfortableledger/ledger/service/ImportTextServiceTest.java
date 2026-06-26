@@ -70,6 +70,92 @@ class ImportTextServiceTest {
     }
 
     @Test
+    void parsesReceiptOcrTextUsingTotalAmountInsteadOfFirstItemAmount() {
+        TextImportPreview preview = service.preview("""
+                스타벅스 강남역점
+                대표 홍길동
+                사업자 123-45-67890
+                2026-06-26 12:34
+                아메리카노 4,500원
+                카페라떼 5,000원
+                합계 9,500원
+                받은금액 10,000원
+                """);
+
+        assertThat(preview.type()).isEqualTo(TransactionType.EXPENSE);
+        assertThat(preview.transactionDate()).isEqualTo(LocalDate.of(2026, 6, 26));
+        assertThat(preview.amount()).isEqualByComparingTo(new BigDecimal("9500"));
+        assertThat(preview.merchant()).isEqualTo("스타벅스 강남역점");
+        assertThat(preview.memo()).contains("영수증 OCR");
+    }
+
+    @Test
+    void parsesReceiptOcrTextWithSpacedTotalKeyword() {
+        TextImportPreview preview = service.preview("""
+                편의점CU 서울역점
+                영수증
+                2026/06/25
+                생수 1,000원
+                과자 2,300원
+                합 계 : 3,300
+                """);
+
+        assertThat(preview.transactionDate()).isEqualTo(LocalDate.of(2026, 6, 25));
+        assertThat(preview.amount()).isEqualByComparingTo(new BigDecimal("3300"));
+        assertThat(preview.merchant()).isEqualTo("편의점CU 서울역점");
+    }
+
+    @Test
+    void prefersReceiptItemTableNameAndTotalAmountWhenItemHeaderExists() {
+        TextImportPreview preview = service.preview("""
+                스타벅스 강남역점
+                2026-06-26 12:34
+                품명 단가 수량 금액
+                아메리카노 4,500 1 4,500
+                카페라떼 5,000 1 5,000
+                합계 9,500원
+                """);
+
+        assertThat(preview.transactionDate()).isEqualTo(LocalDate.of(2026, 6, 26));
+        assertThat(preview.amount()).isEqualByComparingTo(new BigDecimal("9500"));
+        assertThat(preview.merchant()).isEqualTo("아메리카노");
+    }
+
+    @Test
+    void usesFirstReceiptItemAmountWhenTotalAmountIsMissing() {
+        TextImportPreview preview = service.preview("""
+                문구점
+                2026-06-26
+                품명    단가    수량    금액
+                노트 2,000 2 4,000
+                볼펜 1,500 1 1,500
+                """);
+
+        assertThat(preview.amount()).isEqualByComparingTo(new BigDecimal("4000"));
+        assertThat(preview.merchant()).isEqualTo("노트");
+    }
+
+    @Test
+    void summarizesMultipleReceiptItemsInMemo() {
+        TextImportPreview preview = service.preview("""
+                카페테스트
+                2026-06-26
+                품명 단가 수량 금액
+                Americano 4,500 1 4,500
+                Latte 5,000 1 5,000
+                Cookie 2,000 2 4,000
+                합계 13,500원
+                """);
+
+        assertThat(preview.amount()).isEqualByComparingTo(new BigDecimal("13500"));
+        assertThat(preview.merchant()).isEqualTo("Americano");
+        assertThat(preview.memo()).contains("품목:");
+        assertThat(preview.memo()).contains("Americano 4500원");
+        assertThat(preview.memo()).contains("Latte 5000원");
+        assertThat(preview.memo()).contains("Cookie 4000원");
+    }
+
+    @Test
     void recommendsExpenseCategoryFromMerchantKeyword() {
         Household household = new Household("테스트");
         Category food = new Category(household, CategoryType.EXPENSE, "식비", "🍜", "#fff", 0);

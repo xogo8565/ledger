@@ -173,6 +173,16 @@ public final class ApiDtos {
         }
     }
 
+    public record TransactionSearchResultDto(
+            List<TransactionDto> items,
+            int page,
+            int size,
+            long totalElements,
+            int totalPages,
+            String sort
+    ) {
+    }
+
     public record CreateTransactionRequest(
             @NotNull TransactionType type,
             @NotNull LocalDate transactionDate,
@@ -269,6 +279,22 @@ public final class ApiDtos {
             Long recommendedCategoryId,
             String recommendedCategoryName,
             String categoryRecommendationReason
+    ) {
+    }
+
+    public record ReceiptOcrPreview(
+            String originalFilename,
+            String rawText,
+            TextImportPreview preview,
+            List<String> warnings,
+            ReceiptOcrCandidates candidates
+    ) {
+    }
+
+    public record ReceiptOcrCandidates(
+            List<LocalDate> dateCandidates,
+            List<String> titleCandidates,
+            List<BigDecimal> amountCandidates
     ) {
     }
 

@@ -9,13 +9,10 @@ import com.comfortableledger.ledger.domain.MonthlyBudget;
 import com.comfortableledger.ledger.domain.TransactionRecord;
 import com.comfortableledger.ledger.domain.TransactionType;
 import com.comfortableledger.ledger.repo.AssetRepository;
-import com.comfortableledger.ledger.repo.CardProfileRepository;
 import com.comfortableledger.ledger.repo.CategoryBudgetRepository;
 import com.comfortableledger.ledger.repo.CategoryRepository;
 import com.comfortableledger.ledger.repo.HouseholdRepository;
-import com.comfortableledger.ledger.repo.MemberRepository;
 import com.comfortableledger.ledger.repo.MonthlyBudgetRepository;
-import com.comfortableledger.ledger.repo.ReceiptAttachmentRepository;
 import com.comfortableledger.ledger.repo.TransactionRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -23,7 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
-class LedgerServiceYearlyBudgetSummaryTest {
+class StatisticsServiceYearlyBudgetSummaryTest {
 
     @Test
     void aggregatesMonthlyBudgetsAndExpensesForSelectedYear() {
@@ -45,16 +42,13 @@ class LedgerServiceYearlyBudgetSummaryTest {
                 new MonthlyBudget(household, "2026-02", new BigDecimal("100000"))
         ));
 
-        LedgerService service = new LedgerService(
+        StatisticsService service = new StatisticsService(
                 householdRepository,
-                mock(MemberRepository.class),
                 mock(AssetRepository.class),
                 mock(CategoryRepository.class),
                 mock(CategoryBudgetRepository.class),
                 transactionRepository,
-                monthlyBudgetRepository,
-                mock(CardProfileRepository.class),
-                mock(ReceiptAttachmentRepository.class)
+                monthlyBudgetRepository
         );
 
         var summary = service.yearlyBudgetSummary(2026);

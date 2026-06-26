@@ -1,7 +1,6 @@
 package com.comfortableledger.ledger.web;
 
 import com.comfortableledger.ledger.service.CardService;
-import com.comfortableledger.ledger.service.LedgerService;
 import com.comfortableledger.ledger.web.ApiDtos.CardDetailDto;
 import com.comfortableledger.ledger.web.ApiDtos.CardPaymentScheduleDto;
 import com.comfortableledger.ledger.web.ApiDtos.CreatePaymentScheduleRequest;
@@ -24,11 +23,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/cards")
 public class CardController {
     private final CardService cardService;
-    private final LedgerService ledgerService;
 
-    public CardController(CardService cardService, LedgerService ledgerService) {
+    public CardController(CardService cardService) {
         this.cardService = cardService;
-        this.ledgerService = ledgerService;
     }
 
     @GetMapping("/{cardAssetId}")
@@ -71,7 +68,7 @@ public class CardController {
 
     @PostMapping("/payment-schedules/execute")
     public CardPaymentScheduleDto executePaymentSchedule(@Valid @RequestBody SchedulePaymentRequest request) {
-        return cardService.executePaymentSchedule(request.scheduleId(), ledgerService);
+        return cardService.executePaymentSchedule(request.scheduleId());
     }
 
     @PostMapping("/payment-schedules/{scheduleId}/reschedule")
@@ -81,7 +78,7 @@ public class CardController {
 
     @PostMapping("/payment-schedules/{scheduleId}/retry")
     public CardPaymentScheduleDto retryFailedPayment(@PathVariable Long scheduleId) {
-        return cardService.retryFailedPayment(scheduleId, ledgerService);
+        return cardService.retryFailedPayment(scheduleId);
     }
 
     @DeleteMapping("/payment-schedules/{scheduleId}")

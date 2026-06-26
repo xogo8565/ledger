@@ -11,13 +11,8 @@ import com.comfortableledger.ledger.domain.MemberRole;
 import com.comfortableledger.ledger.domain.TransactionRecord;
 import com.comfortableledger.ledger.domain.TransactionType;
 import com.comfortableledger.ledger.repo.AssetRepository;
-import com.comfortableledger.ledger.repo.CardProfileRepository;
-import com.comfortableledger.ledger.repo.CategoryBudgetRepository;
-import com.comfortableledger.ledger.repo.CategoryRepository;
 import com.comfortableledger.ledger.repo.HouseholdRepository;
 import com.comfortableledger.ledger.repo.MemberRepository;
-import com.comfortableledger.ledger.repo.MonthlyBudgetRepository;
-import com.comfortableledger.ledger.repo.ReceiptAttachmentRepository;
 import com.comfortableledger.ledger.repo.TransactionRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -25,7 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
-class LedgerServiceConsumerMigrationTest {
+class MemberServiceConsumerMigrationTest {
 
     @Test
     void migratesOnlyEligibleRecordsToOwnerAndBecomesIdempotent() {
@@ -43,16 +38,11 @@ class LedgerServiceConsumerMigrationTest {
                 .thenReturn(List.of(legacyPersonalExpense))
                 .thenReturn(List.of());
 
-        LedgerService service = new LedgerService(
+        MemberService service = new MemberService(
                 householdRepository,
                 memberRepository,
                 mock(AssetRepository.class),
-                mock(CategoryRepository.class),
-                mock(CategoryBudgetRepository.class),
-                transactionRepository,
-                mock(MonthlyBudgetRepository.class),
-                mock(CardProfileRepository.class),
-                mock(ReceiptAttachmentRepository.class)
+                transactionRepository
         );
 
         var first = service.migrateUnassignedPersonalExpenses();

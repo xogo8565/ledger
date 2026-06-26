@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AppHeader, BackButton, EmptyState, IconButton, LineField } from '../components/ui';
 import { iconForType, KeyValue, transferLabel } from './LedgerScreen';
 import { money, transactionTone } from '../utils/format';
@@ -10,6 +11,89 @@ function defaultConsumerMemberId(members) {
   const member = members.find((item) => item.role === 'OWNER') || members[0];
   return member ? String(member.id) : '';
 }
+
+function uniqueValues(values) {
+  return [...new Set(values.filter((value) => value !== null && value !== undefined && String(value).trim() !== ''))];
+}
+
+function extractAmountCandidates(rawText, currentAmount) {
+  const values = [];
+  if (currentAmount) values.push(String(Number(currentAmount)));
+  const matcher = String(rawText || '').matchAll(/([0-9][0-9,]{2,})\s*(?:원|won)?/gi);
+  for (const match of matcher) {
+    const amount = Number(match[1].replaceAll(',', ''));
+    if (amount > 0) values.push(String(amount));
+  }
+  return uniqueValues(values).slice(0, 6);
+}
+
+function formatDateCandidate(year, month, day) {
+  const parsedYear = Number(year);
+  const parsedMonth = Number(month);
+  const parsedDay = Number(day);
+  if (!parsedYear || !parsedMonth || !parsedDay) return null;
+  if (parsedMonth < 1 || parsedMonth > 12 || parsedDay < 1 || parsedDay > 31) return null;
+  const date = new Date(parsedYear, parsedMonth - 1, parsedDay);
+  if (date.getFullYear() !== parsedYear || date.getMonth() !== parsedMonth - 1 || date.getDate() !== parsedDay) {
+    return null;
+  }
+  return [
+    String(parsedYear).padStart(4, '0'),
+    String(parsedMonth).padStart(2, '0'),
+    String(parsedDay).padStart(2, '0')
+  ].join('-');
+}
+
+function extractDateCandidates(rawText, currentDate) {
+  const values = [];
+  if (currentDate) values.push(currentDate);
+  const text = String(rawText || '');
+  const currentYear = new Date().getFullYear();
+
+  for (const match of text.matchAll(/\b(20\d{2})[./-]\s*(\d{1,2})[./-]\s*(\d{1,2})\b/g)) {
+    values.push(formatDateCandidate(match[1], match[2], match[3]));
+  }
+  for (const match of text.matchAll(/\b(\d{1,2})[./월]\s*(\d{1,2})\s*(?:일)?\b/g)) {
+    values.push(formatDateCandidate(currentYear, match[1], match[2]));
+  }
+
+  return uniqueValues(values).slice(0, 6);
+}
+
+function extractTitleCandidates(rawText, currentTitle) {
+  const text = String(rawText || '');
+  const values = [];
+  if (currentTitle) values.push(currentTitle);
+
+  const lines = text.split(/\r?\n/)
+    .map((line) => line.trim().replace(/\s+/g, ' '))
+    .filter(Boolean);
+  let itemTableStarted = false;
+  for (const line of lines) {
+    const compact = line.replace(/\s+/g, '').toLowerCase();
+    if (!itemTableStarted && compact.includes('품명') && compact.includes('단가') && compact.includes('수량') && compact.includes('금액')) {
+      itemTableStarted = true;
+      continue;
+    }
+    if (itemTableStarted && /합계|총액|결제|받은금액|거스름|부가세|과세|면세|total/i.test(line)) {
+      break;
+    }
+    if (itemTableStarted) {
+      const itemName = line.split(/[0-9]/)[0].replace(/[·*]/g, '').trim();
+      if (itemName) values.push(itemName);
+    }
+  }
+
+  for (const line of lines) {
+    if (/[0-9][0-9,]*\s*(?:원|won)?/i.test(line)) continue;
+    if (/20\d{2}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./월]\s*\d{1,2}/.test(line)) continue;
+    if (/영수증|매출전표|사업자|대표|주소|전화|tel|품명|단가|수량|금액|합계|총액|결제|승인|카드|부가세|과세|면세|total/i.test(line)) continue;
+    if (line.length >= 2 && line.length <= 40) values.push(line);
+  }
+
+  return uniqueValues(values).slice(0, 6);
+}
+
 export function EntryChoiceSheet({ openEntry, openClipboardEntry, onClose }) {
   return (
     <div className="sheet-backdrop entry-choice-backdrop" role="presentation" onClick={onClose}>
@@ -35,6 +119,215 @@ export function EntryChoiceSheet({ openEntry, openClipboardEntry, onClose }) {
             <small>클립보드의 카드·은행 문자를 분석합니다.</small>
           </div>
         </button>
+      </section>
+    </div>
+  );
+}
+
+export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, applyReceiptOcrPreview, onClose }) {
+  const [file, setFile] = useState(null);
+  const [result, setResult] = useState(null);
+  const [editedRawText, setEditedRawText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [reparsing, setReparsing] = useState(false);
+  const [error, setError] = useState('');
+
+  function openManualEntry() {
+    applyReceiptOcrPreview({
+      rawText: editedRawText,
+      preview: {
+        type: 'EXPENSE'
+      }
+    }, null);
+  }
+
+  async function analyze(event) {
+    event.preventDefault();
+    if (!file) {
+      setError('OCR로 읽을 영수증 이미지를 선택해 주세요.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setResult(null);
+    const response = await previewReceiptOcr(file);
+    setLoading(false);
+    if (!response.ok) {
+      setError(response.data?.message || '영수증 OCR 분석에 실패했습니다.');
+      return;
+    }
+    setResult(response.data);
+    setEditedRawText(response.data?.rawText || '');
+  }
+
+  async function reparseEditedText() {
+    if (!editedRawText.trim()) {
+      setError('재분석할 OCR 원문을 입력해 주세요.');
+      return;
+    }
+    setReparsing(true);
+    setError('');
+    const response = await parseTransactionText(editedRawText);
+    setReparsing(false);
+    if (!response.ok) {
+      setError(response.data?.message || '수정한 OCR 원문 재분석에 실패했습니다.');
+      return;
+    }
+    setResult((current) => ({
+      ...(current || {}),
+      rawText: editedRawText,
+      preview: response.data,
+      candidates: null,
+      warnings: current?.warnings || []
+    }));
+  }
+
+  const preview = result?.preview || {};
+  const serverCandidates = result?.candidates || {};
+  const titleCandidates = result
+    ? (serverCandidates.titleCandidates?.length ? serverCandidates.titleCandidates : extractTitleCandidates(result.rawText || editedRawText, preview.merchant))
+    : [];
+  const amountCandidates = result
+    ? (serverCandidates.amountCandidates?.length
+      ? serverCandidates.amountCandidates.map((candidate) => String(Number(candidate)))
+      : extractAmountCandidates(result.rawText || editedRawText, preview.amount))
+    : [];
+  const dateCandidates = result
+    ? (serverCandidates.dateCandidates?.length ? serverCandidates.dateCandidates : extractDateCandidates(result.rawText || editedRawText, preview.transactionDate))
+    : [];
+
+  function updatePreviewCandidate(patch) {
+    setResult((current) => ({
+      ...(current || {}),
+      preview: {
+        ...(current?.preview || {}),
+        ...patch
+      }
+    }));
+  }
+
+  return (
+    <div className="full-panel">
+      <section className="receipt-ocr-screen">
+        <AppHeader title="영수증 업로드" left={<BackButton label="닫기" onClick={onClose} />} />
+        <form className="receipt-ocr-card" onSubmit={analyze}>
+          <strong>Tesseract OCR 자동 입력</strong>
+          <p>영수증 사진을 업로드하면 텍스트를 추출하고 거래 입력 초안을 만듭니다.</p>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              setFile(event.target.files?.[0] || null);
+              setResult(null);
+              setEditedRawText('');
+              setError('');
+            }}
+          />
+          <button type="submit" disabled={loading}>{loading ? '분석 중...' : 'OCR 분석'}</button>
+          {error && (
+            <div className="ocr-error-box">
+              <em className="ocr-error">{error}</em>
+              <button type="button" className="secondary-action" onClick={openManualEntry}>
+                직접 입력으로 전환
+              </button>
+            </div>
+          )}
+        </form>
+
+        {result && (
+          <section className="receipt-ocr-result">
+            <h2>분석 결과</h2>
+            <div className="ocr-preview-grid">
+              <span>파일</span><strong>{result.originalFilename}</strong>
+              <span>날짜</span><strong>{preview.transactionDate || '-'}</strong>
+              <span>금액</span><strong>{preview.amount ? Number(preview.amount).toLocaleString() : '-'}</strong>
+              <span>가맹점</span><strong>{preview.merchant || '-'}</strong>
+              <span>추천 분류</span><strong>{preview.recommendedCategoryName || '-'}</strong>
+            </div>
+            {(titleCandidates.length > 1 || amountCandidates.length > 1 || dateCandidates.length > 1) && (
+              <div className="ocr-candidate-card">
+                <strong>OCR 후보 선택</strong>
+                {dateCandidates.length > 1 && (
+                  <div className="ocr-candidate-group">
+                    <span>날짜 후보</span>
+                    <div className="ocr-candidate-list">
+                      {dateCandidates.map((candidate) => (
+                        <button
+                          key={candidate}
+                          type="button"
+                          className={preview.transactionDate === candidate ? 'ocr-candidate-chip active' : 'ocr-candidate-chip'}
+                          onClick={() => updatePreviewCandidate({ transactionDate: candidate })}
+                        >
+                          {candidate}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {titleCandidates.length > 1 && (
+                  <div className="ocr-candidate-group">
+                    <span>내용/품명 후보</span>
+                    <div className="ocr-candidate-list">
+                      {titleCandidates.map((candidate) => (
+                        <button
+                          key={candidate}
+                          type="button"
+                          className={preview.merchant === candidate ? 'ocr-candidate-chip active' : 'ocr-candidate-chip'}
+                          onClick={() => updatePreviewCandidate({ merchant: candidate })}
+                        >
+                          {candidate}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {amountCandidates.length > 1 && (
+                  <div className="ocr-candidate-group">
+                    <span>금액 후보</span>
+                    <div className="ocr-candidate-list">
+                      {amountCandidates.map((candidate) => (
+                        <button
+                          key={candidate}
+                          type="button"
+                          className={String(Number(preview.amount || 0)) === candidate ? 'ocr-candidate-chip active' : 'ocr-candidate-chip'}
+                          onClick={() => updatePreviewCandidate({ amount: candidate })}
+                        >
+                          {Number(candidate).toLocaleString()}원
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {result.warnings?.length > 0 && (
+              <ul className="ocr-warnings">
+                {result.warnings.map((warning, index) => <li key={index}>{warning}</li>)}
+              </ul>
+            )}
+            <div className="ocr-help-card">
+              <strong>인식이 부정확하면</strong>
+              <span>밝은 곳에서 영수증 전체가 나오게 다시 촬영하거나, 아래 OCR 원문에서 품명·합계·금액을 수정한 뒤 다시 분석하세요.</span>
+            </div>
+            <details>
+              <summary>OCR 원문 보기</summary>
+              <pre>{result.rawText || '추출된 텍스트가 없습니다.'}</pre>
+            </details>
+            <textarea
+              className="ocr-raw-text-editor"
+              value={editedRawText}
+              onChange={(event) => setEditedRawText(event.target.value)}
+              aria-label="OCR 원문 편집"
+              placeholder="OCR로 추출한 텍스트가 여기에 표시됩니다."
+            />
+            <button type="button" className="secondary-action" onClick={reparseEditedText} disabled={reparsing}>
+              {reparsing ? '재분석 중...' : '수정한 원문으로 다시 분석'}
+            </button>
+            <button type="button" onClick={() => applyReceiptOcrPreview(result, file)}>
+              거래 입력에 사용
+            </button>
+          </section>
+        )}
       </section>
     </div>
   );
@@ -350,4 +643,3 @@ function amountFromExpression(value) {
     return '';
   }
 }
-

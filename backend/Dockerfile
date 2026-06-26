@@ -6,6 +6,9 @@ RUN gradle bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-kor tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
 ENV APP_DATA_DIR=/data
 ENV APP_UPLOAD_DIR=/data/uploads
 ENV APP_LOG_DIR=/data/logs

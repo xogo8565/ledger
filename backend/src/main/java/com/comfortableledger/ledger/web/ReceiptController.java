@@ -54,7 +54,7 @@ public class ReceiptController {
     }
 
     @DeleteMapping("/{receiptId}")
-    public void delete(@PathVariable Long receiptId) throws IOException {
+    public void delete(@PathVariable Long receiptId) {
         receiptService.delete(receiptId);
     }
 }

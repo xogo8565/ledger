@@ -11,7 +11,7 @@ import java.time.YearMonth;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class LedgerServiceWeeklyTotalsTest {
+class StatisticsServiceWeeklyTotalsTest {
 
     @Test
     void groupsMonthlyExpensesIntoSundayEndingWeeks() {
@@ -24,7 +24,7 @@ class LedgerServiceWeeklyTotalsTest {
                 transaction(household, LocalDate.of(2026, 6, 30), TransactionType.EXPENSE, "4000")
         );
 
-        var totals = LedgerService.weeklyTotals(YearMonth.of(2026, 6), records);
+        var totals = StatisticsService.weeklyTotals(YearMonth.of(2026, 6), records);
 
         assertThat(totals).hasSize(5);
         assertThat(totals)
