@@ -72,7 +72,7 @@ services:
         done
 
   backend:
-    image: ghcr.io/Xogo8565/comfortable-ledger-backend:latest
+    image: ghcr.io/xogo8565/comfortable-ledger-backend:latest
     build:
       context: ./backend
     container_name: comfortable-ledger-backend
@@ -94,7 +94,7 @@ services:
       - "8080:8080"
 
   frontend:
-    image: ghcr.io/Xogo8565/comfortable-ledger-frontend:latest
+    image: ghcr.io/xogo8565/comfortable-ledger-frontend:latest
     build:
       context: ./frontend
     container_name: comfortable-ledger-frontend

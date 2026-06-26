@@ -9,6 +9,27 @@
           </mappings>
         </serverdata>
       </paths>
+      <paths name="(./21) WAS_REFUND">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="(./31) WAS_BIZMALL">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="(./32) WAS_BIZMALL">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
       <paths name="(./35) WAS_TEENCASH_1">
         <serverdata>
           <mappings>
@@ -31,6 +52,13 @@
         </serverdata>
       </paths>
       <paths name="(./57) WEB_TEENCASH_2">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="(./70) WEB_BIZMALL">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
