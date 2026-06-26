@@ -125,13 +125,13 @@ export function LedgerScreen({
   return (
     <div className="screen ledger-screen">
       <AppHeader title="가계부" />
-      <section className="receipt-ocr-cta">
+      {/* <section className="receipt-ocr-cta">
         <div>
           <strong>영수증 자동 입력</strong>
           <span>사진을 올리면 Tesseract OCR로 읽고 거래 초안을 만듭니다.</span>
         </div>
         <button type="button" onClick={openReceiptOcr}>영수증 업로드</button>
-      </section>
+      </section> */}
       <MonthNav month={month} setMonth={setMonth} />
       {rangeActive && <div className="range-banner">{filters.startDate} ~ {filters.endDate}</div>}
       <nav className="view-tabs" aria-label="가계부 보기">

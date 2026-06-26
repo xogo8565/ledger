@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="b306150e-acc0-4df0-82a9-ee8dade66f33" name="ORACLE-CLOUD">
+        <fileTransfer rootFolder="/home/ubuntu" accessType="SFTP" host="217.142.229.9" port="22" sshConfigId="1aad665d-7a84-4c84-b246-faf81c547987" sshConfig="ubuntu@217.142.229.9:22 key" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
