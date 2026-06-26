@@ -1,17 +1,24 @@
 :root {
-  --page: #eef0f5;
-  --surface: #ffffff;
-  --surface-soft: #f7f8fb;
-  --line: #e6e7eb;
-  --line-strong: #dadce3;
-  --text: #141414;
-  --subtle: #8c8c8c;
-  --muted: #b1b1b1;
-  --accent: #ff625c;
-  --accent-dark: #e84f49;
-  --income: #2189ff;
-  --transfer: #4ba66a;
-  --shadow: 0 22px 70px rgba(32, 35, 48, 0.18);
+  --page: #f7f5ef;
+  --surface: #fffef9;
+  --surface-soft: #f1f7ec;
+  --line: #e1ead9;
+  --line-strong: #cfdcc6;
+  --text: #2f2a23;
+  --subtle: #807568;
+  --muted: #aa9d8c;
+  --accent: #9bcf8e;
+  --accent-dark: #6eaa68;
+  --income: #6fa96f;
+  --transfer: #b8875d;
+  --danger: #be7959;
+  --warning: #c29558;
+  --wood: #b8875d;
+  --wood-dark: #7b5638;
+  --wood-soft: #f3e6d7;
+  --green-soft: #e9f6e4;
+  --shadow: 0 22px 70px rgba(79, 60, 40, 0.16);
+  --shadow-card: 0 10px 28px rgba(79, 60, 40, 0.10);
   font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
   color: var(--text);
   background: var(--page);
@@ -100,7 +107,7 @@ button {
 .back-button,
 .top-icon-button {
   border: 0;
-  color: #161616;
+  color: var(--text);
   background: transparent;
   font-weight: 800;
 }
@@ -132,7 +139,7 @@ button {
 .month-nav button {
   border: 0;
   background: transparent;
-  color: #111;
+  color: var(--wood-dark);
   font-size: 48px;
   line-height: 1;
 }
@@ -163,7 +170,7 @@ button {
   position: relative;
   border: 0;
   background: var(--surface);
-  color: #a2a2a2;
+  color: #a79c8c;
   font-size: 18px;
   font-weight: 700;
 }
@@ -223,7 +230,7 @@ button {
 }
 
 .mini-metric span {
-  color: #555;
+  color: #6d604f;
   font-size: 16px;
 }
 
@@ -245,7 +252,7 @@ button {
 }
 
 .mini-metric.total strong {
-  color: #101010;
+  color: var(--text);
 }
 
 .daily-list {
@@ -285,17 +292,17 @@ button {
   padding: 0 8px;
   border-radius: 5px;
   color: white;
-  background: #989898;
+  background: var(--muted);
   font-size: 14px;
   font-weight: 800;
 }
 
 .weekday.sunday {
-  background: #ff7771;
+  background: #c58f67;
 }
 
 .weekday.saturday {
-  background: #5caaff;
+  background: #91c99d;
 }
 
 .day-sums {
@@ -327,7 +334,7 @@ button {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #858585;
+  color: #8b806f;
 }
 
 .category-cell span {
@@ -355,7 +362,7 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #555;
+  color: #6d604f;
   font-size: 19px;
 }
 
@@ -363,7 +370,7 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #919191;
+  color: #9a8f80;
   font-size: 15px;
 }
 
@@ -383,15 +390,15 @@ button {
   width: fit-content;
   padding: 3px 7px;
   border-radius: 999px;
-  color: #5d6470;
-  background: #eef0f4;
+  color: #7a705f;
+  background: var(--green-soft);
   font-size: 11px;
   font-weight: 900;
 }
 
 .consumption-scope-chip.shared {
-  color: #397023;
-  background: #eaf6df;
+  color: #5f8f58;
+  background: var(--green-soft);
 }
 
 .transaction-row > b {
@@ -744,8 +751,8 @@ button {
   grid-template-columns: repeat(7, 1fr);
   align-items: center;
   border-bottom: 1px solid var(--line);
-  color: #8d8d8d;
-  background: #f3f4f7;
+  color: var(--muted);
+  background: var(--surface-soft);
   text-align: center;
   font-weight: 800;
 }
@@ -755,7 +762,7 @@ button {
 }
 
 .calendar-weekdays span:last-child {
-  color: #58a9ff;
+  color: var(--accent-dark);
 }
 
 .calendar-grid {
@@ -778,16 +785,16 @@ button {
 }
 
 .calendar-cell > span {
-  color: #606060;
+  color: #6d604f;
   font-size: 17px;
 }
 
 .calendar-cell.muted {
-  background: #f8f8fb;
+  background: var(--surface-soft);
 }
 
 .calendar-cell.muted > span {
-  color: #aaa;
+  color: var(--muted);
 }
 
 .calendar-cell.today > span {
@@ -796,7 +803,7 @@ button {
   width: 38px;
   height: 24px;
   color: white;
-  background: #4b527e;
+  background: var(--wood-dark);
 }
 
 .calendar-cell b {
@@ -893,12 +900,12 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  color: #787878;
+  color: var(--subtle);
   font-size: 18px;
 }
 
 .key-value strong {
-  color: #787878;
+  color: var(--subtle);
 }
 
 .budget-overview {
@@ -911,7 +918,7 @@ button {
 .budget-overview span,
 .budget-track span {
   display: block;
-  color: #858585;
+  color: #8b806f;
   font-size: 16px;
 }
 
@@ -930,7 +937,7 @@ button {
   height: 22px;
   overflow: hidden;
   border-radius: 7px;
-  background: #f1f2f6;
+  background: var(--surface-soft);
 }
 
 .progress-bar i {
@@ -946,7 +953,7 @@ button {
   padding: 3px 10px;
   border-radius: 13px;
   color: white;
-  background: #8f8f8f;
+  background: var(--muted);
   font-size: 13px;
   font-weight: 800;
 }
@@ -958,7 +965,7 @@ button {
   top: 100%;
   transform: translateX(-50%);
   border: 6px solid transparent;
-  border-top-color: #8f8f8f;
+  border-top-color: var(--muted);
 }
 
 .export-button {
@@ -971,21 +978,21 @@ button {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #222;
+  color: var(--text);
   background: var(--surface);
   font-size: 17px;
   font-weight: 800;
 }
 
 .export-button span {
-  color: #24bf61;
+  color: var(--accent-dark);
   font-size: 25px;
 }
 
 .memo-row p {
   margin: 0;
   padding: 0 18px 14px 110px;
-  color: #777;
+  color: var(--subtle);
 }
 
 .stats-top {
@@ -1003,13 +1010,13 @@ button {
   padding: 2px;
   border: 1px solid var(--line-strong);
   border-radius: 12px;
-  background: #e9eaef;
+  background: var(--surface-soft);
 }
 
 .segmented-tabs button {
   border: 0;
-  border-right: 1px solid #d4d5dc;
-  color: #9b9b9b;
+  border-right: 1px solid var(--line-strong);
+  color: var(--muted);
   background: transparent;
   font-size: 17px;
   font-weight: 800;
@@ -1024,14 +1031,14 @@ button {
   border-radius: 10px;
   color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 1px 4px rgba(79, 60, 40, 0.12);
 }
 
 .period-button {
   height: 48px;
-  border: 1px solid #ababab;
+  border: 1px solid var(--line-strong);
   border-radius: 12px;
-  color: #111;
+  color: var(--wood-dark);
   background: var(--surface);
   font-size: 17px;
   font-weight: 800;
@@ -1044,13 +1051,13 @@ button {
   padding: 2px;
   border: 1px solid var(--line-strong);
   border-radius: 12px;
-  background: #e9eaef;
+  background: var(--surface-soft);
 }
 
 .period-mode-tabs button {
   border: 0;
-  border-right: 1px solid #d4d5dc;
-  color: #8f93a1;
+  border-right: 1px solid var(--line-strong);
+  color: var(--subtle);
   background: transparent;
   font-size: 14px;
   font-weight: 900;
@@ -1065,7 +1072,7 @@ button {
   border-radius: 10px;
   color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 1px 4px rgba(79, 60, 40, 0.12);
 }
 
 .stats-range-filter {
@@ -1110,7 +1117,7 @@ button {
 .income-expense-switch button {
   position: relative;
   border: 0;
-  color: #a2a2a2;
+  color: #a79c8c;
   background: var(--surface);
   font-size: 18px;
   font-weight: 800;
@@ -1151,7 +1158,7 @@ button {
 .stats-breakdown-tabs button.active {
   border-color: var(--accent);
   color: var(--accent);
-  background: #f1f9e8;
+  background: var(--green-soft);
 }
 
 .chart-zone {
@@ -1182,7 +1189,7 @@ button {
 .donut-chart span {
   position: relative;
   z-index: 1;
-  color: #777;
+  color: var(--subtle);
   font-weight: 800;
 }
 
@@ -1260,7 +1267,7 @@ button {
 
 .yearly-headline span,
 .period-headline span {
-  color: #777;
+  color: var(--subtle);
   font-size: 15px;
   font-weight: 800;
 }
@@ -1289,7 +1296,7 @@ button {
 }
 
 .yearly-month-row span {
-  color: #777;
+  color: var(--subtle);
   font-weight: 900;
 }
 
@@ -1330,7 +1337,7 @@ button {
 .budget-headline span {
   display: block;
   margin-bottom: 12px;
-  color: #858585;
+  color: #8b806f;
   font-size: 16px;
 }
 
@@ -1343,7 +1350,7 @@ button {
   border: 0;
   border-radius: 8px;
   padding: 14px 18px;
-  color: #747474;
+  color: var(--subtle);
   background: var(--surface-soft);
   font-size: 17px;
   font-weight: 900;
@@ -1389,7 +1396,7 @@ button {
   height: 9px;
   overflow: hidden;
   border-radius: 999px;
-  background: #eceef3;
+  background: var(--surface-soft);
 }
 
 .budget-category-row i {
@@ -1535,7 +1542,7 @@ button {
   display: grid;
   align-items: center;
   border-bottom: 1px solid var(--line);
-  color: #a2a2a2;
+  color: #a79c8c;
   text-align: center;
   font-size: 17px;
 }
@@ -1551,7 +1558,7 @@ button {
 }
 
 .details-row span {
-  color: #8a8a8a;
+  color: var(--subtle);
   text-align: center;
   font-size: 18px;
 }
@@ -1667,7 +1674,7 @@ button {
 }
 
 .asset-row span {
-  color: #858585;
+  color: #8b806f;
   font-size: 14px;
 }
 
@@ -1766,7 +1773,7 @@ button {
 .preview-card span {
   display: block;
   margin-top: 4px;
-  color: #777;
+  color: var(--subtle);
 }
 
 .preview-detail {
@@ -1789,7 +1796,7 @@ button {
 }
 
 .preview-detail dt {
-  color: #777;
+  color: var(--subtle);
   font-size: 12px;
   font-weight: 800;
 }
@@ -1817,7 +1824,7 @@ button {
 }
 
 .more-list span {
-  color: #aaa;
+  color: var(--muted);
   font-size: 28px;
 }
 
@@ -2027,7 +2034,7 @@ button {
 }
 
 .installment-row.active {
-  background: #fff8f6;
+  background: var(--wood-soft);
 }
 
 .installment-row strong,
@@ -2213,7 +2220,7 @@ button {
 .entry-tabs button {
   position: relative;
   border: 0;
-  color: #999;
+  color: var(--muted);
   background: var(--surface);
   font-size: 18px;
   font-weight: 900;
@@ -2264,7 +2271,7 @@ button {
 }
 
 .entry-amount-panel span {
-  color: #555;
+  color: #6d604f;
   font-weight: 900;
 }
 
@@ -2308,7 +2315,7 @@ button {
 }
 
 .line-field > span {
-  color: #3a3a3a;
+  color: var(--text);
   font-weight: 900;
 }
 
@@ -2347,8 +2354,8 @@ button {
   height: 34px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
-  color: #777;
-  background: #f8f9fb;
+  color: var(--subtle);
+  background: var(--surface-soft);
   font-size: 14px;
   font-weight: 900;
 }
@@ -2376,7 +2383,7 @@ button {
   align-items: center;
   gap: 10px;
   padding: 10px 18px;
-  color: #777;
+  color: var(--subtle);
   border-bottom: 1px solid var(--line);
   font-weight: 900;
 }
@@ -2421,7 +2428,7 @@ button {
 
 .calculator {
   border-top: 1px solid var(--line);
-  background: #f8f8fb;
+  background: var(--surface-soft);
 }
 
 .calculator-grid {
@@ -2437,7 +2444,7 @@ button {
   border-bottom: 1px solid var(--line);
   display: grid;
   place-items: center;
-  color: #333;
+  color: var(--text);
   background: var(--surface);
   font-size: 24px;
   font-weight: 800;
@@ -2758,7 +2765,7 @@ button {
   position: absolute;
   inset: 0;
   border-radius: 999px;
-  background: #d6d8df;
+  background: var(--line-strong);
 }
 
 .switch i::after {
@@ -2770,7 +2777,7 @@ button {
   height: 24px;
   border-radius: 50%;
   background: white;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 4px rgba(79, 60, 40, 0.18);
 }
 
 .switch input:checked + i {
@@ -2845,13 +2852,13 @@ button {
 
 .category-admin-row > button {
   border: 0;
-  color: #555;
+  color: #6d604f;
   background: transparent;
   font-size: 22px;
 }
 
 .category-admin-row span {
-  color: #aaa;
+  color: var(--muted);
   font-size: 24px;
 }
 
@@ -2945,7 +2952,7 @@ button {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid var(--line);
-  background: #f7f8fb;
+  background: var(--surface-soft);
   z-index: 10;
 }
 
@@ -2956,7 +2963,7 @@ button {
   place-items: center;
   align-content: center;
   gap: 5px;
-  color: #a7a7a7;
+  color: var(--muted);
   background: transparent;
   font-size: 15px;
   font-weight: 800;
@@ -2999,7 +3006,7 @@ button {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 8px 18px rgba(79, 60, 40, 0.16);
   font-size: 34px;
   line-height: 1;
 }
@@ -3017,7 +3024,7 @@ button {
   inset: 0;
   display: grid;
   align-items: end;
-  background: rgba(17, 20, 28, 0.36);
+  background: rgba(61, 50, 38, 0.34);
   z-index: 30;
 }
 
@@ -3031,7 +3038,7 @@ button {
   padding: 18px 18px 28px;
   border-radius: 24px 24px 0 0;
   background: var(--surface);
-  box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 -12px 30px rgba(79, 60, 40, 0.15);
 }
 
 .entry-choice-sheet header {
@@ -3087,7 +3094,7 @@ button {
   place-items: center;
   border-radius: 12px;
   color: var(--accent);
-  background: #f1f9e8;
+  background: var(--green-soft);
   font-size: 22px;
   font-weight: 900;
 }
@@ -3137,7 +3144,7 @@ button {
 }
 
 .entry-sheet > header button:first-child {
-  color: #333;
+  color: var(--text);
   font-size: 28px;
 }
 
@@ -3147,13 +3154,13 @@ button {
   grid-template-columns: repeat(3, 1fr);
   padding: 3px;
   border-radius: 8px;
-  background: #e9eaef;
+  background: var(--surface-soft);
 }
 
 .entry-type-tabs button {
   border: 0;
   border-radius: 7px;
-  color: #8d8d8d;
+  color: var(--muted);
   background: transparent;
   font-weight: 900;
 }
@@ -3166,7 +3173,7 @@ button {
 .amount-field {
   display: grid;
   gap: 8px;
-  color: #858585;
+  color: #8b806f;
   font-weight: 800;
 }
 
@@ -3185,7 +3192,7 @@ button {
 .form-grid label {
   display: grid;
   gap: 7px;
-  color: #777;
+  color: var(--subtle);
   font-weight: 800;
 }
 
@@ -3203,7 +3210,7 @@ button {
   place-items: center;
   align-content: center;
   gap: 10px;
-  color: #c5c6ca;
+  color: var(--line-strong);
   background: var(--surface-soft);
 }
 

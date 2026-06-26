@@ -775,7 +775,7 @@ function emptyCategoryForm(type = 'EXPENSE') {
     type,
     name: '',
     icon: type === 'INCOME' ? '💰' : '•',
-    color: type === 'INCOME' ? '#2189ff' : '#ff625c'
+    color: type === 'INCOME' ? '#6fa96f' : '#b8875d'
   };
 }
 

@@ -41,7 +41,6 @@ export function AssetsScreen({ data, loading, openAssetForm, openCardPaymentMana
         title="자산"
         right={
           <div className="asset-actions">
-            <IconButton label="자산 편집">✎</IconButton>
             <IconButton label="자산 추가" onClick={() => openAssetForm(null)}>+</IconButton>
           </div>
         }

@@ -135,7 +135,7 @@ export function CategoryManagerScreen({
               <strong>{category.icon} {category.name}</strong>
               <button type="button" onClick={() => {
                 setEditingCategory(category);
-                setForm({ type: category.type, name: category.name, icon: category.icon || '', color: category.color || '#ff625c' });
+                setForm({ type: category.type, name: category.name, icon: category.icon || '', color: category.color || '#b8875d' });
               }}>✎</button>
               <span>☰</span>
             </div>
