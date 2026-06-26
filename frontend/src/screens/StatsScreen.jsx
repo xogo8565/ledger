@@ -3,7 +3,7 @@ import { EmptyState, ProgressBar } from '../components/ui';
 import { MonthNav, YearNav } from './LedgerScreen';
 import { money, numberOnly } from '../utils/format';
 
-const palette = ['#9bcf8e', '#b8875d', '#c58f67', '#6fa96f', '#d9bf8f', '#86b786', '#7b5638', '#e2d0b5'];
+const palette = ['#ff675f', '#ff914d', '#ffcc3d', '#bde837', '#6bd26b', '#5edbd1', '#58a9ff', '#f38cc9'];
 const consumptionScopeLabels = { PERSONAL: '개인', SHARED: '공동' };
 export function StatsScreen({
   data,
@@ -267,7 +267,7 @@ function PeriodStats({ summary, categoryByName, breakdown, openLedgerCategory, o
 }
 
 function buildChartGradient(spends, total, categoryByName) {
-  if (!total) return 'conic-gradient(#f1f7ec 0 100%)';
+  if (!total) return 'conic-gradient(#eef0f5 0 100%)';
   let start = 0;
   const segments = spends.map((item, index) => {
     const category = categoryByName.get(item.categoryName);
@@ -325,7 +325,7 @@ function ScopeRanking({ scopes, expenseTotal, openLedgerScope }) {
     <div className="ranking-list scope-ranking-list">
       {scopes.map((item, index) => {
         const percent = expenseTotal ? Math.round((Number(item.amount) / expenseTotal) * 100) : 0;
-        const color = item.scope === 'SHARED' ? '#9bcf8e' : palette[index % palette.length];
+        const color = item.scope === 'SHARED' ? '#58a9ff' : palette[index % palette.length];
         return (
           <button className="ranking-row scope-ranking-row" type="button" key={item.scope} onClick={() => openLedgerScope(item)}>
             <span className="percent-badge" style={{ backgroundColor: color }}>{percent}%</span>
