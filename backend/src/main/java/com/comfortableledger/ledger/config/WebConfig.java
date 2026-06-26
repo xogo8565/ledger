@@ -17,7 +17,7 @@ public class WebConfig implements WebMvcConfigurer {
                         "http://127.0.0.1:3000",
                         "http://127.0.0.1:8081",
                         "http://host.docker.internal:8081",
-                        "http://221.149.114.209:8081"
+                        "http://217.142.229.9:8081"
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*");
