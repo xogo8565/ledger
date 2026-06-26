@@ -1,11 +1,11 @@
 package com.comfortableledger.ledger.controller;
 
-import com.comfortableledger.ledger.service.CardService;
-import com.comfortableledger.ledger.dto.ApiDtos.CardDetailDto;
-import com.comfortableledger.ledger.dto.ApiDtos.CardPaymentScheduleDto;
-import com.comfortableledger.ledger.dto.ApiDtos.CreatePaymentScheduleRequest;
-import com.comfortableledger.ledger.dto.ApiDtos.SchedulePaymentRequest;
-import com.comfortableledger.ledger.dto.ApiDtos.TransactionDto;
+import com.comfortableledger.ledger.service.asset.CardService;
+import com.comfortableledger.ledger.dto.CardPaymentDtos.CardDetailDto;
+import com.comfortableledger.ledger.dto.CardPaymentDtos.CardPaymentScheduleDto;
+import com.comfortableledger.ledger.dto.CardPaymentDtos.CreatePaymentScheduleRequest;
+import com.comfortableledger.ledger.dto.CardPaymentDtos.SchedulePaymentRequest;
+import com.comfortableledger.ledger.dto.TransactionDtos.TransactionDto;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.time.LocalDate;

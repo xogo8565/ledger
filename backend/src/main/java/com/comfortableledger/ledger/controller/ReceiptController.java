@@ -1,8 +1,8 @@
 package com.comfortableledger.ledger.controller;
 
-import com.comfortableledger.ledger.service.ReceiptService;
-import com.comfortableledger.ledger.service.ReceiptService.ReceiptFile;
-import com.comfortableledger.ledger.dto.ApiDtos.ReceiptDto;
+import com.comfortableledger.ledger.service.receipt.ReceiptService;
+import com.comfortableledger.ledger.service.receipt.ReceiptService.ReceiptFile;
+import com.comfortableledger.ledger.dto.ReceiptDtos.ReceiptDto;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.http.HttpHeaders;

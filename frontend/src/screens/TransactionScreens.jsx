@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { AppHeader, BackButton, EmptyState, IconButton, LineField } from '../components/ui';
+import { AppHeader, BackButton, EmptyState, IconButton, LineField, MoneyInput } from '../components/ui';
 import { iconForType, KeyValue, transferLabel } from './LedgerScreen';
 import { money, transactionTone } from '../utils/format';
-import { formatNumber, parseWonAmount, toNumber } from '../utils/numberValues';
+import { formatMoneyInput, formatNumber, parseWonAmount, toNumber } from '../utils/numberValues';
 import { normalizeWhitespace, trimToEmpty, uniqueNonBlank } from '../utils/stringValues';
 
 const API = '/api';
@@ -485,7 +485,7 @@ export function EntryScreen({
 
         <section className={`entry-amount-panel ${tone}`} aria-label="금액">
           <span>금액</span>
-          <strong>{amountDisplay || '0'}</strong>
+          <strong>{formatCalculatorExpression(amountDisplay) || '0'}</strong>
           <em>{amountPreview ? `${formatNumber(amountPreview)}원` : '계산기로 입력'}</em>
         </section>
 
@@ -509,7 +509,7 @@ export function EntryScreen({
                 </select>
               </LineField>
               <LineField label="수수료">
-                <input inputMode="numeric" value={form.fee} onChange={(event) => updateForm('fee', event.target.value)} placeholder="0" />
+                <MoneyInput value={form.fee} onValueChange={(fee) => updateForm('fee', fee)} placeholder="0" />
               </LineField>
             </>
           ) : (
@@ -647,4 +647,8 @@ function amountFromExpression(value) {
   } catch {
     return '';
   }
+}
+
+function formatCalculatorExpression(value) {
+  return String(value || '').replace(/\d+/g, (digits) => formatMoneyInput(digits));
 }

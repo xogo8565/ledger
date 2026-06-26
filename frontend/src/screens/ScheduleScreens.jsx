@@ -1,4 +1,4 @@
-import { AppHeader, BackButton, EmptyState, LineField } from '../components/ui';
+import { AppHeader, BackButton, EmptyState, LineField, MoneyInput } from '../components/ui';
 import { Metric } from './LedgerScreen';
 import { formatDate, money, transactionTone } from '../utils/format';
 
@@ -108,7 +108,7 @@ export function RecurringManagerScreen({
           </nav>
           <div className="edit-fields recurring-fields">
             <LineField label="금액">
-              <input inputMode="numeric" value={form.amount} onChange={(event) => updateField('amount', event.target.value)} required />
+              <MoneyInput value={form.amount} onValueChange={(amount) => updateField('amount', amount)} required />
             </LineField>
             {form.type === 'TRANSFER' ? (
               <>

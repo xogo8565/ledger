@@ -1,9 +1,9 @@
 package com.comfortableledger.ledger.controller;
 
-import com.comfortableledger.ledger.service.RecurringTransactionService;
-import com.comfortableledger.ledger.dto.ApiDtos.RecurringGenerationResult;
-import com.comfortableledger.ledger.dto.ApiDtos.RecurringTransactionDto;
-import com.comfortableledger.ledger.dto.ApiDtos.SaveRecurringTransactionRequest;
+import com.comfortableledger.ledger.service.recurring.RecurringTransactionService;
+import com.comfortableledger.ledger.dto.RecurringDtos.RecurringGenerationResult;
+import com.comfortableledger.ledger.dto.RecurringDtos.RecurringTransactionDto;
+import com.comfortableledger.ledger.dto.RecurringDtos.SaveRecurringTransactionRequest;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;

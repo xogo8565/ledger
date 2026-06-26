@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AppHeader, EmptyState, ProgressBar } from '../components/ui';
+import { AppHeader, EmptyState, MoneyInput, ProgressBar } from '../components/ui';
 import {
   formatDate,
   money,
@@ -10,6 +10,7 @@ import {
   transactionTone,
   weekdays
 } from '../utils/format';
+import { toNumber } from '../utils/numberValues';
 
 const today = formatDate(new Date());
 const currentMonth = today.slice(0, 7);
@@ -53,8 +54,8 @@ function filterTransactions(transactions, filters) {
     if (filters.consumptionScope && item.consumptionScope !== filters.consumptionScope) return false;
     if (filters.consumerMemberId && String(item.consumerMemberId || '') !== String(filters.consumerMemberId)) return false;
     if (filters.assetId && ![item.assetId, item.fromAssetId, item.toAssetId].some((id) => String(id || '') === String(filters.assetId))) return false;
-    if (filters.minAmount && Number(item.amount || 0) < Number(filters.minAmount)) return false;
-    if (filters.maxAmount && Number(item.amount || 0) > Number(filters.maxAmount)) return false;
+    if (filters.minAmount && Number(item.amount || 0) < toNumber(filters.minAmount)) return false;
+    if (filters.maxAmount && Number(item.amount || 0) > toNumber(filters.maxAmount)) return false;
     if (!query) return true;
     const haystack = [
       item.title,
@@ -211,8 +212,8 @@ function LedgerFilters({ filters, setFilters, categories, assets, members, resul
         {hasActiveFilter && <button type="button" onClick={() => setFilters(emptyLedgerFilters())}>초기화</button>}
       </div>
       <div className="amount-filter-row">
-        <input type="number" min="0" value={filters.minAmount} onChange={(event) => updateFilter('minAmount', event.target.value)} placeholder="최소 금액" aria-label="최소 금액" />
-        <input type="number" min="0" value={filters.maxAmount} onChange={(event) => updateFilter('maxAmount', event.target.value)} placeholder="최대 금액" aria-label="최대 금액" />
+        <MoneyInput value={filters.minAmount} onValueChange={(value) => updateFilter('minAmount', value)} placeholder="최소 금액" aria-label="최소 금액" />
+        <MoneyInput value={filters.maxAmount} onValueChange={(value) => updateFilter('maxAmount', value)} placeholder="최대 금액" aria-label="최대 금액" />
       </div>
       {hasActiveFilter && (
         <div className="search-options-row">
@@ -311,8 +312,8 @@ function LedgerFiltersPaged({ filters, setFilters, categories, assets, members, 
             {hasActiveFilter && <button type="button" onClick={() => setFilters(emptyLedgerFilters())}>초기화</button>}
           </div>
           <div className="amount-filter-row">
-            <input type="number" min="0" value={filters.minAmount} onChange={(event) => updateFilter('minAmount', event.target.value)} placeholder="최소 금액" aria-label="최소 금액" />
-            <input type="number" min="0" value={filters.maxAmount} onChange={(event) => updateFilter('maxAmount', event.target.value)} placeholder="최대 금액" aria-label="최대 금액" />
+            <MoneyInput value={filters.minAmount} onValueChange={(value) => updateFilter('minAmount', value)} placeholder="최소 금액" aria-label="최소 금액" />
+            <MoneyInput value={filters.maxAmount} onValueChange={(value) => updateFilter('maxAmount', value)} placeholder="최대 금액" aria-label="최대 금액" />
           </div>
           {hasActiveFilter && (
             <div className="search-options-row">

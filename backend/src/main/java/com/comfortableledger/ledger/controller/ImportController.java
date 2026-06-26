@@ -1,8 +1,8 @@
 package com.comfortableledger.ledger.controller;
 
-import com.comfortableledger.ledger.service.ImportTextService;
-import com.comfortableledger.ledger.dto.ApiDtos.TextImportPreview;
-import com.comfortableledger.ledger.dto.ApiDtos.TextImportRequest;
+import com.comfortableledger.ledger.service.importing.ImportTextService;
+import com.comfortableledger.ledger.dto.ImportDtos.TextImportPreview;
+import com.comfortableledger.ledger.dto.ImportDtos.TextImportRequest;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;

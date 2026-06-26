@@ -96,7 +96,9 @@ export function useLedgerData({ month, ledgerFilters, statsRange }) {
     if (query) params.set('query', query);
     if (ledgerFilters.type !== 'ALL') params.set('type', ledgerFilters.type);
     ['categoryId', 'consumptionScope', 'consumerMemberId', 'assetId', 'minAmount', 'maxAmount'].forEach((key) => {
-      if (ledgerFilters[key] !== '') params.set(key, ledgerFilters[key]);
+      if (ledgerFilters[key] !== '') {
+        params.set(key, key === 'minAmount' || key === 'maxAmount' ? String(toNumber(ledgerFilters[key])) : ledgerFilters[key]);
+      }
     });
     params.set('page', String(ledgerFilters.page || 0));
     params.set('size', String(ledgerFilters.size || 50));

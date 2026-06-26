@@ -1,3 +1,5 @@
+import { formatMoneyInput, normalizeMoneyInput } from '../utils/numberValues';
+
 export function AppHeader({ title, left, right }) {
   return (
     <header className="app-header">
@@ -51,5 +53,17 @@ export function LineField({ label, side, children }) {
       <div>{children}</div>
       {side && <em>{side}</em>}
     </label>
+  );
+}
+
+export function MoneyInput({ value, onValueChange, ...props }) {
+  return (
+    <input
+      {...props}
+      type="text"
+      inputMode="numeric"
+      value={formatMoneyInput(value)}
+      onChange={(event) => onValueChange(normalizeMoneyInput(event.target.value))}
+    />
   );
 }

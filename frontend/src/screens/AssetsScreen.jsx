@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { AppHeader, BackButton, EmptyState, IconButton, LineField } from '../components/ui';
+import { AppHeader, BackButton, EmptyState, IconButton, LineField, MoneyInput } from '../components/ui';
 import { Metric } from './LedgerScreen';
 import { money, numberOnly } from '../utils/format';
 
@@ -130,7 +130,7 @@ export function CardPaymentManagerScreen({ card, detail, schedules, form, setFor
             <input type="date" value={form.scheduledDate} onChange={(event) => setForm((prev) => ({ ...prev, scheduledDate: event.target.value }))} required />
           </LineField>
           <LineField label="금액">
-            <input inputMode="numeric" type="number" min="1" step="1" value={form.amount} onChange={(event) => setForm((prev) => ({ ...prev, amount: event.target.value }))} placeholder="0" required />
+            <MoneyInput value={form.amount} onValueChange={(amount) => setForm((prev) => ({ ...prev, amount }))} placeholder="0" required />
           </LineField>
           <button className="wide-save-button" type="submit">예약 추가</button>
         </form>
@@ -218,7 +218,7 @@ export function AssetFormScreen({ form, setForm, assets, members, editingAsset, 
             </select>
           </LineField>
           <LineField label="금액">
-            <input inputMode="numeric" value={form.balance} onChange={(event) => setForm((prev) => ({ ...prev, balance: event.target.value }))} />
+            <MoneyInput value={form.balance} onValueChange={(balance) => setForm((prev) => ({ ...prev, balance }))} />
           </LineField>
           <LineField label="메모">
             <input value={form.memo} onChange={(event) => setForm((prev) => ({ ...prev, memo: event.target.value }))} />

@@ -1,7 +1,7 @@
 package com.comfortableledger.ledger.controller;
 
-import com.comfortableledger.ledger.service.ReceiptOcrService;
-import com.comfortableledger.ledger.dto.ApiDtos.ReceiptOcrPreview;
+import com.comfortableledger.ledger.service.receipt.ReceiptOcrService;
+import com.comfortableledger.ledger.dto.ReceiptDtos.ReceiptOcrPreview;
 import java.io.IOException;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

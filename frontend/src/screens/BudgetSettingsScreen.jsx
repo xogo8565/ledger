@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppHeader, BackButton } from '../components/ui';
+import { AppHeader, BackButton, MoneyInput } from '../components/ui';
 import { MonthNav } from './LedgerScreen';
 
 export function BudgetSettingsScreen({
@@ -21,21 +21,18 @@ export function BudgetSettingsScreen({
         <button className="budget-copy-button" type="button" onClick={copyPreviousBudget}>전월 예산 복사</button>
         <div className="budget-total-edit">
           <span>전체 예산</span>
-          <input
-            inputMode="numeric"
+          <MoneyInput
             value={settings?.totalAmount || 0}
-            onChange={(event) => setSettings((prev) => ({ ...prev, totalAmount: event.target.value }))}
+            onValueChange={(totalAmount) => setSettings((prev) => ({ ...prev, totalAmount }))}
           />
         </div>
         <div className="budget-settings-list">
           {categories.map((item, index) => (
             <label key={item.categoryId}>
               <span>{item.categoryIcon || '•'} {item.categoryName}</span>
-              <input
-                inputMode="numeric"
+              <MoneyInput
                 value={item.amount}
-                onChange={(event) => {
-                  const amount = event.target.value;
+                onValueChange={(amount) => {
                   setSettings((prev) => ({
                     ...prev,
                     categories: prev.categories.map((category, categoryIndex) => (
