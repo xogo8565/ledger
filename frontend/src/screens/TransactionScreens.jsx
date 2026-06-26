@@ -96,7 +96,7 @@ function extractTitleCandidates(rawText, currentTitle) {
   return uniqueValues(values).slice(0, 6);
 }
 
-export function EntryChoiceSheet({ openEntry, openClipboardEntry, onClose }) {
+export function EntryChoiceSheet({ openEntry, openClipboardEntry, openReceiptOcr, onClose }) {
   return (
     <div className="sheet-backdrop entry-choice-backdrop" role="presentation" onClick={onClose}>
       <section className="entry-choice-sheet" role="dialog" aria-modal="true" aria-label="거래 입력 방식" onClick={(event) => event.stopPropagation()}>
@@ -119,6 +119,13 @@ export function EntryChoiceSheet({ openEntry, openClipboardEntry, onClose }) {
           <div>
             <strong>문자 자동 입력</strong>
             <small>클립보드의 카드·은행 문자를 분석합니다.</small>
+          </div>
+        </button>
+        <button type="button" className="entry-choice-button" onClick={openReceiptOcr}>
+          <span>⌁</span>
+          <div>
+            <strong>영수증 자동 입력</strong>
+            <small>영수증 사진에서 거래 초안을 만듭니다.</small>
           </div>
         </button>
       </section>
@@ -421,6 +428,8 @@ export function EntryScreen({
     Math.max(Number(installmentReceiptTargetIndex || 1), 1),
     Math.max(installmentReceiptOptions.length, 1)
   );
+  const amountDisplay = expression || (form.amount ? String(form.amount) : '');
+  const amountPreview = amountFromExpression(amountDisplay);
 
   function setType(type) {
     updateForm('type', type);
@@ -474,16 +483,15 @@ export function EntryScreen({
           ))}
         </div>
 
+        <section className={`entry-amount-panel ${tone}`} aria-label="금액">
+          <span>금액</span>
+          <strong>{amountDisplay || '0'}</strong>
+          <em>{amountPreview ? `${formatNumber(amountPreview)}원` : '계산기로 입력'}</em>
+        </section>
+
         <section className={`entry-fields ${tone}`}>
           <LineField label="날짜">
             <input type="date" value={form.transactionDate} onChange={(event) => updateForm('transactionDate', event.target.value)} />
-          </LineField>
-
-          <LineField label="금액" side={form.type === 'TRANSFER' ? <span className="fee-pill">수수료</span> : <span className="repeat-pill">반복/할부</span>}>
-            <input value={expression || form.amount} inputMode="decimal" onChange={(event) => {
-              setExpression(event.target.value);
-              updateForm('amount', amountFromExpression(event.target.value));
-            }} placeholder="0" />
           </LineField>
 
           {form.type === 'TRANSFER' ? (
@@ -617,12 +625,7 @@ export function EntryScreen({
 function CalculatorPad({ onKey, submitLabel = '확인' }) {
   const keys = ['+', '-', '×', '÷', '7', '8', '9', '=', '4', '5', '6', '.', '1', '2', '3', '⌫', '', '0', '', submitLabel];
   return (
-    <section className="calculator">
-      <header>
-        <span>금액</span>
-        <button type="button">◎</button>
-        <button type="button">×</button>
-      </header>
+    <section className="calculator" aria-label="금액 계산기">
       <div className="calculator-grid">
         {keys.map((key, index) => key ? (
           <button key={`${key}-${index}`} type={key === submitLabel ? 'submit' : 'button'} className={key === submitLabel ? 'confirm' : ''} onClick={() => onKey(key)}>

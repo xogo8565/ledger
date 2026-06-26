@@ -48,16 +48,24 @@ button {
 .phone-shell {
   position: relative;
   width: min(100vw, 430px);
-  min-height: 100vh;
-  overflow: hidden;
+  height: 100vh;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: var(--surface);
   border: 0;
   border-radius: 0;
   box-shadow: none;
+  scrollbar-width: none;
+}
+
+.phone-shell::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .screen {
-  min-height: 778px;
+  min-height: calc(100vh - 88px);
   padding-bottom: 102px;
   background: var(--surface);
 }
@@ -396,7 +404,7 @@ button {
 .ledger-filters {
   display: grid;
   gap: 8px;
-  padding: 0 18px 12px;
+  padding: 8px 18px 12px;
   background: var(--surface);
   border-bottom: 8px solid var(--surface-soft);
 }
@@ -418,16 +426,70 @@ button {
   padding: 0 12px;
 }
 
+.ledger-filters .filter-toggle-button {
+  width: 100%;
+  height: 40px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.filter-toggle-button span {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.filter-toggle-button strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--subtle);
+  font-size: 12px;
+  font-weight: 900;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-toggle-button i {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--accent);
+  background: var(--surface-soft);
+  font-style: normal;
+  font-size: 15px;
+}
+
+.ledger-filter-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
 .ledger-filters > div {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.ledger-filters > .date-filter-row,
-.ledger-filters > .amount-filter-row,
-.ledger-filters > .search-options-row {
+.ledger-filters > .ledger-filter-controls {
+  grid-template-columns: 1fr;
+}
+
+.filter-grid,
+.amount-filter-row,
+.search-options-row {
+  display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .ledger-filters select {
@@ -445,14 +507,18 @@ button {
   opacity: 0.55;
 }
 
-.ledger-filters > .filter-result-row {
+.filter-result-row {
+  display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
+  gap: 8px;
 }
 
-.ledger-filters > .search-page-row {
+.search-page-row {
+  display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
+  gap: 8px;
 }
 
 .search-page-row span {
@@ -475,28 +541,6 @@ button {
   font-weight: 800;
 }
 
-.range-banner {
-  padding: 8px 18px;
-  border-top: 1px solid var(--line);
-  color: var(--accent);
-  background: var(--surface);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.receipt-ocr-cta {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-  align-items: center;
-  margin: 0 18px 10px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: linear-gradient(135deg, #fff7ed, #eff6ff);
-}
-
-.receipt-ocr-cta strong,
 .receipt-ocr-card strong {
   display: block;
   color: var(--text);
@@ -504,7 +548,6 @@ button {
   font-weight: 900;
 }
 
-.receipt-ocr-cta span,
 .receipt-ocr-card p {
   display: block;
   margin-top: 4px;
@@ -513,7 +556,6 @@ button {
   font-weight: 800;
 }
 
-.receipt-ocr-cta button,
 .receipt-ocr-card button,
 .receipt-ocr-result > button {
   min-height: 38px;
@@ -2004,7 +2046,7 @@ button {
 }
 
 .entry-screen-form {
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto auto 1fr auto;
 }
 
 .transaction-detail-screen {
@@ -2210,6 +2252,51 @@ button {
   overflow-y: auto;
 }
 
+.entry-amount-panel {
+  min-height: 82px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 12px 18px;
+  border-bottom: 8px solid var(--surface-soft);
+  background: var(--surface);
+}
+
+.entry-amount-panel span {
+  color: #555;
+  font-weight: 900;
+}
+
+.entry-amount-panel strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.entry-amount-panel em {
+  grid-column: 1 / -1;
+  justify-self: end;
+  color: var(--subtle);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.entry-amount-panel.income em {
+  color: var(--income);
+}
+
+.entry-amount-panel.expense em {
+  color: var(--accent);
+}
+
+.entry-amount-panel.transfer em {
+  color: var(--transfer);
+}
+
 .line-field {
   min-height: 62px;
   display: grid;
@@ -2253,8 +2340,7 @@ button {
   font-style: normal;
 }
 
-.fee-pill,
-.repeat-pill {
+.fee-pill {
   display: inline-grid;
   place-items: center;
   min-width: 72px;
@@ -2338,27 +2424,9 @@ button {
   background: #f8f8fb;
 }
 
-.calculator header {
-  height: 42px;
-  display: grid;
-  grid-template-columns: 1fr 44px 44px;
-  align-items: center;
-  padding: 0 14px 0 18px;
-  color: #777;
-  font-weight: 900;
-}
-
-.calculator header button {
-  border: 0;
-  color: #777;
-  background: transparent;
-  font-size: 22px;
-}
-
 .calculator-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  border-top: 1px solid var(--line);
 }
 
 .calculator-grid button,
@@ -2867,11 +2935,13 @@ button {
 }
 
 .bottom-nav {
-  position: absolute;
+  position: sticky;
   left: 0;
   right: 0;
   bottom: 0;
+  width: 100%;
   height: 88px;
+  margin: 0;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid var(--line);
@@ -2913,9 +2983,11 @@ button {
 }
 
 .floating-actions {
-  position: absolute;
-  right: 18px;
-  bottom: 76px;
+  position: sticky;
+  bottom: 104px;
+  width: 66px;
+  height: 66px;
+  margin: 0 18px 12px auto;
   display: grid;
   place-items: center;
   z-index: 12;
@@ -3156,14 +3228,15 @@ button {
 
   .phone-shell {
     width: min(calc(100vw - 44px), 430px);
-    min-height: 860px;
+    height: calc(100vh - 44px);
+    min-height: min(860px, calc(100vh - 44px));
     border: 1px solid var(--line-strong);
     border-radius: 30px;
     box-shadow: var(--shadow);
   }
 
   .screen {
-    min-height: 778px;
+    min-height: calc(100vh - 132px);
   }
 }
 

@@ -19,7 +19,6 @@ export function AppShell({
     <main className="page-frame">
       <section className="phone-shell" aria-label="편한가계부 미리보기">
         {content}
-        <BottomNav active={activeTab} onChange={onTabChange} />
         {showAddAction && (
           <div className="floating-actions">
             <button className="fab" type="button" onClick={onAdd} aria-label="거래 추가">
@@ -27,6 +26,7 @@ export function AppShell({
             </button>
           </div>
         )}
+        <BottomNav active={activeTab} onChange={onTabChange} />
         {children}
       </section>
     </main>

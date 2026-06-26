@@ -45,6 +45,20 @@ async function selectFirstOption(locator, value) {
   await locator.selectOption(String(value));
 }
 
+async function enterCalculatorAmount(page, amount) {
+  const calculator = page.locator('.calculator-grid');
+  for (const digit of String(amount)) {
+    await calculator.getByRole('button', { name: digit, exact: true }).click();
+  }
+}
+
+async function openLedgerFilters(page) {
+  const toggle = page.locator('.filter-toggle-button').first();
+  if (await toggle.getAttribute('aria-expanded') !== 'true') {
+    await toggle.click();
+  }
+}
+
 async function assertResponseOk(response, label) {
   if (!response.ok()) {
     throw new Error(`Browser smoke test failed: ${label} returned HTTP ${response.status()} from ${response.url()}: ${await response.text()}`);
@@ -298,49 +312,19 @@ try {
   await page.waitForSelector(`.member-row:has-text("${memberUpdatedName}")`, { state: 'detached', timeout: 15000 });
   await page.locator('.full-panel .back-button').first().click();
   await assertVisible(page, '.more-screen', 'more screen did not return after closing member manager');
-
-  await page.locator('.more-list button').nth(2).click();
-  await assertVisible(page, '.recurring-manager', 'recurring transaction manager did not open');
-  await page.locator('.recurring-form .wide-save-button').click();
-  assert(
-    mutationRequests.filter((requestItem) => requestItem.includes('/api/recurring-transactions')).length === 0,
-    'empty recurring form submitted a mutation'
-  );
-
-  const recurringTitle = `browser-smoke-recurring-${Date.now()}`;
-  await page.locator('.recurring-form .line-field').nth(0).locator('input').fill('2468');
-  await selectFirstOption(page.locator('.recurring-form .line-field').nth(1).locator('select'), expenseCategory.id);
-  await selectFirstOption(page.locator('.recurring-form .line-field').nth(2).locator('select'), cashAsset.id);
-  await page.locator('.recurring-form .line-field').nth(3).locator('input').fill(recurringTitle);
-  const [recurringCreateResponse] = await Promise.all([
-    page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/recurring-transactions')),
-    page.locator('.recurring-form .wide-save-button').click()
-  ]);
-  await assertResponseOk(recurringCreateResponse, 'recurring UI creation');
-  const recurringRule = await recurringCreateResponse.json();
-  assert(recurringRule.title === recurringTitle, `recurring title was not saved: ${recurringRule.title}`);
-  cleanup.recurringRuleIds.push(recurringRule.id);
-  await page.waitForSelector(`.recurring-row:has-text("${recurringTitle}")`, { timeout: 15000 });
-
-  await page.locator('.recurring-row', { hasText: recurringTitle }).locator('button').first().click();
-  await page.locator('.recurring-form .line-field').nth(0).locator('input').fill('3579');
-  const [recurringUpdateResponse] = await Promise.all([
-    page.waitForResponse((response) => response.request().method() === 'PUT' && response.url().includes(`/api/recurring-transactions/${recurringRule.id}`)),
-    page.locator('.recurring-form .wide-save-button').click()
-  ]);
-  await assertResponseOk(recurringUpdateResponse, 'recurring UI update');
-
-  await page.locator('.full-panel .back-button').first().click();
-  await assertVisible(page, '.more-screen', 'more screen did not return after closing recurring manager');
-
-  await page.getByRole('button', { name: /영수증 업로드/ }).click();
-  await assertVisible(page, '.receipt-ocr-screen', 'receipt OCR upload screen did not open');
-  await assertVisible(page, '.receipt-ocr-card', 'receipt OCR upload card did not render');
-  await page.locator('.full-panel .back-button').first().click();
-  await assertVisible(page, '.more-screen', 'more screen did not return after closing receipt OCR screen');
+  const moreActions = await page.locator('.more-list button').allTextContents();
+  assert(!moreActions.some((text) => text.includes('반복 거래')), 'recurring transaction entry remained in more menu');
+  assert(!moreActions.some((text) => text.includes('영수증 업로드')), 'receipt OCR entry remained in more menu');
 
   await clickBottomTab(page, 0, '.ledger-screen');
-  await assertVisible(page, '.receipt-ocr-cta', 'receipt OCR CTA did not render on ledger screen');
+  await page.locator('.fab').click();
+  await assertVisible(page, '.entry-choice-sheet', 'transaction entry choice did not open for receipt OCR');
+  await page.getByRole('button', { name: /영수증 자동 입력/ }).click();
+  await assertVisible(page, '.receipt-ocr-screen', 'receipt OCR upload screen did not open from entry choice');
+  await assertVisible(page, '.receipt-ocr-card', 'receipt OCR upload card did not render');
+  await page.locator('.full-panel .back-button').first().click();
+  await assertVisible(page, '.ledger-screen', 'ledger screen did not return after closing receipt OCR screen');
+
   await page.locator('.fab').click();
   await assertVisible(page, '.entry-choice-sheet', 'transaction entry choice did not open');
   await page.getByRole('button', { name: '직접 입력' }).click();
@@ -352,12 +336,12 @@ try {
   );
 
   const transactionTitle = `browser-smoke-transaction-${Date.now()}`;
-  await page.locator('.entry-fields .line-field').nth(1).locator('input').fill('3690');
-  await selectFirstOption(page.locator('.entry-fields .line-field').nth(2).locator('select'), expenseCategory.id);
-  await selectFirstOption(page.locator('.entry-fields .line-field').nth(3).locator('select'), cashAsset.id);
-  await selectFirstOption(page.locator('.entry-fields .line-field').nth(4).locator('select'), 3);
-  await page.locator('.entry-fields .line-field').nth(5).locator('input').fill(transactionTitle);
-  const consumerSelect = page.locator('.entry-fields .line-field').nth(8).locator('select');
+  await enterCalculatorAmount(page, 3690);
+  await selectFirstOption(page.locator('.entry-fields .line-field').nth(1).locator('select'), expenseCategory.id);
+  await selectFirstOption(page.locator('.entry-fields .line-field').nth(2).locator('select'), cashAsset.id);
+  await selectFirstOption(page.locator('.entry-fields .line-field').nth(3).locator('select'), 3);
+  await page.locator('.entry-fields .line-field').nth(4).locator('input').fill(transactionTitle);
+  const consumerSelect = page.locator('.entry-fields .line-field').nth(7).locator('select');
   await consumerSelect.selectOption({ index: 1 });
   const selectedConsumerName = (await consumerSelect.locator('option:checked').textContent()).replace(' · 기본', '');
   const [transactionResponse] = await Promise.all([
@@ -418,6 +402,7 @@ try {
   );
   await page.reload({ waitUntil: 'networkidle' });
   await assertVisible(page, '.ledger-screen', 'ledger screen did not return after creating transaction');
+  await openLedgerFilters(page);
   await page.getByLabel('거래 검색').fill(transactionTitle);
   await page.waitForTimeout(150);
   const filteredExpenseText = await page.locator('.month-totals .mini-metric.expense strong').textContent();
@@ -479,7 +464,7 @@ try {
   ]);
   await assertResponseOk(textParseResponse, 'clipboard text parse');
   await assertVisible(page, '.entry-screen-form', 'clipboard text did not open transaction entry');
-  const clipboardAmount = await page.locator('.entry-fields .line-field').nth(1).locator('input').inputValue();
+  const clipboardAmount = await page.locator('.entry-amount-panel strong').textContent();
   assert(clipboardAmount === '8900', `clipboard amount was not populated: ${clipboardAmount}`);
   await page.locator('.full-panel .back-button').first().click();
   await assertVisible(page, '.ledger-screen', 'ledger screen did not return after clipboard entry');
@@ -516,6 +501,7 @@ try {
   await page.waitForSelector('.scope-ranking-row:has-text("공동")', { timeout: 15000 });
   await page.locator('.scope-ranking-row', { hasText: '공동' }).click();
   await assertVisible(page, '.ledger-screen', 'scope statistics did not open ledger');
+  await openLedgerFilters(page);
   const selectedScopeFilter = await page.getByLabel('소비 구분 필터').inputValue();
   assert(selectedScopeFilter === 'SHARED', `shared scope filter was not selected: ${selectedScopeFilter}`);
   await page.waitForSelector(`.transaction-row:has-text("${transactionTitle}-shared")`, { timeout: 15000 });
@@ -524,6 +510,7 @@ try {
   await page.waitForSelector(`.member-ranking-row:has-text("${selectedConsumerName}")`, { timeout: 15000 });
   await page.locator('.member-ranking-row', { hasText: selectedConsumerName }).click();
   await assertVisible(page, '.ledger-screen', 'member statistics did not open ledger');
+  await openLedgerFilters(page);
   const selectedConsumerFilter = await page.getByLabel('소비 명의 필터').inputValue();
   assert(String(selectedConsumerFilter) === String(transaction.consumerMemberId), `consumer member filter was not selected: ${selectedConsumerFilter}`);
   await page.waitForSelector(`.transaction-row:has-text("${transactionTitle}")`, { timeout: 15000 });

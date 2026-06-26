@@ -15,8 +15,5 @@ export function downloadTextFile(filename, contents, type) {
 }
 
 export function filteredFileLabel(filters, month) {
-  const period = filters.startDate || filters.endDate
-    ? `${filters.startDate || 'start'}_${filters.endDate || 'end'}`
-    : month;
-  return `${period}-filtered`;
+  return `${month}-filtered`;
 }

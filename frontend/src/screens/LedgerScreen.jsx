@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { AppHeader, EmptyState, ProgressBar } from '../components/ui';
 import {
   formatDate,
@@ -26,8 +26,6 @@ export function emptyLedgerFilters() {
     assetId: '',
     minAmount: '',
     maxAmount: '',
-    startDate: '',
-    endDate: '',
     page: 0,
     size: 50,
     sort: 'DATE_DESC'
@@ -43,8 +41,6 @@ export function hasLedgerFilters(filters) {
     || filters.assetId
     || filters.minAmount
     || filters.maxAmount
-    || filters.startDate
-    || filters.endDate
     || filters.type !== 'ALL'
   );
 }
@@ -59,8 +55,6 @@ function filterTransactions(transactions, filters) {
     if (filters.assetId && ![item.assetId, item.fromAssetId, item.toAssetId].some((id) => String(id || '') === String(filters.assetId))) return false;
     if (filters.minAmount && Number(item.amount || 0) < Number(filters.minAmount)) return false;
     if (filters.maxAmount && Number(item.amount || 0) > Number(filters.maxAmount)) return false;
-    if (filters.startDate && item.transactionDate < filters.startDate) return false;
-    if (filters.endDate && item.transactionDate > filters.endDate) return false;
     if (!query) return true;
     const haystack = [
       item.title,
@@ -89,10 +83,7 @@ function summarizeTransactions(transactions) {
 }
 
 export function filteredPeriodLabel(filters, month) {
-  if (filters.startDate && filters.endDate) return `${filters.startDate} ~ ${filters.endDate}`;
-  if (filters.startDate) return `${filters.startDate} 이후`;
-  if (filters.endDate) return `${filters.endDate} 이전`;
-  return month;
+  return monthLabel(month);
 }
 
 export function LedgerScreen({
@@ -107,7 +98,6 @@ export function LedgerScreen({
   searchResult,
   loading,
   exportFilteredTransactions,
-  openReceiptOcr,
   openInstallmentSchedule,
   openTransactionDetail,
   members
@@ -118,22 +108,13 @@ export function LedgerScreen({
   const filteredSummary = useMemo(() => summarizeTransactions(filteredTransactions), [filteredTransactions]);
   const filterCategories = data.categories.filter((category) => filters.type === 'ALL' || category.type === filters.type);
   const hasActiveFilter = hasLedgerFilters(filters);
-  const rangeActive = Boolean(filters.startDate && filters.endDate);
   const summaryScope = hasActiveFilter ? filteredPeriodLabel(filters, month) : monthLabel(month);
   const tabs = [['daily', '일일'], ['calendar', '달력'], ['monthly', '월별'], ['summary', '요약'], ['memo', '메모']];
 
   return (
     <div className="screen ledger-screen">
       <AppHeader title="가계부" />
-      {/* <section className="receipt-ocr-cta">
-        <div>
-          <strong>영수증 자동 입력</strong>
-          <span>사진을 올리면 Tesseract OCR로 읽고 거래 초안을 만듭니다.</span>
-        </div>
-        <button type="button" onClick={openReceiptOcr}>영수증 업로드</button>
-      </section> */}
       <MonthNav month={month} setMonth={setMonth} />
-      {rangeActive && <div className="range-banner">{filters.startDate} ~ {filters.endDate}</div>}
       <nav className="view-tabs" aria-label="가계부 보기">
         {tabs.map(([key, label]) => (
           <button key={key} type="button" className={ledgerMode === key ? 'active' : ''} onClick={() => setLedgerMode(key)}>
@@ -229,10 +210,6 @@ function LedgerFilters({ filters, setFilters, categories, assets, members, resul
         </select>
         {hasActiveFilter && <button type="button" onClick={() => setFilters(emptyLedgerFilters())}>초기화</button>}
       </div>
-      <div className="date-filter-row">
-        <input type="date" value={filters.startDate} onChange={(event) => updateFilter('startDate', event.target.value)} aria-label="시작일" />
-        <input type="date" value={filters.endDate} onChange={(event) => updateFilter('endDate', event.target.value)} aria-label="종료일" />
-      </div>
       <div className="amount-filter-row">
         <input type="number" min="0" value={filters.minAmount} onChange={(event) => updateFilter('minAmount', event.target.value)} placeholder="최소 금액" aria-label="최소 금액" />
         <input type="number" min="0" value={filters.maxAmount} onChange={(event) => updateFilter('maxAmount', event.target.value)} placeholder="최대 금액" aria-label="최대 금액" />
@@ -261,6 +238,8 @@ function LedgerFilters({ filters, setFilters, categories, assets, members, resul
 }
 
 function LedgerFiltersPaged({ filters, setFilters, categories, assets, members, resultCount, hasActiveFilter, searchResult, exportFilteredTransactions }) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   function updateFilter(key, value) {
     setFilters((prev) => {
       const next = { ...prev, [key]: value };
@@ -288,69 +267,80 @@ function LedgerFiltersPaged({ filters, setFilters, categories, assets, members, 
   const page = searchResult?.page ?? Number(filters.page || 0);
   const totalPages = searchResult?.totalPages ?? 0;
   const totalElements = searchResult?.totalElements ?? resultCount;
+  const resultLabel = hasActiveFilter ? `${totalElements}건${totalPages > 0 ? ` · ${page + 1}/${totalPages}쪽` : ''}` : `이번 달 ${resultCount}건`;
 
   return (
-    <section className="ledger-filters">
-      <input value={filters.query} onChange={(event) => updateFilter('query', event.target.value)} placeholder="검색" aria-label="거래 검색" />
-      <div>
-        <select value={filters.type} onChange={(event) => updateFilter('type', event.target.value)} aria-label="거래 유형 필터">
-          <option value="ALL">전체</option>
-          <option value="INCOME">수입</option>
-          <option value="EXPENSE">지출</option>
-          <option value="TRANSFER">이체</option>
-        </select>
-        <select value={filters.categoryId} onChange={(event) => updateFilter('categoryId', event.target.value)} aria-label="카테고리 필터">
-          <option value="">분류 전체</option>
-          {categories.map((category) => <option value={category.id} key={category.id}>{category.icon} {category.name}</option>)}
-        </select>
-        <select value={filters.consumptionScope} onChange={(event) => updateFilter('consumptionScope', event.target.value)} aria-label="소비 구분 필터">
-          <option value="">소비 전체</option>
-          <option value="PERSONAL">개인 소비</option>
-          <option value="SHARED">공동 소비</option>
-        </select>
-        <select value={filters.consumerMemberId} onChange={(event) => updateFilter('consumerMemberId', event.target.value)} aria-label="소비 명의 필터">
-          <option value="">명의 전체</option>
-          {members.map((member) => <option value={member.id} key={member.id}>{member.name}</option>)}
-        </select>
-        <select value={filters.assetId} onChange={(event) => updateFilter('assetId', event.target.value)} aria-label="자산 필터">
-          <option value="">자산 전체</option>
-          {assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
-        </select>
-        {hasActiveFilter && <button type="button" onClick={() => setFilters(emptyLedgerFilters())}>초기화</button>}
-      </div>
-      <div className="date-filter-row">
-        <input type="date" value={filters.startDate} onChange={(event) => updateFilter('startDate', event.target.value)} aria-label="시작일" />
-        <input type="date" value={filters.endDate} onChange={(event) => updateFilter('endDate', event.target.value)} aria-label="종료일" />
-      </div>
-      <div className="amount-filter-row">
-        <input type="number" min="0" value={filters.minAmount} onChange={(event) => updateFilter('minAmount', event.target.value)} placeholder="최소 금액" aria-label="최소 금액" />
-        <input type="number" min="0" value={filters.maxAmount} onChange={(event) => updateFilter('maxAmount', event.target.value)} placeholder="최대 금액" aria-label="최대 금액" />
-      </div>
-      {hasActiveFilter && (
-        <div className="search-options-row">
-          <select value={filters.sort} onChange={(event) => updateFilter('sort', event.target.value)} aria-label="검색 정렬">
-            <option value="DATE_DESC">최신순</option>
-            <option value="DATE_ASC">오래된순</option>
-            <option value="AMOUNT_DESC">금액 높은순</option>
-            <option value="AMOUNT_ASC">금액 낮은순</option>
-          </select>
-          <select value={filters.size} onChange={(event) => updateFilter('size', Number(event.target.value))} aria-label="페이지 크기">
-            <option value={20}>20개씩</option>
-            <option value={50}>50개씩</option>
-            <option value={100}>100개씩</option>
-          </select>
-        </div>
-      )}
-      <div className="filter-result-row">
-        <span>{hasActiveFilter ? `${totalElements}건${totalPages > 0 ? ` · ${page + 1}/${totalPages}쪽` : ''}` : `이번 달 ${resultCount}건`}</span>
-        <button type="button" onClick={exportFilteredTransactions} disabled={resultCount === 0}>{hasActiveFilter ? '현재 페이지 CSV' : '결과 CSV'}</button>
-      </div>
-      {hasActiveFilter && <p className="csv-scope-hint">CSV는 현재 페이지에 표시된 {resultCount}건만 내보냅니다.</p>}
-      {hasActiveFilter && totalPages > 1 && (
-        <div className="search-page-row">
-          <button type="button" onClick={() => updateSearchPage(page - 1)} disabled={page <= 0}>이전</button>
-          <span>{page + 1} / {totalPages}</span>
-          <button type="button" onClick={() => updateSearchPage(page + 1)} disabled={page + 1 >= totalPages}>다음</button>
+    <section className={`ledger-filters ${filtersOpen ? 'open' : 'collapsed'}`}>
+      <button
+        type="button"
+        className="filter-toggle-button"
+        onClick={() => setFiltersOpen((current) => !current)}
+        aria-expanded={filtersOpen}
+      >
+        <span>필터</span>
+        <strong>{resultLabel}</strong>
+        <i aria-hidden="true">{filtersOpen ? '▴' : '▾'}</i>
+      </button>
+      {filtersOpen && (
+        <div className="ledger-filter-controls">
+          <input value={filters.query} onChange={(event) => updateFilter('query', event.target.value)} placeholder="검색" aria-label="거래 검색" />
+          <div className="filter-grid">
+            <select value={filters.type} onChange={(event) => updateFilter('type', event.target.value)} aria-label="거래 유형 필터">
+              <option value="ALL">전체</option>
+              <option value="INCOME">수입</option>
+              <option value="EXPENSE">지출</option>
+              <option value="TRANSFER">이체</option>
+            </select>
+            <select value={filters.categoryId} onChange={(event) => updateFilter('categoryId', event.target.value)} aria-label="카테고리 필터">
+              <option value="">분류 전체</option>
+              {categories.map((category) => <option value={category.id} key={category.id}>{category.icon} {category.name}</option>)}
+            </select>
+            <select value={filters.consumptionScope} onChange={(event) => updateFilter('consumptionScope', event.target.value)} aria-label="소비 구분 필터">
+              <option value="">소비 전체</option>
+              <option value="PERSONAL">개인 소비</option>
+              <option value="SHARED">공동 소비</option>
+            </select>
+            <select value={filters.consumerMemberId} onChange={(event) => updateFilter('consumerMemberId', event.target.value)} aria-label="소비 명의 필터">
+              <option value="">명의 전체</option>
+              {members.map((member) => <option value={member.id} key={member.id}>{member.name}</option>)}
+            </select>
+            <select value={filters.assetId} onChange={(event) => updateFilter('assetId', event.target.value)} aria-label="자산 필터">
+              <option value="">자산 전체</option>
+              {assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
+            </select>
+            {hasActiveFilter && <button type="button" onClick={() => setFilters(emptyLedgerFilters())}>초기화</button>}
+          </div>
+          <div className="amount-filter-row">
+            <input type="number" min="0" value={filters.minAmount} onChange={(event) => updateFilter('minAmount', event.target.value)} placeholder="최소 금액" aria-label="최소 금액" />
+            <input type="number" min="0" value={filters.maxAmount} onChange={(event) => updateFilter('maxAmount', event.target.value)} placeholder="최대 금액" aria-label="최대 금액" />
+          </div>
+          {hasActiveFilter && (
+            <div className="search-options-row">
+              <select value={filters.sort} onChange={(event) => updateFilter('sort', event.target.value)} aria-label="검색 정렬">
+                <option value="DATE_DESC">최신순</option>
+                <option value="DATE_ASC">오래된순</option>
+                <option value="AMOUNT_DESC">금액 높은순</option>
+                <option value="AMOUNT_ASC">금액 낮은순</option>
+              </select>
+              <select value={filters.size} onChange={(event) => updateFilter('size', Number(event.target.value))} aria-label="페이지 크기">
+                <option value={20}>20개씩</option>
+                <option value={50}>50개씩</option>
+                <option value={100}>100개씩</option>
+              </select>
+            </div>
+          )}
+          <div className="filter-result-row">
+            <span>{resultLabel}</span>
+            <button type="button" onClick={exportFilteredTransactions} disabled={resultCount === 0}>{hasActiveFilter ? '현재 페이지 CSV' : '결과 CSV'}</button>
+          </div>
+          {hasActiveFilter && <p className="csv-scope-hint">CSV는 현재 페이지에 표시된 {resultCount}건만 내보냅니다.</p>}
+          {hasActiveFilter && totalPages > 1 && (
+            <div className="search-page-row">
+              <button type="button" onClick={() => updateSearchPage(page - 1)} disabled={page <= 0}>이전</button>
+              <span>{page + 1} / {totalPages}</span>
+              <button type="button" onClick={() => updateSearchPage(page + 1)} disabled={page + 1 >= totalPages}>다음</button>
+            </div>
+          )}
         </div>
       )}
     </section>

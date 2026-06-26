@@ -3,9 +3,7 @@ import { AppHeader, BackButton, EmptyState, IconButton } from '../components/ui'
 export function MoreScreen({
   exportMonthlyTransactions,
   openCategoryManager,
-  openRecurringManager,
-  openMemberManager,
-  openReceiptOcr
+  openMemberManager
 }) {
   return (
     <div className="screen more-screen">
@@ -13,8 +11,6 @@ export function MoreScreen({
       <section className="more-list">
         <button type="button" onClick={openCategoryManager}>카테고리 관리<span>›</span></button>
         <button type="button" onClick={openMemberManager}>명의 관리<span>›</span></button>
-        <button type="button" onClick={openRecurringManager}>반복 거래<span>›</span></button>
-        <button type="button" onClick={openReceiptOcr}>영수증 업로드<span>›</span></button>
         <button type="button" onClick={exportMonthlyTransactions}>월 거래 CSV 내보내기<span>›</span></button>
       </section>
     </div>

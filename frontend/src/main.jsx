@@ -513,7 +513,6 @@ function App() {
             searchTransactions={searchTransactions}
             exportMonthlyTransactions={exportMonthlyTransactions}
             exportFilteredTransactions={exportFilteredTransactions}
-            openReceiptOcr={openReceiptOcr}
             openInstallmentSchedule={openInstallmentSchedule}
             openTransactionDetail={openTransactionDetail}
             members={members}
@@ -554,9 +553,7 @@ function App() {
           <MoreScreen
             exportMonthlyTransactions={exportMonthlyTransactions}
             openCategoryManager={openCategoryManager}
-            openRecurringManager={openRecurringManager}
             openMemberManager={openMemberManager}
-            openReceiptOcr={openReceiptOcr}
           />
         )}
     </>
@@ -574,6 +571,7 @@ function App() {
           <EntryChoiceSheet
             openEntry={openEntry}
             openClipboardEntry={openClipboardEntry}
+            openReceiptOcr={openReceiptOcr}
             onClose={closePanel}
           />
         )}

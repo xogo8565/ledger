@@ -83,15 +83,14 @@ export function useLedgerData({ month, ledgerFilters, statsRange }) {
 
   async function loadSearchTransactions() {
     if (!hasLedgerFilters(ledgerFilters)) return null;
-    if (ledgerFilters.startDate && ledgerFilters.endDate && ledgerFilters.endDate < ledgerFilters.startDate) return emptySearchResult;
     if (ledgerFilters.minAmount && ledgerFilters.maxAmount
       && toNumber(ledgerFilters.maxAmount) < toNumber(ledgerFilters.minAmount)) return emptySearchResult;
 
     const params = new URLSearchParams();
-    params.set('startDate', ledgerFilters.startDate || `${month}-01`);
+    params.set('startDate', `${month}-01`);
     params.set(
       'endDate',
-      ledgerFilters.endDate || formatDate(new Date(toNumber(month.slice(0, 4)), toNumber(month.slice(5, 7)), 0))
+      formatDate(new Date(toNumber(month.slice(0, 4)), toNumber(month.slice(5, 7)), 0))
     );
     const query = trimToEmpty(ledgerFilters.query);
     if (query) params.set('query', query);
