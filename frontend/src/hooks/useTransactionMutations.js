@@ -1,6 +1,7 @@
 import { errorMessage } from '../api/http';
 import * as ledgerApi from '../api/ledgerApi';
 import * as scheduleApi from '../api/scheduleApi';
+import { toNumber } from '../utils/numberValues';
 
 export function useTransactionMutations({
   form,
@@ -49,17 +50,17 @@ export function useTransactionMutations({
 
   async function submitTransaction(event) {
     event.preventDefault();
-    const amount = Number(form.amount);
+    const amount = toNumber(form.amount);
     if (!amount) return;
     const payload = {
       ...form,
       amount,
-      categoryId: form.categoryId ? Number(form.categoryId) : null,
-      assetId: form.assetId ? Number(form.assetId) : null,
-      fromAssetId: form.fromAssetId ? Number(form.fromAssetId) : null,
-      toAssetId: form.toAssetId ? Number(form.toAssetId) : null,
-      consumerMemberId: form.consumerMemberId ? Number(form.consumerMemberId) : null,
-      installmentMonths: Number(form.installmentMonths || 0)
+      categoryId: form.categoryId ? toNumber(form.categoryId) : null,
+      assetId: form.assetId ? toNumber(form.assetId) : null,
+      fromAssetId: form.fromAssetId ? toNumber(form.fromAssetId) : null,
+      toAssetId: form.toAssetId ? toNumber(form.toAssetId) : null,
+      consumerMemberId: form.consumerMemberId ? toNumber(form.consumerMemberId) : null,
+      installmentMonths: toNumber(form.installmentMonths)
     };
     const created = await run(
       () => ledgerApi.saveTransaction({
@@ -81,11 +82,11 @@ export function useTransactionMutations({
     if (!receiptFiles.length) return true;
     const updatedInstallments = Array.isArray(created) ? created : [];
     const requestedTargetIndex = Math.min(
-      Math.max(Number(installmentReceiptTargetIndex || 1), 1),
-      Math.max(Number(form.installmentMonths || 1), 1)
+      Math.max(toNumber(installmentReceiptTargetIndex, 1), 1),
+      Math.max(toNumber(form.installmentMonths, 1), 1)
     );
     const receiptTransactionId = editingInstallmentGroup
-      ? updatedInstallments.find((item) => Number(item.installmentIndex) === requestedTargetIndex)?.id
+      ? updatedInstallments.find((item) => toNumber(item.installmentIndex) === requestedTargetIndex)?.id
         || updatedInstallments.at(-1)?.id
       : created.id || editingTransaction?.id;
     if (!receiptTransactionId) {
@@ -99,7 +100,7 @@ export function useTransactionMutations({
   }
 
   async function createTransferFee() {
-    const fee = Number(form.fee || 0);
+    const fee = toNumber(form.fee);
     if (editingTransaction || editingInstallmentGroup
       || form.type !== 'TRANSFER' || fee <= 0 || !form.fromAssetId) return true;
     return Boolean(await run(
@@ -107,7 +108,7 @@ export function useTransactionMutations({
         type: 'EXPENSE',
         transactionDate: form.transactionDate,
         amount: fee,
-        assetId: Number(form.fromAssetId),
+        assetId: toNumber(form.fromAssetId),
         title: '이체 수수료',
         memo: form.memo || ''
       }),

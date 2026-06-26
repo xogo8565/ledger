@@ -7,17 +7,18 @@ import com.comfortableledger.ledger.domain.Category;
 import com.comfortableledger.ledger.domain.CategoryType;
 import com.comfortableledger.ledger.domain.Household;
 import com.comfortableledger.ledger.domain.Member;
-import com.comfortableledger.ledger.repo.AssetRepository;
-import com.comfortableledger.ledger.repo.CardProfileRepository;
-import com.comfortableledger.ledger.repo.CategoryRepository;
-import com.comfortableledger.ledger.repo.HouseholdRepository;
-import com.comfortableledger.ledger.repo.MemberRepository;
-import com.comfortableledger.ledger.web.ApiDtos.AssetDto;
-import com.comfortableledger.ledger.web.ApiDtos.AssetSummaryDto;
-import com.comfortableledger.ledger.web.ApiDtos.CategoryDto;
-import com.comfortableledger.ledger.web.ApiDtos.SaveAssetRequest;
-import com.comfortableledger.ledger.web.ApiDtos.SaveCardAssetRequest;
-import com.comfortableledger.ledger.web.ApiDtos.SaveCategoryRequest;
+import com.comfortableledger.ledger.dto.ApiDtos.AssetDto;
+import com.comfortableledger.ledger.dto.ApiDtos.AssetSummaryDto;
+import com.comfortableledger.ledger.dto.ApiDtos.CategoryDto;
+import com.comfortableledger.ledger.dto.ApiDtos.SaveAssetRequest;
+import com.comfortableledger.ledger.dto.ApiDtos.SaveCardAssetRequest;
+import com.comfortableledger.ledger.dto.ApiDtos.SaveCategoryRequest;
+import com.comfortableledger.ledger.repository.AssetRepository;
+import com.comfortableledger.ledger.repository.CardProfileRepository;
+import com.comfortableledger.ledger.repository.CategoryRepository;
+import com.comfortableledger.ledger.repository.HouseholdRepository;
+import com.comfortableledger.ledger.repository.MemberRepository;
+import com.comfortableledger.ledger.util.StringValues;
 import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
@@ -191,11 +192,11 @@ public class AssetManagementService {
     private static String normalizedOwnerName(String ownerName) {
         return ownerName == null || ownerName.isBlank()
                 ? "명의 미지정"
-                : ownerName.trim().replaceAll("\\s+", " ");
+                : StringValues.normalizeWhitespace(ownerName);
     }
 
     private String registeredOwnerName(Household household, String ownerName) {
-        String normalized = ownerName == null ? "" : ownerName.trim().replaceAll("\\s+", " ");
+        String normalized = StringValues.normalizeWhitespace(ownerName);
         if (normalized.isBlank()) return null;
         return memberRepository.findByHouseholdId(household.getId()).stream()
                 .filter(member -> member.getName().equalsIgnoreCase(normalized))
@@ -208,7 +209,7 @@ public class AssetManagementService {
         if (groupName != null && !groupName.isBlank()) return groupName;
         return switch (type) {
             case CASH -> "현금";
-            case BANK -> "은행";
+            case BANK -> "계좌";
             case CARD -> "카드";
             case OTHER -> "기타";
             case DEBT -> "부채";
@@ -217,7 +218,7 @@ public class AssetManagementService {
 
     private String normalizedCategoryIcon(CategoryType type, String icon) {
         if (icon != null && !icon.isBlank()) return icon;
-        return type == CategoryType.INCOME ? "💰" : "•";
+        return type == CategoryType.INCOME ? "＋" : "•";
     }
 
     private String normalizedCategoryColor(String color) {

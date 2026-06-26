@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.comfortableledger.ledger.domain.TransactionType;
-import com.comfortableledger.ledger.web.ApiDtos.TextImportPreview;
+import com.comfortableledger.ledger.dto.ApiDtos.TextImportPreview;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -28,22 +28,22 @@ class ReceiptOcrServiceTest {
 
     @Test
     void warnsWhenOcrTextIsBlank() {
-        TextImportPreview preview = preview(BigDecimal.ZERO, "자동 입력");
+        TextImportPreview preview = preview(BigDecimal.ZERO, "?먮룞 ?낅젰");
 
         List<String> warnings = service.qualityWarnings("", preview);
 
-        assertThat(warnings).anyMatch(message -> message.contains("거래 후보"));
+        assertThat(warnings).anyMatch(message -> message.contains("嫄곕옒 ?꾨낫"));
     }
 
     @Test
     void warnsWhenAmountOrMerchantIsUncertain() {
-        TextImportPreview preview = preview(BigDecimal.ZERO, "자동 입력");
+        TextImportPreview preview = preview(BigDecimal.ZERO, "?먮룞 ?낅젰");
 
-        List<String> warnings = service.qualityWarnings("짧은텍스트", preview);
+        List<String> warnings = service.qualityWarnings("짧은 텍스트", preview);
 
-        assertThat(warnings).anyMatch(message -> message.contains("짧습니다"));
-        assertThat(warnings).anyMatch(message -> message.contains("금액 후보"));
-        assertThat(warnings).anyMatch(message -> message.contains("가맹점/품명"));
+        assertThat(warnings).anyMatch(message -> message.contains("吏㏃뒿?덈떎"));
+        assertThat(warnings).anyMatch(message -> message.contains("湲덉븸 ?꾨낫"));
+        assertThat(warnings).anyMatch(message -> message.contains("媛留뱀젏/?덈챸"));
     }
 
     @Test
@@ -71,7 +71,7 @@ class ReceiptOcrServiceTest {
         var candidates = service.candidateOptions("""
                 STARBUCKS GANGNAM
                 2026-06-26 12:34
-                품명 단가 수량 금액
+                ?덈챸 ?④? ?섎웾 湲덉븸
                 Americano 4,500 1 4,500
                 Latte 5,000 1 5,000
                 TOTAL 9,500WON

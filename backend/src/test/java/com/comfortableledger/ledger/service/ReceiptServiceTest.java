@@ -10,8 +10,8 @@ import static org.mockito.Mockito.when;
 
 import com.comfortableledger.ledger.domain.ReceiptAttachment;
 import com.comfortableledger.ledger.domain.TransactionRecord;
-import com.comfortableledger.ledger.repo.ReceiptAttachmentRepository;
-import com.comfortableledger.ledger.repo.TransactionRepository;
+import com.comfortableledger.ledger.repository.ReceiptAttachmentRepository;
+import com.comfortableledger.ledger.repository.TransactionRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;

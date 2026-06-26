@@ -133,6 +133,9 @@ npm run dev
 - 월별 거래 및 화면 필터/현재 검색 페이지 결과 CSV 내보내기
 - 가족/공동 가계부를 위한 Household/Member 도메인 기반
 - `initial-data/assets_*.xlsx`, `initial-data/transactions_*.xlsx` 엑셀 목록 기반 DB 첫 실행 초기 자산·거래 데이터 주입
+- 문자열/숫자/암호성 값 공통 유틸 분리
+- 프론트엔드 문자열/숫자/암호성 값 공통 유틸 분리
+- 백엔드 MVC 기준 패키지 세분화: `controller`, `dto`, `config`, `repository`, `service`, `domain`, `util`
 
 ## 다음 작업
 

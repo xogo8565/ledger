@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { AppHeader, BackButton, EmptyState, IconButton, LineField } from '../components/ui';
 import { iconForType, KeyValue, transferLabel } from './LedgerScreen';
 import { money, transactionTone } from '../utils/format';
+import { formatNumber, parseWonAmount, toNumber } from '../utils/numberValues';
+import { normalizeWhitespace, trimToEmpty, uniqueNonBlank } from '../utils/stringValues';
 
 const API = '/api';
 const typeLabels = { INCOME: '수입', EXPENSE: '지출', TRANSFER: '이체' };
@@ -13,15 +15,15 @@ function defaultConsumerMemberId(members) {
 }
 
 function uniqueValues(values) {
-  return [...new Set(values.filter((value) => value !== null && value !== undefined && String(value).trim() !== ''))];
+  return uniqueNonBlank(values);
 }
 
 function extractAmountCandidates(rawText, currentAmount) {
   const values = [];
-  if (currentAmount) values.push(String(Number(currentAmount)));
+  if (currentAmount) values.push(String(toNumber(currentAmount)));
   const matcher = String(rawText || '').matchAll(/([0-9][0-9,]{2,})\s*(?:원|won)?/gi);
   for (const match of matcher) {
-    const amount = Number(match[1].replaceAll(',', ''));
+    const amount = parseWonAmount(match[1]);
     if (amount > 0) values.push(String(amount));
   }
   return uniqueValues(values).slice(0, 6);
@@ -66,7 +68,7 @@ function extractTitleCandidates(rawText, currentTitle) {
   if (currentTitle) values.push(currentTitle);
 
   const lines = text.split(/\r?\n/)
-    .map((line) => line.trim().replace(/\s+/g, ' '))
+    .map(normalizeWhitespace)
     .filter(Boolean);
   let itemTableStarted = false;
   for (const line of lines) {
@@ -79,7 +81,7 @@ function extractTitleCandidates(rawText, currentTitle) {
       break;
     }
     if (itemTableStarted) {
-      const itemName = line.split(/[0-9]/)[0].replace(/[·*]/g, '').trim();
+      const itemName = trimToEmpty(line.split(/[0-9]/)[0].replace(/[·*]/g, ''));
       if (itemName) values.push(itemName);
     }
   }
@@ -161,7 +163,7 @@ export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, appl
   }
 
   async function reparseEditedText() {
-    if (!editedRawText.trim()) {
+    if (!trimToEmpty(editedRawText)) {
       setError('재분석할 OCR 원문을 입력해 주세요.');
       return;
     }
@@ -189,7 +191,7 @@ export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, appl
     : [];
   const amountCandidates = result
     ? (serverCandidates.amountCandidates?.length
-      ? serverCandidates.amountCandidates.map((candidate) => String(Number(candidate)))
+      ? serverCandidates.amountCandidates.map((candidate) => String(toNumber(candidate)))
       : extractAmountCandidates(result.rawText || editedRawText, preview.amount))
     : [];
   const dateCandidates = result
@@ -240,7 +242,7 @@ export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, appl
             <div className="ocr-preview-grid">
               <span>파일</span><strong>{result.originalFilename}</strong>
               <span>날짜</span><strong>{preview.transactionDate || '-'}</strong>
-              <span>금액</span><strong>{preview.amount ? Number(preview.amount).toLocaleString() : '-'}</strong>
+              <span>금액</span><strong>{preview.amount ? formatNumber(preview.amount) : '-'}</strong>
               <span>가맹점</span><strong>{preview.merchant || '-'}</strong>
               <span>추천 분류</span><strong>{preview.recommendedCategoryName || '-'}</strong>
             </div>
@@ -289,10 +291,10 @@ export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, appl
                         <button
                           key={candidate}
                           type="button"
-                          className={String(Number(preview.amount || 0)) === candidate ? 'ocr-candidate-chip active' : 'ocr-candidate-chip'}
+                          className={String(toNumber(preview.amount)) === candidate ? 'ocr-candidate-chip active' : 'ocr-candidate-chip'}
                           onClick={() => updatePreviewCandidate({ amount: candidate })}
                         >
-                          {Number(candidate).toLocaleString()}원
+                          {formatNumber(candidate)}원
                         </button>
                       ))}
                     </div>

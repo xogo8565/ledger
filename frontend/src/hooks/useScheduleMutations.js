@@ -1,5 +1,6 @@
 import { errorMessage } from '../api/http';
 import * as scheduleApi from '../api/scheduleApi';
+import { toNumber } from '../utils/numberValues';
 
 export function useScheduleMutations({
   recurringForm,
@@ -36,17 +37,17 @@ export function useScheduleMutations({
 
   async function saveRecurringRule(event) {
     event.preventDefault();
-    const amount = Number(recurringForm.amount || 0);
+    const amount = toNumber(recurringForm.amount);
     if (!amount || amount <= 0 || !recurringForm.startDate || !recurringForm.nextRunDate) return;
     const payload = {
       ...recurringForm,
       amount,
-      categoryId: recurringForm.categoryId ? Number(recurringForm.categoryId) : null,
-      assetId: recurringForm.assetId ? Number(recurringForm.assetId) : null,
-      fromAssetId: recurringForm.fromAssetId ? Number(recurringForm.fromAssetId) : null,
-      toAssetId: recurringForm.toAssetId ? Number(recurringForm.toAssetId) : null,
-      intervalValue: Number(recurringForm.intervalValue || 1),
-      installmentMonths: Number(recurringForm.installmentMonths || 0),
+      categoryId: recurringForm.categoryId ? toNumber(recurringForm.categoryId) : null,
+      assetId: recurringForm.assetId ? toNumber(recurringForm.assetId) : null,
+      fromAssetId: recurringForm.fromAssetId ? toNumber(recurringForm.fromAssetId) : null,
+      toAssetId: recurringForm.toAssetId ? toNumber(recurringForm.toAssetId) : null,
+      intervalValue: toNumber(recurringForm.intervalValue, 1),
+      installmentMonths: toNumber(recurringForm.installmentMonths),
       endDate: recurringForm.endDate || null,
       nextRunDate: recurringForm.nextRunDate || recurringForm.startDate
     };
@@ -59,7 +60,7 @@ export function useScheduleMutations({
       const next = editingRecurringRule
         ? current.map((rule) => rule.id === savedRule.id ? savedRule : rule)
         : [...current.filter((rule) => rule.id !== savedRule.id), savedRule];
-      return next.sort((a, b) => a.nextRunDate.localeCompare(b.nextRunDate) || Number(a.id) - Number(b.id));
+      return next.sort((a, b) => a.nextRunDate.localeCompare(b.nextRunDate) || toNumber(a.id) - toNumber(b.id));
     });
     setEditingRecurringRule(null);
     setRecurringForm(emptyRecurringForm());
@@ -96,7 +97,7 @@ export function useScheduleMutations({
   async function saveCardSchedule(event) {
     event.preventDefault();
     if (!selectedCard) return;
-    const amount = Number(cardScheduleForm.amount || 0);
+    const amount = toNumber(cardScheduleForm.amount);
     if (!amount || amount <= 0 || !cardScheduleForm.scheduledDate) return;
     const result = await run(
       () => scheduleApi.createCardSchedule(selectedCard.id, {

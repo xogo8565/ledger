@@ -2,9 +2,9 @@ package com.comfortableledger.ledger.service;
 
 import com.comfortableledger.ledger.domain.ReceiptAttachment;
 import com.comfortableledger.ledger.domain.TransactionRecord;
-import com.comfortableledger.ledger.repo.ReceiptAttachmentRepository;
-import com.comfortableledger.ledger.repo.TransactionRepository;
-import com.comfortableledger.ledger.web.ApiDtos.ReceiptDto;
+import com.comfortableledger.ledger.repository.ReceiptAttachmentRepository;
+import com.comfortableledger.ledger.repository.TransactionRepository;
+import com.comfortableledger.ledger.dto.ApiDtos.ReceiptDto;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

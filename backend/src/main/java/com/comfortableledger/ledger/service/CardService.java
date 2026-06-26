@@ -7,14 +7,14 @@ import com.comfortableledger.ledger.domain.CardPaymentSchedule;
 import com.comfortableledger.ledger.domain.PaymentStatus;
 import com.comfortableledger.ledger.domain.TransactionRecord;
 import com.comfortableledger.ledger.domain.TransactionType;
-import com.comfortableledger.ledger.repo.AssetRepository;
-import com.comfortableledger.ledger.repo.CardProfileRepository;
-import com.comfortableledger.ledger.repo.CardPaymentScheduleRepository;
-import com.comfortableledger.ledger.repo.TransactionRepository;
-import com.comfortableledger.ledger.web.ApiDtos.CardDetailDto;
-import com.comfortableledger.ledger.web.ApiDtos.CardPaymentScheduleDto;
-import com.comfortableledger.ledger.web.ApiDtos.CreateTransactionRequest;
-import com.comfortableledger.ledger.web.ApiDtos.TransactionDto;
+import com.comfortableledger.ledger.repository.AssetRepository;
+import com.comfortableledger.ledger.repository.CardProfileRepository;
+import com.comfortableledger.ledger.repository.CardPaymentScheduleRepository;
+import com.comfortableledger.ledger.repository.TransactionRepository;
+import com.comfortableledger.ledger.dto.ApiDtos.CardDetailDto;
+import com.comfortableledger.ledger.dto.ApiDtos.CardPaymentScheduleDto;
+import com.comfortableledger.ledger.dto.ApiDtos.CreateTransactionRequest;
+import com.comfortableledger.ledger.dto.ApiDtos.TransactionDto;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -177,7 +177,7 @@ public class CardService {
     }
 
     /**
-     * 카드 결제 예약 생성
+     * 移대뱶 寃곗젣 ?덉빟 ?앹꽦
      */
     @Transactional
     public CardPaymentScheduleDto createPaymentSchedule(Long cardAssetId, LocalDate scheduledDate, BigDecimal amount) {
@@ -198,7 +198,7 @@ public class CardService {
     }
 
     /**
-     * 특정 카드의 모든 결제 예약 조회
+     * ?뱀젙 移대뱶??紐⑤뱺 寃곗젣 ?덉빟 議고쉶
      */
     @Transactional(readOnly = true)
     public List<CardPaymentScheduleDto> getPaymentSchedules(Long cardAssetId) {
@@ -209,7 +209,7 @@ public class CardService {
     }
 
     /**
-     * 예정된 결제 목록 조회 (자동 결제 대상)
+     * ?덉젙??寃곗젣 紐⑸줉 議고쉶 (?먮룞 寃곗젣 ???
      */
     @Transactional(readOnly = true)
     public List<CardPaymentScheduleDto> getScheduledPayments(LocalDate upToDate) {
@@ -245,7 +245,7 @@ public class CardService {
     }
 
     /**
-     * 결제 예약 실행 (거래 생성)
+     * 寃곗젣 ?덉빟 ?ㅽ뻾 (嫄곕옒 ?앹꽦)
      */
     @Transactional
     public CardPaymentScheduleDto executePaymentSchedule(Long scheduleId) {
@@ -273,7 +273,7 @@ public class CardService {
                     null,
                     paymentAccount.getId(),
                     null,
-                    "카드 자동 결제",
+                    "移대뱶 ?먮룞 寃곗젣",
                     cardAsset.getName(),
                     null,
                     null,

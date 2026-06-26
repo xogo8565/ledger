@@ -10,12 +10,14 @@ import com.comfortableledger.ledger.domain.MemberRole;
 import com.comfortableledger.ledger.domain.MonthlyBudget;
 import com.comfortableledger.ledger.domain.TransactionRecord;
 import com.comfortableledger.ledger.domain.TransactionType;
-import com.comfortableledger.ledger.repo.AssetRepository;
-import com.comfortableledger.ledger.repo.CategoryRepository;
-import com.comfortableledger.ledger.repo.HouseholdRepository;
-import com.comfortableledger.ledger.repo.MemberRepository;
-import com.comfortableledger.ledger.repo.MonthlyBudgetRepository;
-import com.comfortableledger.ledger.repo.TransactionRepository;
+import com.comfortableledger.ledger.repository.AssetRepository;
+import com.comfortableledger.ledger.repository.CategoryRepository;
+import com.comfortableledger.ledger.repository.HouseholdRepository;
+import com.comfortableledger.ledger.repository.MemberRepository;
+import com.comfortableledger.ledger.repository.MonthlyBudgetRepository;
+import com.comfortableledger.ledger.repository.TransactionRepository;
+import com.comfortableledger.ledger.util.NumberValues;
+import com.comfortableledger.ledger.util.StringValues;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -117,12 +119,12 @@ public class DemoDataInitializer implements ApplicationRunner {
 
     private void seedAssets(Household household, Map<String, Asset> assetsByName, List<Map<String, String>> rows) {
         for (Map<String, String> row : skipHeader(rows)) {
-            String name = firstNonBlank(row.get("B"), row.get("E"));
+            String name = StringValues.firstNonBlank(row.get("B"), row.get("E"));
             if (name == null) {
                 continue;
             }
 
-            BigDecimal balance = parseAmount(firstNonBlank(row.get("F"), row.get("I")));
+            BigDecimal balance = NumberValues.parseWonAmount(StringValues.firstNonBlank(row.get("F"), row.get("I")));
             assetsByName.computeIfAbsent(name,
                     currentName -> assetRepository.save(new Asset(
                             household,
@@ -136,7 +138,7 @@ public class DemoDataInitializer implements ApplicationRunner {
 
     private Resource[] sortedResources(Resource[] resources) {
         return Arrays.stream(resources)
-                .sorted(Comparator.comparing(resource -> firstNonBlank(resource.getFilename(), "")))
+                .sorted(Comparator.comparing(resource -> StringValues.firstNonBlank(resource.getFilename(), "")))
                 .toArray(Resource[]::new);
     }
 
@@ -148,17 +150,17 @@ public class DemoDataInitializer implements ApplicationRunner {
         int count = 0;
         for (Map<String, String> row : skipHeader(rows)) {
             LocalDate transactionDate = parseDate(row.get("A"));
-            BigDecimal amount = parseAmount(firstNonBlank(row.get("F"), row.get("I")));
+            BigDecimal amount = NumberValues.parseWonAmount(StringValues.firstNonBlank(row.get("F"), row.get("I")));
             if (transactionDate == null || amount.signum() <= 0) {
                 continue;
             }
 
             TransactionType transactionType = parseTransactionType(row.get("G"));
-            String categoryName = firstNonBlank(row.get("C"), row.get("D"), "기타");
+            String categoryName = StringValues.firstNonBlank(row.get("C"), row.get("D"), "기타");
             Category category = categoryFor(household, categoriesByKey, transactionType, categoryName);
             String assetName = row.get("B");
             Asset asset = assetFor(household, assetsByName, assetName);
-            String title = firstNonBlank(row.get("E"), categoryName);
+            String title = StringValues.firstNonBlank(row.get("E"), categoryName);
             String memo = row.get("H");
 
             transactionRepository.save(new TransactionRecord(
@@ -201,7 +203,7 @@ public class DemoDataInitializer implements ApplicationRunner {
     }
 
     private Asset assetFor(Household household, Map<String, Asset> assetsByName, String assetName) {
-        String normalizedAssetName = firstNonBlank(assetName, "미분류 자산");
+        String normalizedAssetName = StringValues.firstNonBlank(assetName, "미분류 자산");
         return assetsByName.computeIfAbsent(normalizedAssetName,
                 name -> assetRepository.save(new Asset(household, inferAssetType(name), name, BigDecimal.ZERO, groupName(name))));
     }
@@ -244,34 +246,14 @@ public class DemoDataInitializer implements ApplicationRunner {
     }
 
     private LocalDate parseDate(String value) {
-        if (value == null || value.isBlank()) {
+        String normalizedValue = StringValues.trimToEmpty(value);
+        if (normalizedValue.isBlank()) {
             return null;
         }
-        String normalizedValue = value.trim();
         if (normalizedValue.matches("\\d+(\\.\\d+)?")) {
             return EXCEL_DATE_EPOCH.plusDays((long) Math.floor(Double.parseDouble(normalizedValue)));
         }
         return LocalDate.parse(normalizedValue);
-    }
-
-    private BigDecimal parseAmount(String value) {
-        if (value == null || value.isBlank()) {
-            return BigDecimal.ZERO;
-        }
-        String normalizedValue = value.replace(",", "").replace("원", "").trim();
-        if (normalizedValue.isBlank()) {
-            return BigDecimal.ZERO;
-        }
-        return new BigDecimal(normalizedValue);
-    }
-
-    private String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value.trim();
-            }
-        }
-        return null;
     }
 
     private record CategoryKey(CategoryType type, String name) {

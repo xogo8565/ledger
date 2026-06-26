@@ -1,5 +1,7 @@
 import * as managementApi from '../api/managementApi';
 import { errorMessage } from '../api/http';
+import { toNumber } from '../utils/numberValues';
+import { normalizeWhitespace } from '../utils/stringValues';
 
 const memberErrorTranslations = {
   'Member is used by an asset': '이 명의를 사용하는 자산이 있습니다. 자산 명의를 먼저 변경해 주세요.',
@@ -43,10 +45,10 @@ export function useManagementMutations({
     event.preventDefault();
     const payload = {
       ...assetForm,
-      balance: Number(assetForm.balance || 0),
-      paymentAccountId: assetForm.paymentAccountId ? Number(assetForm.paymentAccountId) : null,
-      statementClosingDay: Number(assetForm.statementClosingDay || 1),
-      paymentDay: Number(assetForm.paymentDay || 1),
+      balance: toNumber(assetForm.balance),
+      paymentAccountId: assetForm.paymentAccountId ? toNumber(assetForm.paymentAccountId) : null,
+      statementClosingDay: toNumber(assetForm.statementClosingDay, 1),
+      paymentDay: toNumber(assetForm.paymentDay, 1),
       autoPayment: Boolean(assetForm.autoPayment)
     };
     const result = await run(
@@ -112,7 +114,7 @@ export function useManagementMutations({
 
   async function saveMember(event) {
     event.preventDefault();
-    const name = memberForm.name.trim();
+    const name = normalizeWhitespace(memberForm.name);
     if (!name) return;
     const result = await managementApi.saveMember(editingMember?.id, name);
     if (!result.ok) {
@@ -148,10 +150,10 @@ export function useManagementMutations({
     const result = await run(
       () => managementApi.saveBudgetSettings({
         month: budgetSettings.month,
-        totalAmount: Number(budgetSettings.totalAmount || 0),
+        totalAmount: toNumber(budgetSettings.totalAmount),
         categories: budgetSettings.categories.map((item) => ({
           categoryId: item.categoryId,
-          amount: Number(item.amount || 0)
+          amount: toNumber(item.amount)
         }))
       }),
       '예산 저장에 실패했습니다.'

@@ -5,9 +5,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.comfortableledger.ledger.repo.CategoryRepository;
-import com.comfortableledger.ledger.repo.HouseholdRepository;
-import com.comfortableledger.ledger.repo.TransactionRepository;
+import com.comfortableledger.ledger.repository.CategoryRepository;
+import com.comfortableledger.ledger.repository.HouseholdRepository;
+import com.comfortableledger.ledger.repository.TransactionRepository;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;

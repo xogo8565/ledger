@@ -11,16 +11,16 @@ import com.comfortableledger.ledger.domain.Member;
 import com.comfortableledger.ledger.domain.MonthlyBudget;
 import com.comfortableledger.ledger.domain.TransactionRecord;
 import com.comfortableledger.ledger.domain.TransactionType;
-import com.comfortableledger.ledger.repo.AssetRepository;
-import com.comfortableledger.ledger.repo.CategoryBudgetRepository;
-import com.comfortableledger.ledger.repo.CategoryRepository;
-import com.comfortableledger.ledger.repo.HouseholdRepository;
-import com.comfortableledger.ledger.repo.MonthlyBudgetRepository;
-import com.comfortableledger.ledger.repo.TransactionRepository;
-import com.comfortableledger.ledger.web.ApiDtos.MonthlySummaryDto;
-import com.comfortableledger.ledger.web.ApiDtos.PeriodSummaryDto;
-import com.comfortableledger.ledger.web.ApiDtos.YearlyBudgetSummaryDto;
-import com.comfortableledger.ledger.web.ApiDtos.YearlySummaryDto;
+import com.comfortableledger.ledger.repository.AssetRepository;
+import com.comfortableledger.ledger.repository.CategoryBudgetRepository;
+import com.comfortableledger.ledger.repository.CategoryRepository;
+import com.comfortableledger.ledger.repository.HouseholdRepository;
+import com.comfortableledger.ledger.repository.MonthlyBudgetRepository;
+import com.comfortableledger.ledger.repository.TransactionRepository;
+import com.comfortableledger.ledger.dto.ApiDtos.MonthlySummaryDto;
+import com.comfortableledger.ledger.dto.ApiDtos.PeriodSummaryDto;
+import com.comfortableledger.ledger.dto.ApiDtos.YearlyBudgetSummaryDto;
+import com.comfortableledger.ledger.dto.ApiDtos.YearlySummaryDto;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -195,7 +195,7 @@ public class StatisticsService {
         Map<String, TagSpendAccumulator> totals = new LinkedHashMap<>();
         records.stream().filter(record -> record.getType() == TransactionType.EXPENSE)
                 .filter(record -> record.getSpendingTag() != null && !record.getSpendingTag().isBlank())
-                .forEach(record -> java.util.Arrays.stream(record.getSpendingTag().split("[,，]"))
+                .forEach(record -> java.util.Arrays.stream(record.getSpendingTag().split("[,竊?"))
                         .map(String::trim).map(tag -> tag.startsWith("#") ? tag.substring(1).trim() : tag)
                         .filter(tag -> !tag.isBlank()).map(tag -> tag.replaceAll("\\s+", " ")).distinct()
                         .forEach(tag -> totals.computeIfAbsent(

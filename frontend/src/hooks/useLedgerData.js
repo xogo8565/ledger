@@ -3,6 +3,8 @@ import * as ledgerApi from '../api/ledgerApi';
 import * as managementApi from '../api/managementApi';
 import { hasLedgerFilters } from '../screens/LedgerScreen';
 import { formatDate } from '../utils/format';
+import { toNumber } from '../utils/numberValues';
+import { trimToEmpty } from '../utils/stringValues';
 
 const emptyData = {
   assets: [],
@@ -50,7 +52,7 @@ export function useLedgerData({ month, ledgerFilters, statsRange }) {
   }, [month]);
 
   useEffect(() => {
-    const year = Number(month.slice(0, 4));
+    const year = toNumber(month.slice(0, 4));
     Promise.all([
       ledgerApi.getYearlySummary(year).then(setYearlySummary),
       managementApi.getYearlyBudgetSummary(year).then(setYearlyBudgetSummary)
@@ -83,15 +85,16 @@ export function useLedgerData({ month, ledgerFilters, statsRange }) {
     if (!hasLedgerFilters(ledgerFilters)) return null;
     if (ledgerFilters.startDate && ledgerFilters.endDate && ledgerFilters.endDate < ledgerFilters.startDate) return emptySearchResult;
     if (ledgerFilters.minAmount && ledgerFilters.maxAmount
-      && Number(ledgerFilters.maxAmount) < Number(ledgerFilters.minAmount)) return emptySearchResult;
+      && toNumber(ledgerFilters.maxAmount) < toNumber(ledgerFilters.minAmount)) return emptySearchResult;
 
     const params = new URLSearchParams();
     params.set('startDate', ledgerFilters.startDate || `${month}-01`);
     params.set(
       'endDate',
-      ledgerFilters.endDate || formatDate(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0))
+      ledgerFilters.endDate || formatDate(new Date(toNumber(month.slice(0, 4)), toNumber(month.slice(5, 7)), 0))
     );
-    if (ledgerFilters.query.trim()) params.set('query', ledgerFilters.query.trim());
+    const query = trimToEmpty(ledgerFilters.query);
+    if (query) params.set('query', query);
     if (ledgerFilters.type !== 'ALL') params.set('type', ledgerFilters.type);
     ['categoryId', 'consumptionScope', 'consumerMemberId', 'assetId', 'minAmount', 'maxAmount'].forEach((key) => {
       if (ledgerFilters[key] !== '') params.set(key, ledgerFilters[key]);

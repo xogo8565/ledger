@@ -1,11 +1,13 @@
+import { formatNumber, formatWon } from './numberValues';
+
 export const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
 
 export function money(value) {
-  return `${Number(value || 0).toLocaleString('ko-KR')}원`;
+  return formatWon(value);
 }
 
 export function numberOnly(value) {
-  return Number(value || 0).toLocaleString('ko-KR');
+  return formatNumber(value);
 }
 
 export function formatDate(date) {

@@ -1,6 +1,6 @@
 package com.comfortableledger.ledger.service;
 
-import com.comfortableledger.ledger.web.ApiDtos.CardPaymentScheduleDto;
+import com.comfortableledger.ledger.dto.ApiDtos.CardPaymentScheduleDto;
 import java.time.LocalDate;
 import java.util.List;
 import org.slf4j.Logger;

@@ -1,6 +1,6 @@
 package com.comfortableledger.ledger.service;
 
-import com.comfortableledger.ledger.web.ApiDtos.RecurringGenerationResult;
+import com.comfortableledger.ledger.dto.ApiDtos.RecurringGenerationResult;
 import java.time.LocalDate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

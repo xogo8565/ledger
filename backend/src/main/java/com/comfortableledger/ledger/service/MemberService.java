@@ -5,13 +5,14 @@ import com.comfortableledger.ledger.domain.Household;
 import com.comfortableledger.ledger.domain.Member;
 import com.comfortableledger.ledger.domain.MemberRole;
 import com.comfortableledger.ledger.domain.TransactionRecord;
-import com.comfortableledger.ledger.repo.AssetRepository;
-import com.comfortableledger.ledger.repo.HouseholdRepository;
-import com.comfortableledger.ledger.repo.MemberRepository;
-import com.comfortableledger.ledger.repo.TransactionRepository;
-import com.comfortableledger.ledger.web.ApiDtos.ConsumerMigrationDto;
-import com.comfortableledger.ledger.web.ApiDtos.MemberDto;
-import com.comfortableledger.ledger.web.ApiDtos.SaveMemberRequest;
+import com.comfortableledger.ledger.repository.AssetRepository;
+import com.comfortableledger.ledger.repository.HouseholdRepository;
+import com.comfortableledger.ledger.repository.MemberRepository;
+import com.comfortableledger.ledger.repository.TransactionRepository;
+import com.comfortableledger.ledger.util.StringValues;
+import com.comfortableledger.ledger.dto.ApiDtos.ConsumerMigrationDto;
+import com.comfortableledger.ledger.dto.ApiDtos.MemberDto;
+import com.comfortableledger.ledger.dto.ApiDtos.SaveMemberRequest;
 import java.util.Comparator;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -135,7 +136,7 @@ public class MemberService {
     }
 
     private String normalizedMemberNameOrEmpty(String name) {
-        return name == null ? "" : name.trim().replaceAll("\\s+", " ");
+        return StringValues.normalizeWhitespace(name);
     }
 
     private Household defaultHousehold() {

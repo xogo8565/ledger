@@ -1,8 +1,9 @@
 package com.comfortableledger.ledger.service;
 
-import com.comfortableledger.ledger.web.ApiDtos.ReceiptOcrPreview;
-import com.comfortableledger.ledger.web.ApiDtos.ReceiptOcrCandidates;
-import com.comfortableledger.ledger.web.ApiDtos.TextImportPreview;
+import com.comfortableledger.ledger.dto.ApiDtos.ReceiptOcrPreview;
+import com.comfortableledger.ledger.dto.ApiDtos.ReceiptOcrCandidates;
+import com.comfortableledger.ledger.dto.ApiDtos.TextImportPreview;
+import com.comfortableledger.ledger.util.NumberValues;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -135,7 +136,7 @@ public class ReceiptOcrService {
             throw new IllegalStateException("Tesseract OCR failed: " + errorText);
         }
         if (rawText.isBlank()) {
-            warnings.add("OCR 텍스트를 찾지 못했습니다. 사진을 더 밝고 선명하게 촬영해 주세요.");
+            warnings.add("OCR ?띿뒪?몃? 李얠? 紐삵뻽?듬땲?? ?ъ쭊????諛앷퀬 ?좊챸?섍쾶 珥ъ쁺??二쇱꽭??");
         }
         return new OcrResult(rawText, warnings);
     }
@@ -154,17 +155,17 @@ public class ReceiptOcrService {
         List<String> warnings = new ArrayList<>();
         String normalized = rawText == null ? "" : rawText.trim();
         if (normalized.isBlank()) {
-            warnings.add("거래 후보를 자동으로 채우지 못했습니다. 직접 입력으로 전환하거나 다른 사진으로 다시 시도해 주세요.");
+            warnings.add("嫄곕옒 ?꾨낫瑜??먮룞?쇰줈 梨꾩슦吏 紐삵뻽?듬땲?? 吏곸젒 ?낅젰?쇰줈 ?꾪솚?섍굅???ㅻⅨ ?ъ쭊?쇰줈 ?ㅼ떆 ?쒕룄??二쇱꽭??");
             return warnings;
         }
         if (normalized.length() < 20) {
-            warnings.add("인식된 텍스트가 짧습니다. 영수증 전체가 보이도록 다시 촬영하면 정확도가 올라갑니다.");
+            warnings.add("?몄떇???띿뒪?멸? 吏㏃뒿?덈떎. ?곸닔利??꾩껜媛 蹂댁씠?꾨줉 ?ㅼ떆 珥ъ쁺?섎㈃ ?뺥솗?꾧? ?щ씪媛묐땲??");
         }
         if (preview.amount() == null || BigDecimal.ZERO.compareTo(preview.amount()) == 0) {
-            warnings.add("금액 후보를 찾지 못했습니다. OCR 원문에서 합계 또는 금액을 수정한 뒤 다시 분석해 주세요.");
+            warnings.add("湲덉븸 ?꾨낫瑜?李얠? 紐삵뻽?듬땲?? OCR ?먮Ц?먯꽌 ?⑷퀎 ?먮뒗 湲덉븸???섏젙?????ㅼ떆 遺꾩꽍??二쇱꽭??");
         }
-        if (preview.merchant() == null || preview.merchant().isBlank() || preview.merchant().equals("자동 입력")) {
-            warnings.add("가맹점/품명 후보가 불확실합니다. OCR 원문을 확인해 주세요.");
+        if (preview.merchant() == null || preview.merchant().isBlank() || preview.merchant().equals("?먮룞 ?낅젰")) {
+            warnings.add("媛留뱀젏/?덈챸 ?꾨낫媛 遺덊솗?ㅽ빀?덈떎. OCR ?먮Ц???뺤씤??二쇱꽭??");
         }
         return warnings;
     }
@@ -219,7 +220,7 @@ public class ReceiptOcrService {
         amountSearchText = MONTH_DATE_CANDIDATE_PATTERN.matcher(amountSearchText).replaceAll(" ");
         Matcher matcher = AMOUNT_CANDIDATE_PATTERN.matcher(amountSearchText);
         while (matcher.find()) {
-            BigDecimal amount = new BigDecimal(matcher.group(1).replace(",", ""));
+            BigDecimal amount = NumberValues.parseWonAmount(matcher.group(1));
             if (amount.compareTo(BigDecimal.ZERO) > 0) {
                 candidates.add(amount);
             }
@@ -229,7 +230,7 @@ public class ReceiptOcrService {
 
     private List<String> titleCandidates(String rawText, TextImportPreview preview) {
         Set<String> candidates = new LinkedHashSet<>();
-        if (preview.merchant() != null && !preview.merchant().isBlank() && !preview.merchant().equals("자동 입력")) {
+        if (preview.merchant() != null && !preview.merchant().isBlank() && !preview.merchant().equals("?먮룞 ?낅젰")) {
             candidates.add(preview.merchant().trim());
         }
         List<String> lines = rawText.lines()
@@ -240,8 +241,8 @@ public class ReceiptOcrService {
         boolean itemTableStarted = false;
         for (String line : lines) {
             String compact = line.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
-            if (!itemTableStarted && compact.contains("품명") && compact.contains("단가")
-                    && compact.contains("수량") && compact.contains("금액")) {
+            if (!itemTableStarted && compact.contains("?덈챸") && compact.contains("?④?")
+                    && compact.contains("?섎웾") && compact.contains("湲덉븸")) {
                 itemTableStarted = true;
                 continue;
             }
@@ -249,7 +250,7 @@ public class ReceiptOcrService {
                 break;
             }
             if (itemTableStarted) {
-                String itemName = line.split("[0-9]", 2)[0].replaceAll("[·*]", "").trim();
+                String itemName = line.split("[0-9]", 2)[0].replaceAll("[쨌*]", "").trim();
                 if (!itemName.isBlank()) {
                     candidates.add(itemName);
                 }
@@ -268,7 +269,7 @@ public class ReceiptOcrService {
 
     private boolean isItemTableEnd(String line) {
         String normalized = line.toLowerCase(Locale.ROOT);
-        return containsAny(normalized, "합계", "총액", "결제", "받은금액", "거스름", "부가세", "과세", "면세", "total");
+        return containsAny(normalized, "합계", "총액", "결제", "받을금액", "거스름", "부가세", "과세", "면세", "total");
     }
 
     private boolean isNoiseTitleLine(String line) {
