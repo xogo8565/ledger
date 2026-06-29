@@ -1,23 +1,23 @@
 package com.comfortableledger.ledger.controller;
 
-import java.util.Map;
+import static com.comfortableledger.ledger.controller.support.ApiResponses.error;
+
+import com.comfortableledger.ledger.dto.ApiResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
     @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Map<String, String> handleBadRequest(RuntimeException exception) {
-        return Map.of("error", exception.getMessage());
+    public ResponseEntity<ApiResponse<Void>> handleBadRequest(RuntimeException exception) {
+        return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", exception.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Map<String, String> handleValidation(MethodArgumentNotValidException exception) {
-        return Map.of("error", "Invalid request");
+    public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException exception) {
+        return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Invalid request");
     }
 }

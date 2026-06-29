@@ -1,8 +1,12 @@
 package com.comfortableledger.ledger.controller;
 
+import static com.comfortableledger.ledger.controller.support.ApiResponses.ok;
+
+import com.comfortableledger.ledger.dto.ApiResponse;
 import com.comfortableledger.ledger.service.importing.ImportTextService;
 import com.comfortableledger.ledger.dto.ImportDtos.TextImportPreview;
 import com.comfortableledger.ledger.dto.ImportDtos.TextImportRequest;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,7 +22,7 @@ public class ImportController {
     }
 
     @PostMapping("/text/parse")
-    public TextImportPreview parseText(@RequestBody TextImportRequest request) {
-        return importTextService.preview(request.rawText());
+    public ResponseEntity<ApiResponse<TextImportPreview>> parseText(@RequestBody TextImportRequest request) {
+        return ok(importTextService.preview(request.rawText()));
     }
 }

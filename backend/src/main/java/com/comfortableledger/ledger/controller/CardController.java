@@ -1,6 +1,9 @@
 package com.comfortableledger.ledger.controller;
 
+import static com.comfortableledger.ledger.controller.support.ApiResponses.ok;
+
 import com.comfortableledger.ledger.service.asset.CardService;
+import com.comfortableledger.ledger.dto.ApiResponse;
 import com.comfortableledger.ledger.dto.CardPaymentDtos.CardDetailDto;
 import com.comfortableledger.ledger.dto.CardPaymentDtos.CardPaymentScheduleDto;
 import com.comfortableledger.ledger.dto.CardPaymentDtos.CreatePaymentScheduleRequest;
@@ -10,6 +13,7 @@ import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,60 +33,61 @@ public class CardController {
     }
 
     @GetMapping("/{cardAssetId}")
-    public CardDetailDto cardDetail(@PathVariable Long cardAssetId) {
-        return cardService.cardDetail(cardAssetId);
+    public ResponseEntity<ApiResponse<CardDetailDto>> cardDetail(@PathVariable Long cardAssetId) {
+        return ok(cardService.cardDetail(cardAssetId));
     }
 
     @GetMapping("/{cardAssetId}/unpaid")
-    public BigDecimal getUnpaidAmount(@PathVariable Long cardAssetId) {
-        return cardService.getUnpaidAmount(cardAssetId);
+    public ResponseEntity<ApiResponse<BigDecimal>> getUnpaidAmount(@PathVariable Long cardAssetId) {
+        return ok(cardService.getUnpaidAmount(cardAssetId));
     }
 
     @GetMapping("/{cardAssetId}/payment-schedule")
-    public BigDecimal getPaymentScheduleAmount(@PathVariable Long cardAssetId) {
-        return cardService.getPaymentScheduleAmount(cardAssetId);
+    public ResponseEntity<ApiResponse<BigDecimal>> getPaymentScheduleAmount(@PathVariable Long cardAssetId) {
+        return ok(cardService.getPaymentScheduleAmount(cardAssetId));
     }
 
     @GetMapping("/{cardAssetId}/billing-period")
-    public List<TransactionDto> getBillingPeriodTransactions(@PathVariable Long cardAssetId) {
-        return cardService.getBillingPeriodTransactions(cardAssetId);
+    public ResponseEntity<ApiResponse<List<TransactionDto>>> getBillingPeriodTransactions(@PathVariable Long cardAssetId) {
+        return ok(cardService.getBillingPeriodTransactions(cardAssetId));
     }
 
     @PostMapping("/{cardAssetId}/payment-schedules")
-    public CardPaymentScheduleDto createPaymentSchedule(
+    public ResponseEntity<ApiResponse<CardPaymentScheduleDto>> createPaymentSchedule(
             @PathVariable Long cardAssetId,
             @Valid @RequestBody CreatePaymentScheduleRequest request
     ) {
-        return cardService.createPaymentSchedule(cardAssetId, request.scheduledDate(), request.amount());
+        return ok(cardService.createPaymentSchedule(cardAssetId, request.scheduledDate(), request.amount()));
     }
 
     @GetMapping("/{cardAssetId}/payment-schedules")
-    public List<CardPaymentScheduleDto> getPaymentSchedules(@PathVariable Long cardAssetId) {
-        return cardService.getPaymentSchedules(cardAssetId);
+    public ResponseEntity<ApiResponse<List<CardPaymentScheduleDto>>> getPaymentSchedules(@PathVariable Long cardAssetId) {
+        return ok(cardService.getPaymentSchedules(cardAssetId));
     }
 
     @GetMapping("/payment-schedules/due")
-    public List<CardPaymentScheduleDto> getScheduledPayments(@RequestParam(required = false) LocalDate upToDate) {
-        return cardService.getScheduledPayments(upToDate == null ? LocalDate.now() : upToDate);
+    public ResponseEntity<ApiResponse<List<CardPaymentScheduleDto>>> getScheduledPayments(@RequestParam(required = false) LocalDate upToDate) {
+        return ok(cardService.getScheduledPayments(upToDate == null ? LocalDate.now() : upToDate));
     }
 
     @PostMapping("/payment-schedules/execute")
-    public CardPaymentScheduleDto executePaymentSchedule(@Valid @RequestBody SchedulePaymentRequest request) {
-        return cardService.executePaymentSchedule(request.scheduleId());
+    public ResponseEntity<ApiResponse<CardPaymentScheduleDto>> executePaymentSchedule(@Valid @RequestBody SchedulePaymentRequest request) {
+        return ok(cardService.executePaymentSchedule(request.scheduleId()));
     }
 
     @PostMapping("/payment-schedules/{scheduleId}/reschedule")
-    public CardPaymentScheduleDto rescheduleFailedPayment(@PathVariable Long scheduleId) {
-        return cardService.rescheduleFailedPayment(scheduleId);
+    public ResponseEntity<ApiResponse<CardPaymentScheduleDto>> rescheduleFailedPayment(@PathVariable Long scheduleId) {
+        return ok(cardService.rescheduleFailedPayment(scheduleId));
     }
 
     @PostMapping("/payment-schedules/{scheduleId}/retry")
-    public CardPaymentScheduleDto retryFailedPayment(@PathVariable Long scheduleId) {
-        return cardService.retryFailedPayment(scheduleId);
+    public ResponseEntity<ApiResponse<CardPaymentScheduleDto>> retryFailedPayment(@PathVariable Long scheduleId) {
+        return ok(cardService.retryFailedPayment(scheduleId));
     }
 
     @DeleteMapping("/payment-schedules/{scheduleId}")
-    public void cancelPaymentSchedule(@PathVariable Long scheduleId) {
+    public ResponseEntity<ApiResponse<Void>> cancelPaymentSchedule(@PathVariable Long scheduleId) {
         cardService.cancelPaymentSchedule(scheduleId);
+        return ok();
     }
 }

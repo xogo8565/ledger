@@ -1,5 +1,8 @@
 package com.comfortableledger.ledger.controller;
 
+import static com.comfortableledger.ledger.controller.support.ApiResponses.ok;
+
+import com.comfortableledger.ledger.dto.ApiResponse;
 import com.comfortableledger.ledger.service.recurring.RecurringTransactionService;
 import com.comfortableledger.ledger.dto.RecurringDtos.RecurringGenerationResult;
 import com.comfortableledger.ledger.dto.RecurringDtos.RecurringTransactionDto;
@@ -7,6 +10,7 @@ import com.comfortableledger.ledger.dto.RecurringDtos.SaveRecurringTransactionRe
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,30 +31,31 @@ public class RecurringTransactionController {
     }
 
     @GetMapping
-    public List<RecurringTransactionDto> recurringTransactions() {
-        return recurringTransactionService.recurringTransactions();
+    public ResponseEntity<ApiResponse<List<RecurringTransactionDto>>> recurringTransactions() {
+        return ok(recurringTransactionService.recurringTransactions());
     }
 
     @PostMapping
-    public RecurringTransactionDto createRecurringTransaction(@Valid @RequestBody SaveRecurringTransactionRequest request) {
-        return recurringTransactionService.createRecurringTransaction(request);
+    public ResponseEntity<ApiResponse<RecurringTransactionDto>> createRecurringTransaction(@Valid @RequestBody SaveRecurringTransactionRequest request) {
+        return ok(recurringTransactionService.createRecurringTransaction(request));
     }
 
     @PutMapping("/{id}")
-    public RecurringTransactionDto updateRecurringTransaction(
+    public ResponseEntity<ApiResponse<RecurringTransactionDto>> updateRecurringTransaction(
             @PathVariable Long id,
             @Valid @RequestBody SaveRecurringTransactionRequest request
     ) {
-        return recurringTransactionService.updateRecurringTransaction(id, request);
+        return ok(recurringTransactionService.updateRecurringTransaction(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public void deleteRecurringTransaction(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deleteRecurringTransaction(@PathVariable Long id) {
         recurringTransactionService.deleteRecurringTransaction(id);
+        return ok();
     }
 
     @PostMapping("/generate-due")
-    public RecurringGenerationResult generateDueTransactions(@RequestParam(required = false) LocalDate upToDate) {
-        return recurringTransactionService.generateDueTransactions(upToDate);
+    public ResponseEntity<ApiResponse<RecurringGenerationResult>> generateDueTransactions(@RequestParam(required = false) LocalDate upToDate) {
+        return ok(recurringTransactionService.generateDueTransactions(upToDate));
     }
 }

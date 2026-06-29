@@ -1,5 +1,8 @@
 package com.comfortableledger.ledger.controller;
 
+import static com.comfortableledger.ledger.controller.support.ApiResponses.ok;
+
+import com.comfortableledger.ledger.dto.ApiResponse;
 import com.comfortableledger.ledger.service.receipt.ReceiptService;
 import com.comfortableledger.ledger.service.receipt.ReceiptService.ReceiptFile;
 import com.comfortableledger.ledger.dto.ReceiptDtos.ReceiptDto;
@@ -27,21 +30,21 @@ public class ReceiptController {
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ReceiptDto attach(@PathVariable Long transactionId, @RequestPart MultipartFile file) throws IOException {
-        return receiptService.attach(transactionId, file);
+    public ResponseEntity<ApiResponse<ReceiptDto>> attach(@PathVariable Long transactionId, @RequestPart MultipartFile file) throws IOException {
+        return ok(receiptService.attach(transactionId, file));
     }
 
     @PostMapping(path = "/batch", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public List<ReceiptDto> attachMany(
+    public ResponseEntity<ApiResponse<List<ReceiptDto>>> attachMany(
             @PathVariable Long transactionId,
             @RequestPart("files") List<MultipartFile> files
     ) throws IOException {
-        return receiptService.attachMany(transactionId, files);
+        return ok(receiptService.attachMany(transactionId, files));
     }
 
     @GetMapping
-    public List<ReceiptDto> receipts(@PathVariable Long transactionId) {
-        return receiptService.receipts(transactionId);
+    public ResponseEntity<ApiResponse<List<ReceiptDto>>> receipts(@PathVariable Long transactionId) {
+        return ok(receiptService.receipts(transactionId));
     }
 
     @GetMapping("/{receiptId}/file")
@@ -54,7 +57,8 @@ public class ReceiptController {
     }
 
     @DeleteMapping("/{receiptId}")
-    public void delete(@PathVariable Long receiptId) {
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long receiptId) {
         receiptService.delete(receiptId);
+        return ok();
     }
 }

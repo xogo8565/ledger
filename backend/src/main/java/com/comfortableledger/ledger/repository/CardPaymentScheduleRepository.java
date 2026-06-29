@@ -10,22 +10,22 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CardPaymentScheduleRepository extends JpaRepository<CardPaymentSchedule, Long> {
     /**
-     * ?뱀젙 移대뱶??寃곗젣 ?덉빟 紐⑸줉 議고쉶
+     * 특정 카드의 결제 예약 목록 조회
      */
     List<CardPaymentSchedule> findByCardAssetIdOrderByScheduledDateAsc(Long cardAssetId);
 
     /**
-     * ?뱀젙 移대뱶???뱀젙 ?곹깭 寃곗젣 ?덉빟 議고쉶
+     * 특정 카드의 특정 상태 결제 예약 조회
      */
     List<CardPaymentSchedule> findByCardAssetIdAndStatusOrderByScheduledDateAsc(Long cardAssetId, PaymentStatus status);
 
     /**
-     * ?뱀젙 ?좎쭨 ?댁쟾???덉젙??寃곗젣 議고쉶 (?먮룞 寃곗젣??
+     * 특정 날짜 이전의 예정된 결제 조회 (자동 결제)
      */
     List<CardPaymentSchedule> findByScheduledDateLessThanEqualAndStatusOrderByScheduledDateAsc(LocalDate date, PaymentStatus status);
 
     /**
-     * ?뱀젙 移대뱶???뱀젙 ?좎쭨 寃곗젣 ?덉빟 議고쉶
+     * 특정 카드의 특정 날짜 결제 예약 조회
      */
     List<CardPaymentSchedule> findByCardAssetIdAndScheduledDateOrderByIdAsc(Long cardAssetId, LocalDate date);
 }

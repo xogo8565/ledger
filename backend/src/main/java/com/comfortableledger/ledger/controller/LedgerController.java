@@ -1,5 +1,7 @@
 package com.comfortableledger.ledger.controller;
 
+import static com.comfortableledger.ledger.controller.support.ApiResponses.ok;
+
 import com.comfortableledger.ledger.service.asset.BudgetService;
 import com.comfortableledger.ledger.service.asset.CardService;
 import com.comfortableledger.ledger.service.asset.AssetManagementService;
@@ -9,6 +11,7 @@ import com.comfortableledger.ledger.service.transaction.TransactionQueryService;
 import com.comfortableledger.ledger.service.transaction.TransactionSearchCriteria;
 import com.comfortableledger.ledger.service.transaction.TransactionSearchSort;
 import com.comfortableledger.ledger.service.transaction.TransactionCommandService;
+import com.comfortableledger.ledger.dto.ApiResponse;
 import com.comfortableledger.ledger.dto.AssetDtos.AssetDto;
 import com.comfortableledger.ledger.dto.AssetDtos.AssetSummaryDto;
 import com.comfortableledger.ledger.dto.SummaryDtos.BootstrapDto;
@@ -77,116 +80,119 @@ public class LedgerController {
     }
 
     @GetMapping("/bootstrap")
-    public BootstrapDto bootstrap(@RequestParam(required = false) String month) {
+    public ResponseEntity<ApiResponse<BootstrapDto>> bootstrap(@RequestParam(required = false) String month) {
         String targetMonth = month == null ? YearMonth.now().toString() : month;
-        return new BootstrapDto(
+        return ok(new BootstrapDto(
                 assetManagementService.assets(),
                 assetManagementService.categories(),
                 transactionQueryService.transactions(targetMonth),
                 statisticsService.monthlySummary(targetMonth)
-        );
+        ));
     }
 
     @GetMapping("/assets")
-    public List<AssetDto> assets() {
-        return assetManagementService.assets();
+    public ResponseEntity<ApiResponse<List<AssetDto>>> assets() {
+        return ok(assetManagementService.assets());
     }
 
     @GetMapping("/assets/summary")
-    public AssetSummaryDto assetSummary() {
-        return assetManagementService.assetSummary();
+    public ResponseEntity<ApiResponse<AssetSummaryDto>> assetSummary() {
+        return ok(assetManagementService.assetSummary());
     }
 
     @PostMapping("/assets")
-    public AssetDto createAsset(@Valid @RequestBody SaveAssetRequest request) {
-        return assetManagementService.createAsset(request);
+    public ResponseEntity<ApiResponse<AssetDto>> createAsset(@Valid @RequestBody SaveAssetRequest request) {
+        return ok(assetManagementService.createAsset(request));
     }
 
     @PostMapping("/assets/card")
-    public AssetDto createCardAsset(@Valid @RequestBody SaveCardAssetRequest request) {
-        return assetManagementService.createCardAsset(request);
+    public ResponseEntity<ApiResponse<AssetDto>> createCardAsset(@Valid @RequestBody SaveCardAssetRequest request) {
+        return ok(assetManagementService.createCardAsset(request));
     }
 
     @PutMapping("/assets/{id}/card")
-    public AssetDto updateCardAsset(@PathVariable Long id, @Valid @RequestBody SaveCardAssetRequest request) {
-        return assetManagementService.updateCardAsset(id, request);
+    public ResponseEntity<ApiResponse<AssetDto>> updateCardAsset(@PathVariable Long id, @Valid @RequestBody SaveCardAssetRequest request) {
+        return ok(assetManagementService.updateCardAsset(id, request));
     }
 
     @PutMapping("/assets/{id}")
-    public AssetDto updateAsset(@PathVariable Long id, @Valid @RequestBody SaveAssetRequest request) {
-        return assetManagementService.updateAsset(id, request);
+    public ResponseEntity<ApiResponse<AssetDto>> updateAsset(@PathVariable Long id, @Valid @RequestBody SaveAssetRequest request) {
+        return ok(assetManagementService.updateAsset(id, request));
     }
 
     @DeleteMapping("/assets/{id}")
-    public void deleteAsset(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deleteAsset(@PathVariable Long id) {
         assetManagementService.deleteAsset(id);
+        return ok();
     }
 
     @GetMapping("/categories")
-    public List<CategoryDto> categories() {
-        return assetManagementService.categories();
+    public ResponseEntity<ApiResponse<List<CategoryDto>>> categories() {
+        return ok(assetManagementService.categories());
     }
 
     @PostMapping("/categories")
-    public CategoryDto createCategory(@Valid @RequestBody SaveCategoryRequest request) {
-        return assetManagementService.createCategory(request);
+    public ResponseEntity<ApiResponse<CategoryDto>> createCategory(@Valid @RequestBody SaveCategoryRequest request) {
+        return ok(assetManagementService.createCategory(request));
     }
 
     @PutMapping("/categories/{id}")
-    public CategoryDto updateCategory(@PathVariable Long id, @Valid @RequestBody SaveCategoryRequest request) {
-        return assetManagementService.updateCategory(id, request);
+    public ResponseEntity<ApiResponse<CategoryDto>> updateCategory(@PathVariable Long id, @Valid @RequestBody SaveCategoryRequest request) {
+        return ok(assetManagementService.updateCategory(id, request));
     }
 
     @DeleteMapping("/categories/{id}")
-    public void deleteCategory(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deleteCategory(@PathVariable Long id) {
         assetManagementService.deleteCategory(id);
+        return ok();
     }
 
     @GetMapping("/members")
-    public List<MemberDto> members() {
-        return memberService.members();
+    public ResponseEntity<ApiResponse<List<MemberDto>>> members() {
+        return ok(memberService.members());
     }
 
     @PostMapping("/members")
-    public MemberDto createMember(@Valid @RequestBody SaveMemberRequest request) {
-        return memberService.createMember(request);
+    public ResponseEntity<ApiResponse<MemberDto>> createMember(@Valid @RequestBody SaveMemberRequest request) {
+        return ok(memberService.createMember(request));
     }
 
     @PutMapping("/members/{id}")
-    public MemberDto updateMember(@PathVariable Long id, @Valid @RequestBody SaveMemberRequest request) {
-        return memberService.updateMember(id, request);
+    public ResponseEntity<ApiResponse<MemberDto>> updateMember(@PathVariable Long id, @Valid @RequestBody SaveMemberRequest request) {
+        return ok(memberService.updateMember(id, request));
     }
 
     @DeleteMapping("/members/{id}")
-    public void deleteMember(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deleteMember(@PathVariable Long id) {
         memberService.deleteMember(id);
+        return ok();
     }
 
     @GetMapping("/members/consumer-migration")
-    public ConsumerMigrationDto consumerMigrationStatus() {
-        return memberService.consumerMigrationStatus();
+    public ResponseEntity<ApiResponse<ConsumerMigrationDto>> consumerMigrationStatus() {
+        return ok(memberService.consumerMigrationStatus());
     }
 
     @PostMapping("/members/consumer-migration")
-    public ConsumerMigrationDto migrateUnassignedPersonalExpenses() {
-        return memberService.migrateUnassignedPersonalExpenses();
+    public ResponseEntity<ApiResponse<ConsumerMigrationDto>> migrateUnassignedPersonalExpenses() {
+        return ok(memberService.migrateUnassignedPersonalExpenses());
     }
 
     @GetMapping("/transactions")
-    public List<TransactionDto> transactions(@RequestParam(required = false) String month) {
-        return transactionQueryService.transactions(month);
+    public ResponseEntity<ApiResponse<List<TransactionDto>>> transactions(@RequestParam(required = false) String month) {
+        return ok(transactionQueryService.transactions(month));
     }
 
     @GetMapping("/transactions/range")
-    public List<TransactionDto> transactionsBetween(
+    public ResponseEntity<ApiResponse<List<TransactionDto>>> transactionsBetween(
             @RequestParam LocalDate startDate,
             @RequestParam LocalDate endDate
     ) {
-        return transactionQueryService.transactionsBetween(startDate, endDate);
+        return ok(transactionQueryService.transactionsBetween(startDate, endDate));
     }
 
     @GetMapping("/transactions/search")
-    public TransactionSearchResultDto searchTransactions(
+    public ResponseEntity<ApiResponse<TransactionSearchResultDto>> searchTransactions(
             @RequestParam(required = false) LocalDate startDate,
             @RequestParam(required = false) LocalDate endDate,
             @RequestParam(required = false) TransactionType type,
@@ -201,76 +207,78 @@ public class LedgerController {
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) TransactionSearchSort sort
     ) {
-        return transactionQueryService.searchTransactions(new TransactionSearchCriteria(
+        return ok(transactionQueryService.searchTransactions(new TransactionSearchCriteria(
                 startDate, endDate, type, categoryId, consumptionScope,
                 consumerMemberId, assetId, minAmount, maxAmount, query,
-                page, size, sort));
+                page, size, sort)));
     }
 
     @GetMapping("/transactions/daily")
-    public List<TransactionDto> dailyTransactions(@RequestParam(required = false) String date) {
-        return transactionQueryService.dailyTransactions(date);
+    public ResponseEntity<ApiResponse<List<TransactionDto>>> dailyTransactions(@RequestParam(required = false) String date) {
+        return ok(transactionQueryService.dailyTransactions(date));
     }
 
     @GetMapping("/transactions/{id}")
-    public TransactionDto getTransaction(@PathVariable Long id) {
-        return transactionQueryService.getTransaction(id);
+    public ResponseEntity<ApiResponse<TransactionDto>> getTransaction(@PathVariable Long id) {
+        return ok(transactionQueryService.getTransaction(id));
     }
 
     @GetMapping("/transactions/installments/{installmentGroupId}")
-    public List<TransactionDto> installmentTransactions(@PathVariable String installmentGroupId) {
-        return transactionQueryService.installmentTransactions(installmentGroupId);
+    public ResponseEntity<ApiResponse<List<TransactionDto>>> installmentTransactions(@PathVariable String installmentGroupId) {
+        return ok(transactionQueryService.installmentTransactions(installmentGroupId));
     }
 
     @PutMapping("/transactions/installments/{installmentGroupId}")
-    public List<TransactionDto> updateInstallmentTransactions(
+    public ResponseEntity<ApiResponse<List<TransactionDto>>> updateInstallmentTransactions(
             @PathVariable String installmentGroupId,
             @Valid @RequestBody CreateTransactionRequest request
     ) {
-        return transactionCommandService.updateInstallmentTransactions(installmentGroupId, request);
+        return ok(transactionCommandService.updateInstallmentTransactions(installmentGroupId, request));
     }
 
     @DeleteMapping("/transactions/installments/{installmentGroupId}")
-    public void deleteInstallmentTransactions(@PathVariable String installmentGroupId) {
+    public ResponseEntity<ApiResponse<Void>> deleteInstallmentTransactions(@PathVariable String installmentGroupId) {
         transactionCommandService.deleteInstallmentTransactions(installmentGroupId);
+        return ok();
     }
 
     @PostMapping("/transactions")
-    public TransactionDto createTransaction(@Valid @RequestBody CreateTransactionRequest request) {
-        return transactionCommandService.createTransaction(request);
+    public ResponseEntity<ApiResponse<TransactionDto>> createTransaction(@Valid @RequestBody CreateTransactionRequest request) {
+        return ok(transactionCommandService.createTransaction(request));
     }
 
     @PutMapping("/transactions/{id}")
-    public TransactionDto updateTransaction(@PathVariable Long id, @Valid @RequestBody CreateTransactionRequest request) {
-        return transactionCommandService.updateTransaction(id, request);
+    public ResponseEntity<ApiResponse<TransactionDto>> updateTransaction(@PathVariable Long id, @Valid @RequestBody CreateTransactionRequest request) {
+        return ok(transactionCommandService.updateTransaction(id, request));
     }
 
     @DeleteMapping("/transactions/{id}")
-    public void deleteTransaction(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deleteTransaction(@PathVariable Long id) {
         transactionCommandService.deleteTransaction(id);
+        return ok();
     }
 
     @GetMapping("/summary/monthly")
-    public MonthlySummaryDto monthlySummary(@RequestParam(required = false) String month) {
-        return statisticsService.monthlySummary(month);
+    public ResponseEntity<ApiResponse<MonthlySummaryDto>> monthlySummary(@RequestParam(required = false) String month) {
+        return ok(statisticsService.monthlySummary(month));
     }
 
     @GetMapping("/summary/yearly")
-    public YearlySummaryDto yearlySummary(@RequestParam(required = false) Integer year) {
-        return statisticsService.yearlySummary(year);
+    public ResponseEntity<ApiResponse<YearlySummaryDto>> yearlySummary(@RequestParam(required = false) Integer year) {
+        return ok(statisticsService.yearlySummary(year));
     }
 
     @GetMapping("/budgets/summary/yearly")
-    public YearlyBudgetSummaryDto yearlyBudgetSummary(@RequestParam(required = false) Integer year) {
-        return statisticsService.yearlyBudgetSummary(year);
+    public ResponseEntity<ApiResponse<YearlyBudgetSummaryDto>> yearlyBudgetSummary(@RequestParam(required = false) Integer year) {
+        return ok(statisticsService.yearlyBudgetSummary(year));
     }
 
     @GetMapping("/summary/range")
-    public PeriodSummaryDto rangeSummary(
+    public ResponseEntity<ApiResponse<PeriodSummaryDto>> rangeSummary(
             @RequestParam LocalDate startDate,
             @RequestParam LocalDate endDate
     ) {
-        return statisticsService.rangeSummary(startDate, endDate);
+        return ok(statisticsService.rangeSummary(startDate, endDate));
     }
 
     @GetMapping("/export/transactions.csv")
@@ -287,17 +295,17 @@ public class LedgerController {
     }
 
     @GetMapping("/budgets/settings")
-    public BudgetSettingsDto budgetSettings(@RequestParam(required = false) String month) {
-        return budgetService.budgetSettings(month);
+    public ResponseEntity<ApiResponse<BudgetSettingsDto>> budgetSettings(@RequestParam(required = false) String month) {
+        return ok(budgetService.budgetSettings(month));
     }
 
     @PostMapping("/budgets/settings")
-    public BudgetSettingsDto saveBudget(@Valid @RequestBody SaveBudgetRequest request) {
-        return budgetService.saveBudget(request);
+    public ResponseEntity<ApiResponse<BudgetSettingsDto>> saveBudget(@Valid @RequestBody SaveBudgetRequest request) {
+        return ok(budgetService.saveBudget(request));
     }
 
     @PostMapping("/budgets/settings/copy-previous")
-    public BudgetSettingsDto copyPreviousBudget(@RequestParam(required = false) String month) {
-        return budgetService.copyPreviousBudget(month);
+    public ResponseEntity<ApiResponse<BudgetSettingsDto>> copyPreviousBudget(@RequestParam(required = false) String month) {
+        return ok(budgetService.copyPreviousBudget(month));
     }
 }

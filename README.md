@@ -148,6 +148,7 @@ npm run dev
 - 문자열/숫자/암호성 값 공통 유틸 분리
 - 프론트엔드 문자열/숫자/암호성 값 공통 유틸 분리
 - 백엔드 MVC 기준 패키지 세분화: `controller`, `dto`, `config`, `repository`, `service`, `domain`, `util`
+- 백엔드 JSON API 표준 응답 래핑: `ResponseEntity<ApiResponse<T>>`와 `ApiResponses` 공통 응답 유틸
 - 프론트엔드 배포 캐시 정책: HTML no-store, 해시 assets immutable로 새 버전 자동 반영
 - 상세/등록/관리 화면 고정 레이어 처리로 기존 UI와 겹침 방지
 

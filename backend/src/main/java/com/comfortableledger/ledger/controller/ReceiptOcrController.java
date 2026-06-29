@@ -1,8 +1,12 @@
 package com.comfortableledger.ledger.controller;
 
+import static com.comfortableledger.ledger.controller.support.ApiResponses.ok;
+
+import com.comfortableledger.ledger.dto.ApiResponse;
 import com.comfortableledger.ledger.service.receipt.ReceiptOcrService;
 import com.comfortableledger.ledger.dto.ReceiptDtos.ReceiptOcrPreview;
 import java.io.IOException;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -19,8 +23,8 @@ public class ReceiptOcrController {
     }
 
     @PostMapping
-    public ReceiptOcrPreview preview(@RequestPart MultipartFile file) throws IOException, InterruptedException {
-        return receiptOcrService.preview(file);
+    public ResponseEntity<ApiResponse<ReceiptOcrPreview>> preview(@RequestPart MultipartFile file) throws IOException, InterruptedException {
+        return ok(receiptOcrService.preview(file));
     }
 }
 

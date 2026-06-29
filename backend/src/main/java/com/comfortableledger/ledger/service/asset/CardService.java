@@ -178,7 +178,7 @@ public class CardService {
     }
 
     /**
-     * 移대뱶 寃곗젣 ?덉빟 ?앹꽦
+     * 카드 결제 예약 생성
      */
     @Transactional
     public CardPaymentScheduleDto createPaymentSchedule(Long cardAssetId, LocalDate scheduledDate, BigDecimal amount) {
@@ -199,7 +199,7 @@ public class CardService {
     }
 
     /**
-     * ?뱀젙 移대뱶??紐⑤뱺 寃곗젣 ?덉빟 議고쉶
+     * 특정 카드의 모든 결제 예약 조회
      */
     @Transactional(readOnly = true)
     public List<CardPaymentScheduleDto> getPaymentSchedules(Long cardAssetId) {
@@ -210,7 +210,7 @@ public class CardService {
     }
 
     /**
-     * ?덉젙??寃곗젣 紐⑸줉 議고쉶 (?먮룞 寃곗젣 ???
+     * 예정된 결제 목록 조회 (자동 결제 대상)
      */
     @Transactional(readOnly = true)
     public List<CardPaymentScheduleDto> getScheduledPayments(LocalDate upToDate) {
@@ -246,7 +246,7 @@ public class CardService {
     }
 
     /**
-     * 寃곗젣 ?덉빟 ?ㅽ뻾 (嫄곕옒 ?앹꽦)
+     * 결제 예약 실행 (거래 생성)
      */
     @Transactional
     public CardPaymentScheduleDto executePaymentSchedule(Long scheduleId) {
@@ -274,7 +274,7 @@ public class CardService {
                     null,
                     paymentAccount.getId(),
                     null,
-                    "移대뱶 ?먮룞 寃곗젣",
+                    "카드 자동 결제",
                     cardAsset.getName(),
                     null,
                     null,

@@ -82,7 +82,7 @@ public class TransactionQueryService {
         }
 
         StringBuilder csv = new StringBuilder();
-        csv.append("湲곌컙,嫄곕옒???좏삎,湲덉븸,移댄뀒怨좊━,?뚮퉬?쒓렇,?뚮퉬援щ텇,?뚮퉬紐낆쓽,?먯궛,異쒓툑?먯궛,?낃툑?먯궛,?쒕ぉ,硫붾え,?좊??뚯감,?좊?媛쒖썡\n");
+        csv.append("기간,거래일,유형,금액,카테고리,소비태그,소비구분,소비명의,자산,출금자산,입금자산,제목,메모,할부회차,할부개월\n");
         records.stream()
                 .sorted(Comparator.comparing(TransactionRecord::getTransactionDate).thenComparing(TransactionRecord::getId))
                 .forEach(record -> csv.append(csvRow(
