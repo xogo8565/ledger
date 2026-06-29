@@ -163,6 +163,9 @@ public class ImportTextService {
             return Optional.empty();
         }
         BigDecimal amount = NumberValues.parseWonAmount(amountMatcher.group(2)).abs();
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return Optional.empty();
+        }
         String sign = amountMatcher.group(1);
         String remainder = StringValues.normalizeWhitespace(line.substring(amountMatcher.end()));
         if (remainder.startsWith("|")) {

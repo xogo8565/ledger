@@ -93,6 +93,8 @@ function App() {
   const [selectedInstallment, setSelectedInstallment] = useState(null);
   const [receiptFiles, setReceiptFiles] = useState([]);
   const [installmentReceiptTargetIndex, setInstallmentReceiptTargetIndex] = useState(1);
+  const [textImportQueue, setTextImportQueue] = useState([]);
+  const [textImportQueueProgress, setTextImportQueueProgress] = useState(null);
   const {
     data,
     loading,
@@ -188,7 +190,8 @@ function App() {
     reload: load,
     transactionLabel: (transaction) => (
       transaction.title || transaction.categoryName || typeLabels[transaction.type] || '거래'
-    )
+    ),
+    afterSubmitSuccess: handleTextImportSubmitSuccess
   });
 
   async function openBudgetSettings() {
@@ -334,6 +337,8 @@ function App() {
     setSelectedInstallment(null);
     setInstallmentSchedule([]);
     setInstallmentReceiptTargetIndex(1);
+    setTextImportQueue([]);
+    setTextImportQueueProgress(null);
   }
 
   function updateForm(key, value) {
@@ -475,21 +480,82 @@ function App() {
   }
 
   function applyTextImportPreview(parsed) {
+    const importedItems = Array.isArray(parsed?.items) ? parsed.items.filter((item) => Number(item.amount || 0) > 0) : [];
+    if (importedItems.length > 1) {
+      setTextImportQueue(importedItems.slice(1));
+      setTextImportQueueProgress({ current: 1, total: importedItems.length });
+      applyTextImportItem(importedItems[0], { current: 1, total: importedItems.length });
+      return;
+    }
+    setTextImportQueue([]);
+    setTextImportQueueProgress(null);
+    applyTextImportItem(parsed, null);
+  }
+
+  function normalizeAssetKey(value) {
+    return String(value || '').toLowerCase().replace(/\s+/g, '').replace(/[()]/g, '');
+  }
+
+  function findAssetIdByName(assetName) {
+    const key = normalizeAssetKey(assetName);
+    if (!key) return '';
+    const matched = data.assets.find((asset) => {
+      const assetKey = normalizeAssetKey(asset.name);
+      return assetKey && (assetKey === key || key.includes(assetKey) || assetKey.includes(key));
+    });
+    return matched ? String(matched.id) : '';
+  }
+
+  function findTransferAssetIds(title) {
+    const [fromText = '', toText = ''] = String(title || '').split('→').map((value) => value.trim());
+    return {
+      fromAssetId: findAssetIdByName(fromText),
+      toAssetId: findAssetIdByName(toText)
+    };
+  }
+
+  function applyTextImportItem(parsed, progress = textImportQueueProgress) {
     setEditingTransaction(null);
     setEditingInstallmentGroup(null);
+    const matchedAssetId = findAssetIdByName(parsed.assetName);
+    const transferAssets = parsed.type === 'TRANSFER' ? findTransferAssetIds(parsed.merchant || '') : {};
+    const memoParts = [
+      parsed.memo || '',
+      progress ? `자동입력 ${progress.current}/${progress.total}` : ''
+    ].filter(Boolean);
     setForm({
       ...emptyTransactionForm(),
       type: parsed.type || 'EXPENSE',
       transactionDate: parsed.transactionDate || today,
       amount: parsed.amount || '',
       categoryId: parsed.recommendedCategoryId ? String(parsed.recommendedCategoryId) : '',
+      assetId: parsed.type === 'TRANSFER' ? '' : matchedAssetId,
+      fromAssetId: parsed.type === 'TRANSFER' ? transferAssets.fromAssetId || '' : '',
+      toAssetId: parsed.type === 'TRANSFER' ? transferAssets.toAssetId || '' : '',
       title: parsed.merchant || '',
-      memo: parsed.memo || '',
+      memo: memoParts.join(' · '),
       consumerMemberId: parsed.type === 'EXPENSE' || !parsed.type ? defaultConsumerMemberId(members) : ''
     });
     setEntryExpression(String(parsed.amount || ''));
     setReceiptFiles([]);
+    setInstallmentReceiptTargetIndex(1);
     setPanel('entry');
+  }
+
+  async function handleTextImportSubmitSuccess() {
+    if (!textImportQueue.length) {
+      setTextImportQueue([]);
+      setTextImportQueueProgress(null);
+      return false;
+    }
+    const [nextItem, ...remainingItems] = textImportQueue;
+    const total = textImportQueueProgress?.total || textImportQueue.length + 1;
+    const current = total - remainingItems.length;
+    setTextImportQueue(remainingItems);
+    setTextImportQueueProgress({ current, total });
+    applyTextImportItem(nextItem, { current, total });
+    await load();
+    return true;
   }
 
   function applyReceiptOcrPreview(result, file) {
@@ -615,6 +681,7 @@ function App() {
             submitTransaction={submitTransaction}
             editingTransaction={editingTransaction}
             editingInstallmentGroup={editingInstallmentGroup}
+            textImportQueueProgress={textImportQueueProgress}
             installmentReceiptTargetIndex={installmentReceiptTargetIndex}
             setInstallmentReceiptTargetIndex={setInstallmentReceiptTargetIndex}
             onClose={closePanel}

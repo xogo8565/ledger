@@ -463,6 +463,7 @@ export function EntryScreen({
   submitTransaction,
   editingTransaction,
   editingInstallmentGroup,
+  textImportQueueProgress,
   installmentReceiptTargetIndex,
   setInstallmentReceiptTargetIndex,
   onClose
@@ -523,6 +524,12 @@ export function EntryScreen({
           left={<BackButton label="가계부" onClick={onClose} />}
           right={!isEditing && <IconButton label="즐겨찾기">☆</IconButton>}
         />
+        {textImportQueueProgress && (
+          <section className="text-import-progress-card">
+            <strong>자동 입력 처리 중</strong>
+            <span>{textImportQueueProgress.current}/{textImportQueueProgress.total}건 저장 후 다음 거래가 자동으로 표시됩니다.</span>
+          </section>
+        )}
 
         <div className="entry-tabs">
           {['INCOME', 'EXPENSE', 'TRANSFER'].map((type) => (

@@ -21,7 +21,8 @@ export function useTransactionMutations({
   emptyTransactionForm,
   closePanel,
   reload,
-  transactionLabel
+  transactionLabel,
+  afterSubmitSuccess
 }) {
   async function run(action, fallback) {
     try {
@@ -73,6 +74,8 @@ export function useTransactionMutations({
     if (!created) return;
     if (!await attachReceipts(created)) return;
     if (!await createTransferFee()) return;
+    const handled = afterSubmitSuccess ? await afterSubmitSuccess(created) : false;
+    if (handled) return;
     resetEntry();
     closePanel();
     await reload();

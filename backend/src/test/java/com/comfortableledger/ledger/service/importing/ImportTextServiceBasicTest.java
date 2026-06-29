@@ -68,6 +68,7 @@ class ImportTextServiceBasicTest {
 
                 6월 27일 토요일
                 -7,800원 | 이마트 신월점 | 삼성카드 taptap O
+                0원 | 나이스_머니포인트
                 취소 -1,653원 (-1.07 USD) | ORACLE SINGAPORE | KB국민 코웨이III 카드 | 해외 결제
                 """);
 
