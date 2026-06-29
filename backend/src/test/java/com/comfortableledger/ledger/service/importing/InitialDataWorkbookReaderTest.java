@@ -36,4 +36,25 @@ class InitialDataWorkbookReaderTest {
                 .extracting(row -> row.get("F"))
                 .doesNotContainNull();
     }
+
+    @Test
+    void readsPlanAssetWorkbookRowsWithOwnerNames() throws Exception {
+        List<Map<String, String>> rows = InitialDataWorkbookReader.readRows(
+                new ClassPathResource("initial-data/assets_plan_20260629.xlsx")
+        );
+
+        assertThat(rows).hasSize(18);
+        assertThat(rows.get(0)).containsEntry("J", "명의");
+        assertThat(rows.subList(1, rows.size()))
+                .extracting(row -> row.get("J"))
+                .containsOnly("석수");
+        assertThat(rows.subList(1, rows.size()))
+                .extracting(row -> row.get("B"))
+                .contains(
+                        "하나은행 은행재원(일시상환) 대출",
+                        "하나은행 납부계좌",
+                        "KB국민 코웨이III 카드",
+                        "삼성카드 taptap O"
+                );
+    }
 }

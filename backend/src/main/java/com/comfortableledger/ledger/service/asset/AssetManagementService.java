@@ -101,7 +101,7 @@ public class AssetManagementService {
     public AssetDto createCardAsset(SaveCardAssetRequest request) {
         Household household = defaultHousehold();
         String ownerName = registeredOwnerName(household, request.ownerName());
-        Asset paymentAccount = assetRepository.findById(request.paymentAccountId()).orElseThrow();
+        Asset paymentAccount = paymentAccountFor(household, request.paymentAccountId());
         Asset cardAsset = new Asset(
                 household, AssetType.CARD, request.name(), request.balance(),
                 normalizedAssetGroup(AssetType.CARD, request.groupName()));
@@ -127,8 +127,9 @@ public class AssetManagementService {
 
     @Transactional
     public AssetDto updateCardAsset(Long id, SaveCardAssetRequest request) {
-        Asset asset = assetRepository.findById(id).orElseThrow();
-        Asset paymentAccount = assetRepository.findById(request.paymentAccountId()).orElseThrow();
+        Asset asset = assetRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Asset not found"));
+        Asset paymentAccount = paymentAccountFor(asset.getHousehold(), request.paymentAccountId());
         asset.update(
                 AssetType.CARD, request.name(), request.balance(),
                 normalizedAssetGroup(AssetType.CARD, request.groupName()),
@@ -148,7 +149,9 @@ public class AssetManagementService {
 
     @Transactional
     public void deleteAsset(Long id) {
-        assetRepository.findById(id).orElseThrow().hide();
+        assetRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Asset not found"))
+                .hide();
     }
 
     @Transactional
@@ -203,6 +206,24 @@ public class AssetManagementService {
                 .map(Member::getName)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Asset owner must be a registered member"));
+    }
+
+    private Asset paymentAccountFor(Household household, Long paymentAccountId) {
+        if (paymentAccountId == null) {
+            throw new IllegalArgumentException("Card payment account is required");
+        }
+        Asset paymentAccount = assetRepository.findById(paymentAccountId)
+                .orElseThrow(() -> new IllegalArgumentException("Card payment account not found"));
+        if (!paymentAccount.getHousehold().getId().equals(household.getId())) {
+            throw new IllegalArgumentException("Card payment account must belong to the same household");
+        }
+        if (paymentAccount.isHidden()) {
+            throw new IllegalArgumentException("Card payment account is hidden");
+        }
+        if (paymentAccount.getType() == AssetType.CARD || paymentAccount.getType() == AssetType.DEBT) {
+            throw new IllegalArgumentException("Card payment account must be a cash, bank, or other asset");
+        }
+        return paymentAccount;
     }
 
     private String normalizedAssetGroup(AssetType type, String groupName) {

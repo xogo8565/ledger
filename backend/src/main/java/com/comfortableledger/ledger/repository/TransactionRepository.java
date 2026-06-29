@@ -1,6 +1,8 @@
 package com.comfortableledger.ledger.repository;
 
 import com.comfortableledger.ledger.domain.TransactionRecord;
+import com.comfortableledger.ledger.domain.TransactionType;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,6 +27,15 @@ public interface TransactionRepository extends JpaRepository<TransactionRecord, 
     List<TransactionRecord> findByInstallmentGroupIdOrderByTransactionDateAscIdAsc(String installmentGroupId);
 
     boolean existsByConsumerId(Long consumerId);
+
+    boolean existsByHouseholdIdAndTransactionDateAndTypeAndAmountAndAssetIdAndTitle(
+            Long householdId,
+            LocalDate transactionDate,
+            TransactionType type,
+            BigDecimal amount,
+            Long assetId,
+            String title
+    );
 
     @Query("""
             select transaction

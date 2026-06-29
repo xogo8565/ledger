@@ -109,6 +109,7 @@ npm run dev
 - 더보기 화면 앱 버전 표시
 - 기존 명의 미지정 개인 지출 대상 확인 및 기본 OWNER 명의 일괄 연결
 - 카드 자산 생성/수정 시 결제 계좌/확정일/결제일/자동 결제 설정
+- 카드 자산 등록/수정 시 결제계좌 및 결제일 검증
 - 카테고리 기본 데이터 및 카테고리 관리
 - 월별 수입/지출/예산 요약
 - 카테고리별 예산 사용률과 초과 표시
@@ -138,11 +139,15 @@ npm run dev
 - 지출 거래 소비 태그 입력, 상세 표시, 검색, CSV 내보내기
 - 월별 거래 및 화면 필터/현재 검색 페이지 결과 CSV 내보내기
 - 가족/공동 가계부를 위한 Household/Member 도메인 기반
-- `initial-data/assets_*.xlsx`, `initial-data/transactions_*.xlsx` 엑셀 목록 기반 DB 첫 실행 초기 자산·거래 데이터 주입
+- DB 첫 실행 시 기본 명의 `석수`, 보조 명의 `유진` 자동 생성
+- `initial-data/assets_*.xlsx`, `initial-data/transactions_*.xlsx` 엑셀 목록 기반 초기 자산·거래 데이터 주입
+- `initial-data` 파일 SHA-256 변경 감지 기반 재주입: 배포/업로드 후 변경된 파일만 자산 upsert, 거래 중복 skip 처리
+- `plan/*.png` 참고 자산을 `initial-data/assets_plan_20260629.xlsx`로 반영해 기본 자산 주입
 - 문자열/숫자/암호성 값 공통 유틸 분리
 - 프론트엔드 문자열/숫자/암호성 값 공통 유틸 분리
 - 백엔드 MVC 기준 패키지 세분화: `controller`, `dto`, `config`, `repository`, `service`, `domain`, `util`
 - 프론트엔드 배포 캐시 정책: HTML no-store, 해시 assets immutable로 새 버전 자동 반영
+- 상세/등록/관리 화면 고정 레이어 처리로 기존 UI와 겹침 방지
 
 ## 다음 작업
 

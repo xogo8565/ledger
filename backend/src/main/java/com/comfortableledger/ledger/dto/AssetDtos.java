@@ -2,6 +2,8 @@ package com.comfortableledger.ledger.dto;
 
 import com.comfortableledger.ledger.domain.Asset;
 import com.comfortableledger.ledger.domain.AssetType;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
@@ -60,7 +62,11 @@ public final class AssetDtos {
             String ownerName,
             String memo,
             @NotNull Long paymentAccountId,
+            @Min(1)
+            @Max(31)
             int statementClosingDay,
+            @Min(1)
+            @Max(31)
             int paymentDay,
             boolean autoPayment
     ) {

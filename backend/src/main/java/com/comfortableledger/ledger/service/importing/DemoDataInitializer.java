@@ -5,6 +5,7 @@ import com.comfortableledger.ledger.domain.AssetType;
 import com.comfortableledger.ledger.domain.Category;
 import com.comfortableledger.ledger.domain.CategoryType;
 import com.comfortableledger.ledger.domain.Household;
+import com.comfortableledger.ledger.domain.InitialDataImport;
 import com.comfortableledger.ledger.domain.Member;
 import com.comfortableledger.ledger.domain.MemberRole;
 import com.comfortableledger.ledger.domain.MonthlyBudget;
@@ -13,6 +14,7 @@ import com.comfortableledger.ledger.domain.TransactionType;
 import com.comfortableledger.ledger.repository.AssetRepository;
 import com.comfortableledger.ledger.repository.CategoryRepository;
 import com.comfortableledger.ledger.repository.HouseholdRepository;
+import com.comfortableledger.ledger.repository.InitialDataImportRepository;
 import com.comfortableledger.ledger.repository.MemberRepository;
 import com.comfortableledger.ledger.repository.MonthlyBudgetRepository;
 import com.comfortableledger.ledger.repository.TransactionRepository;
@@ -20,10 +22,13 @@ import com.comfortableledger.ledger.util.NumberValues;
 import com.comfortableledger.ledger.util.StringValues;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,8 +44,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class DemoDataInitializer implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(DemoDataInitializer.class);
+    private static final String RESOURCE_KIND_ASSET = "ASSET";
+    private static final String RESOURCE_KIND_TRANSACTION = "TRANSACTION";
     private static final String ASSET_WORKBOOKS = "classpath*:initial-data/assets_*.xlsx";
     private static final String TRANSACTION_WORKBOOKS = "classpath*:initial-data/transactions_*.xlsx";
+    private static final String DEFAULT_OWNER_NAME = "석수";
+    private static final String SECONDARY_OWNER_NAME = "유진";
     private static final LocalDate EXCEL_DATE_EPOCH = LocalDate.of(1899, 12, 30);
     private static final String[] CATEGORY_COLORS = {
             "#609249", "#95CC5C", "#A6744A", "#CDA570", "#706A5C", "#4F7CAC", "#B45F6A", "#8C6BB1"
@@ -52,6 +61,7 @@ public class DemoDataInitializer implements ApplicationRunner {
     private final CategoryRepository categoryRepository;
     private final MonthlyBudgetRepository monthlyBudgetRepository;
     private final TransactionRepository transactionRepository;
+    private final InitialDataImportRepository initialDataImportRepository;
     private final ResourcePatternResolver resourcePatternResolver;
 
     public DemoDataInitializer(HouseholdRepository householdRepository,
@@ -60,6 +70,7 @@ public class DemoDataInitializer implements ApplicationRunner {
                                CategoryRepository categoryRepository,
                                MonthlyBudgetRepository monthlyBudgetRepository,
                                TransactionRepository transactionRepository,
+                               InitialDataImportRepository initialDataImportRepository,
                                ResourcePatternResolver resourcePatternResolver) {
         this.householdRepository = householdRepository;
         this.memberRepository = memberRepository;
@@ -67,16 +78,13 @@ public class DemoDataInitializer implements ApplicationRunner {
         this.categoryRepository = categoryRepository;
         this.monthlyBudgetRepository = monthlyBudgetRepository;
         this.transactionRepository = transactionRepository;
+        this.initialDataImportRepository = initialDataImportRepository;
         this.resourcePatternResolver = resourcePatternResolver;
     }
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) throws IOException {
-        if (!isEmptyDatabase()) {
-            return;
-        }
-
         Resource[] assetWorkbooks = sortedResources(resourcePatternResolver.getResources(ASSET_WORKBOOKS));
         Resource[] transactionWorkbooks = sortedResources(resourcePatternResolver.getResources(TRANSACTION_WORKBOOKS));
         if (assetWorkbooks.length == 0 && transactionWorkbooks.length == 0) {
@@ -85,39 +93,65 @@ public class DemoDataInitializer implements ApplicationRunner {
             return;
         }
 
-        Household household = householdRepository.save(new Household("초기 가계부"));
-        Member owner = memberRepository.save(new Member(household, "사용자", MemberRole.OWNER));
+        Household household = household();
+        Member owner = ensureMember(household, DEFAULT_OWNER_NAME, MemberRole.OWNER);
+        ensureMember(household, SECONDARY_OWNER_NAME, MemberRole.EDITOR);
 
         Map<String, Asset> assetsByName = new HashMap<>();
+        int assetRowCount = 0;
+        int assetFileCount = 0;
         for (Resource assetWorkbook : assetWorkbooks) {
-            seedAssets(household, assetsByName, InitialDataWorkbookReader.readRows(assetWorkbook));
+            if (!needsImport(RESOURCE_KIND_ASSET, assetWorkbook)) {
+                continue;
+            }
+            List<Map<String, String>> rows = InitialDataWorkbookReader.readRows(assetWorkbook);
+            assetRowCount += seedAssets(household, assetsByName, rows);
+            markImported(RESOURCE_KIND_ASSET, assetWorkbook, rows.size());
+            assetFileCount++;
         }
 
-        Map<CategoryKey, Category> categoriesByKey = new HashMap<>();
+        Map<CategoryKey, Category> categoriesByKey = existingCategories(household);
         int transactionCount = 0;
+        int transactionFileCount = 0;
         for (Resource transactionWorkbook : transactionWorkbooks) {
+            if (!needsImport(RESOURCE_KIND_TRANSACTION, transactionWorkbook)) {
+                continue;
+            }
+            List<Map<String, String>> rows = InitialDataWorkbookReader.readRows(transactionWorkbook);
             transactionCount += seedTransactions(
                     household,
                     owner,
                     assetsByName,
                     categoriesByKey,
-                    InitialDataWorkbookReader.readRows(transactionWorkbook)
+                    rows
             );
+            markImported(RESOURCE_KIND_TRANSACTION, transactionWorkbook, rows.size());
+            transactionFileCount++;
         }
 
-        monthlyBudgetRepository.save(new MonthlyBudget(household, YearMonth.now().toString(), BigDecimal.ZERO));
-        log.info("Seeded initial ledger data from workbooks. assetFiles={}, transactionFiles={}, assets={}, transactions={}, categories={}",
-                assetWorkbooks.length, transactionWorkbooks.length, assetsByName.size(), transactionCount, categoriesByKey.size());
+        monthlyBudgetRepository.findByHouseholdIdAndBudgetMonth(household.getId(), YearMonth.now().toString())
+                .orElseGet(() -> monthlyBudgetRepository.save(
+                        new MonthlyBudget(household, YearMonth.now().toString(), BigDecimal.ZERO)
+                ));
+        log.info("Seeded changed initial data workbooks. assetFiles={}, transactionFiles={}, assetRows={}, transactions={}, categories={}",
+                assetFileCount, transactionFileCount, assetRowCount, transactionCount, categoriesByKey.size());
     }
 
-    private boolean isEmptyDatabase() {
-        return householdRepository.count() == 0
-                && assetRepository.count() == 0
-                && categoryRepository.count() == 0
-                && transactionRepository.count() == 0;
+    private Household household() {
+        return householdRepository.findAll().stream()
+                .min(Comparator.comparing(Household::getId))
+                .orElseGet(() -> householdRepository.save(new Household("초기 가계부")));
     }
 
-    private void seedAssets(Household household, Map<String, Asset> assetsByName, List<Map<String, String>> rows) {
+    private Member ensureMember(Household household, String name, MemberRole role) {
+        return memberRepository.findByHouseholdId(household.getId()).stream()
+                .filter(member -> member.getName().equalsIgnoreCase(name))
+                .findFirst()
+                .orElseGet(() -> memberRepository.save(new Member(household, name, role)));
+    }
+
+    private int seedAssets(Household household, Map<String, Asset> assetsByName, List<Map<String, String>> rows) {
+        int count = 0;
         for (Map<String, String> row : skipHeader(rows)) {
             String name = StringValues.firstNonBlank(row.get("B"), row.get("E"));
             if (name == null) {
@@ -125,21 +159,61 @@ public class DemoDataInitializer implements ApplicationRunner {
             }
 
             BigDecimal balance = NumberValues.parseWonAmount(StringValues.firstNonBlank(row.get("F"), row.get("I")));
-            assetsByName.computeIfAbsent(name,
-                    currentName -> assetRepository.save(new Asset(
-                            household,
-                            inferAssetType(currentName),
-                            currentName,
-                            balance,
-                            groupName(currentName)
-                    )));
+            String ownerName = ownerName(row.get("J"));
+            AssetType assetType = inferAssetType(name);
+            Asset asset = assetsByName.get(name);
+            if (asset == null) {
+                asset = assetRepository.findByHouseholdIdAndNameIgnoreCase(household.getId(), name)
+                        .orElseGet(() -> new Asset(household, assetType, name, balance, groupName(name)));
+            }
+            asset.update(assetType, name, balance, groupName(name), ownerName, asset.getMemo());
+            assetsByName.put(name, assetRepository.save(asset));
+            count++;
         }
+        return count;
     }
 
     private Resource[] sortedResources(Resource[] resources) {
         return Arrays.stream(resources)
                 .sorted(Comparator.comparing(resource -> StringValues.firstNonBlank(resource.getFilename(), "")))
                 .toArray(Resource[]::new);
+    }
+
+    private boolean needsImport(String resourceKind, Resource resource) throws IOException {
+        String checksum = checksum(resource);
+        return initialDataImportRepository.findByResourceKindAndResourceName(resourceKind, resourceName(resource))
+                .map(history -> !history.getChecksum().equals(checksum))
+                .orElse(true);
+    }
+
+    private void markImported(String resourceKind, Resource resource, int rowCount) throws IOException {
+        String resourceName = resourceName(resource);
+        String checksum = checksum(resource);
+        InitialDataImport history = initialDataImportRepository
+                .findByResourceKindAndResourceName(resourceKind, resourceName)
+                .orElseGet(() -> new InitialDataImport(resourceName, resourceKind, checksum, rowCount));
+        history.markImported(checksum, rowCount);
+        initialDataImportRepository.save(history);
+    }
+
+    private String resourceName(Resource resource) {
+        return StringValues.firstNonBlank(resource.getFilename(), resource.getDescription());
+    }
+
+    private String checksum(Resource resource) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (var inputStream = resource.getInputStream()) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = inputStream.read(buffer)) != -1) {
+                    digest.update(buffer, 0, read);
+                }
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 digest is not available", e);
+        }
     }
 
     private int seedTransactions(Household household,
@@ -162,6 +236,16 @@ public class DemoDataInitializer implements ApplicationRunner {
             Asset asset = assetFor(household, assetsByName, assetName);
             String title = StringValues.firstNonBlank(row.get("E"), categoryName);
             String memo = row.get("H");
+            if (transactionRepository.existsByHouseholdIdAndTransactionDateAndTypeAndAmountAndAssetIdAndTitle(
+                    household.getId(),
+                    transactionDate,
+                    transactionType,
+                    amount,
+                    asset.getId(),
+                    title
+            )) {
+                continue;
+            }
 
             transactionRepository.save(new TransactionRecord(
                     household,
@@ -181,6 +265,15 @@ public class DemoDataInitializer implements ApplicationRunner {
             count++;
         }
         return count;
+    }
+
+    private Map<CategoryKey, Category> existingCategories(Household household) {
+        Map<CategoryKey, Category> categoriesByKey = new HashMap<>();
+        for (CategoryType categoryType : CategoryType.values()) {
+            categoryRepository.findByHouseholdIdAndTypeAndActiveTrueOrderBySortOrderAscIdAsc(household.getId(), categoryType)
+                    .forEach(category -> categoriesByKey.put(new CategoryKey(category.getType(), category.getName()), category));
+        }
+        return categoriesByKey;
     }
 
     private Category categoryFor(Household household,
@@ -205,7 +298,17 @@ public class DemoDataInitializer implements ApplicationRunner {
     private Asset assetFor(Household household, Map<String, Asset> assetsByName, String assetName) {
         String normalizedAssetName = StringValues.firstNonBlank(assetName, "미분류 자산");
         return assetsByName.computeIfAbsent(normalizedAssetName,
-                name -> assetRepository.save(new Asset(household, inferAssetType(name), name, BigDecimal.ZERO, groupName(name))));
+                name -> {
+                    Asset existingAsset = assetRepository.findByHouseholdIdAndNameIgnoreCase(household.getId(), name)
+                            .orElse(null);
+                    if (existingAsset != null) {
+                        return existingAsset;
+                    }
+                    AssetType assetType = inferAssetType(name);
+                    Asset asset = new Asset(household, assetType, name, BigDecimal.ZERO, groupName(name));
+                    asset.update(assetType, name, BigDecimal.ZERO, groupName(name), DEFAULT_OWNER_NAME, null);
+                    return assetRepository.save(asset);
+                });
     }
 
     private List<Map<String, String>> skipHeader(List<Map<String, String>> rows) {
@@ -223,19 +326,27 @@ public class DemoDataInitializer implements ApplicationRunner {
     }
 
     private AssetType inferAssetType(String name) {
+        if (name.contains("대출") || name.contains("차입") || name.contains("상환")) {
+            return AssetType.DEBT;
+        }
         if (name.contains("카드")) {
             return AssetType.CARD;
         }
         if (name.contains("현금")) {
             return AssetType.CASH;
         }
-        if (name.contains("대출") || name.contains("차입")) {
-            return AssetType.DEBT;
+        if (name.contains("증권") || name.contains("ISA") || name.contains("종합매매")
+                || name.contains("집합투자") || name.contains("연금저축")) {
+            return AssetType.OTHER;
         }
         return AssetType.BANK;
     }
 
     private String groupName(String name) {
+        if (name.contains("증권") || name.contains("ISA") || name.contains("종합매매")
+                || name.contains("집합투자") || name.contains("연금저축")) {
+            return "증권";
+        }
         return switch (inferAssetType(name)) {
             case CARD -> "카드";
             case CASH -> "현금";
@@ -243,6 +354,14 @@ public class DemoDataInitializer implements ApplicationRunner {
             case BANK -> "계좌";
             case OTHER -> "기타";
         };
+    }
+
+    private String ownerName(String value) {
+        String ownerName = StringValues.firstNonBlank(value, DEFAULT_OWNER_NAME);
+        if (SECONDARY_OWNER_NAME.equals(ownerName)) {
+            return SECONDARY_OWNER_NAME;
+        }
+        return DEFAULT_OWNER_NAME;
     }
 
     private LocalDate parseDate(String value) {
