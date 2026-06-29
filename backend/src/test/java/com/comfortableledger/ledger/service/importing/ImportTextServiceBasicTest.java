@@ -56,6 +56,34 @@ class ImportTextServiceBasicTest {
         assertThat(preview.transactionDate()).isEqualTo(LocalDate.of(2026, 6, 26));
         assertThat(preview.amount()).isEqualByComparingTo(new BigDecimal("9500"));
         assertThat(preview.merchant()).isEqualTo("Americano");
-        assertThat(preview.memo()).contains("항목:");
+        assertThat(preview.memo()).contains("품목:");
+    }
+
+    @Test
+    void parsesMultipleLedgerLinesGroupedByKoreanDateHeaders() {
+        TextImportPreview preview = service.preview("""
+                6월 28일 일요일
+                -25,950원 | 주식회사 원플러스마트서부 | 삼성카드 taptap O
+                +21원 | 예금이자 → 내 NH농협계좌
+
+                6월 27일 토요일
+                -7,800원 | 이마트 신월점 | 삼성카드 taptap O
+                취소 -1,653원 (-1.07 USD) | ORACLE SINGAPORE | KB국민 코웨이III 카드 | 해외 결제
+                """);
+
+        assertThat(preview.items()).hasSize(4);
+        assertThat(preview.memo()).isEqualTo("다건 거래 자동 입력 후보 · 4건");
+        assertThat(preview.transactionDate()).isEqualTo(LocalDate.of(LocalDate.now().getYear(), 6, 28));
+        assertThat(preview.amount()).isEqualByComparingTo(new BigDecimal("25950"));
+        assertThat(preview.merchant()).isEqualTo("주식회사 원플러스마트서부");
+
+        assertThat(preview.items().get(0).type()).isEqualTo(TransactionType.EXPENSE);
+        assertThat(preview.items().get(0).assetName()).isEqualTo("삼성카드 taptap O");
+        assertThat(preview.items().get(1).type()).isEqualTo(TransactionType.INCOME);
+        assertThat(preview.items().get(1).merchant()).isEqualTo("예금이자 → 내 NH농협계좌");
+        assertThat(preview.items().get(2).transactionDate()).isEqualTo(LocalDate.of(LocalDate.now().getYear(), 6, 27));
+        assertThat(preview.items().get(3).type()).isEqualTo(TransactionType.INCOME);
+        assertThat(preview.items().get(3).amount()).isEqualByComparingTo(new BigDecimal("1653"));
+        assertThat(preview.items().get(3).memo()).contains("해외 결제", "취소/환불");
     }
 }

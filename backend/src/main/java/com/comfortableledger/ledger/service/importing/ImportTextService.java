@@ -5,6 +5,7 @@ import com.comfortableledger.ledger.domain.CategoryType;
 import com.comfortableledger.ledger.domain.Household;
 import com.comfortableledger.ledger.domain.TransactionRecord;
 import com.comfortableledger.ledger.domain.TransactionType;
+import com.comfortableledger.ledger.dto.ImportDtos.TextImportItem;
 import com.comfortableledger.ledger.dto.ImportDtos.TextImportPreview;
 import com.comfortableledger.ledger.repository.CategoryRepository;
 import com.comfortableledger.ledger.repository.HouseholdRepository;
@@ -13,7 +14,7 @@ import com.comfortableledger.ledger.util.NumberValues;
 import com.comfortableledger.ledger.util.StringValues;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -28,13 +29,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ImportTextService {
     private static final Pattern AMOUNT_PATTERN = Pattern.compile("([0-9][0-9,]{2,})\\s*(?:원|won|WON)?");
+    private static final Pattern SIGNED_WON_PATTERN = Pattern.compile("([+-]?)\\s*([0-9][0-9,]*)\\s*원");
     private static final Pattern RECEIPT_TOTAL_AMOUNT_PATTERN = Pattern.compile(
             "(?:합계|총액|총 결제 금액|결제금액|받을금액|매출금액|total)\\s*[: ]*([0-9,]+)\\s*(?:원|won)?",
             Pattern.CASE_INSENSITIVE
     );
     private static final Pattern YEAR_DATE_PATTERN = Pattern.compile("(20\\d{2})[./-]\\s*(\\d{1,2})[./-]\\s*(\\d{1,2})");
-    private static final Pattern MONTH_DATE_PATTERN = Pattern.compile("(\\d{1,2})[./월]\\s*(\\d{1,2})\\s*(?:일)?");
-    private static final Pattern SUPPORTING_AMOUNT_PATTERN = Pattern.compile("(?:잔액|누적|한도|사용가능|총액)\\s*[: ]*([0-9,]+)\\s*원?");
+    private static final Pattern MONTH_DATE_PATTERN = Pattern.compile("(\\d{1,2})[./월\\s]+(\\d{1,2})\\s*(?:일)?");
+    private static final Pattern DAILY_HEADER_PATTERN = Pattern.compile("^(\\d{1,2})월\\s*(\\d{1,2})일(?:\\s+\\S+요일)?\\s*$");
+    private static final Pattern SUPPORTING_AMOUNT_PATTERN = Pattern.compile("(?:잔액|누적|한도|사용가능|총액)\\s*[: ]*([0-9,]+)\\s*원");
     private static final Pattern TIME_PATTERN = Pattern.compile("\\b\\d{1,2}[:시]\\d{2}\\b");
     private static final Pattern CARD_SUFFIX_PATTERN = Pattern.compile("\\b\\d{2,4}[-*]\\*{2,4}\\b|\\(\\d{3,4}\\)");
     private static final List<String> ISSUER_WORDS = List.of(
@@ -49,17 +52,17 @@ public class ImportTextService {
     private static final Map<String, List<String>> INCOME_CATEGORY_KEYWORDS = new LinkedHashMap<>();
 
     static {
-        EXPENSE_CATEGORY_KEYWORDS.put("식비", List.of("스타벅스", "카페", "커피", "식당", "김밥", "치킨", "피자", "버거", "배달", "푸드", "레스토랑"));
-        EXPENSE_CATEGORY_KEYWORDS.put("마트/편의점", List.of("cu", "gs25", "세븐일레븐", "이마트", "홈플러스", "롯데마트", "마트", "편의점"));
-        EXPENSE_CATEGORY_KEYWORDS.put("교통/차량", List.of("택시", "카카오t", "주유", "충전소", "하이패스", "코레일", "철도", "버스", "지하철", "주차"));
-        EXPENSE_CATEGORY_KEYWORDS.put("문화생활", List.of("영화", "극장", "서점", "공연", "티켓", "게임", "넷플릭스", "유튜브"));
+        EXPENSE_CATEGORY_KEYWORDS.put("식비", List.of("스타벅스", "카페", "커피", "식당", "김밥", "치킨", "피자", "버거", "배달", "푸드", "맥도날드", "스시", "휴게소"));
+        EXPENSE_CATEGORY_KEYWORDS.put("마트/편의점", List.of("cu", "gs25", "세븐일레븐", "이마트", "원플러스", "롯데마트", "마트", "편의점", "다이소"));
+        EXPENSE_CATEGORY_KEYWORDS.put("교통/차량", List.of("택시", "카카오t", "주유", "충전소", "하이패스", "코레일", "철도", "버스", "지하철", "주차", "주차장"));
+        EXPENSE_CATEGORY_KEYWORDS.put("문화생활", List.of("영화", "극장", "서점", "공연", "예스24", "게임", "넷플릭스", "유튜브", "백화점"));
         EXPENSE_CATEGORY_KEYWORDS.put("패션/미용", List.of("미용실", "헤어", "네일", "의류", "패션", "무신사", "올리브영"));
-        EXPENSE_CATEGORY_KEYWORDS.put("생활용품", List.of("다이소", "가구", "생활용품", "문구", "인상"));
-        EXPENSE_CATEGORY_KEYWORDS.put("주거/통신", List.of("통신", "인터넷", "전기", "가스", "수도", "관리비", "월세"));
+        EXPENSE_CATEGORY_KEYWORDS.put("생활용품", List.of("다이소", "가구", "생활용품", "문구", "쿠팡"));
+        EXPENSE_CATEGORY_KEYWORDS.put("주거/통신", List.of("통신", "인터넷", "전기", "가스", "수도", "관리비", "월세", "oracle"));
         EXPENSE_CATEGORY_KEYWORDS.put("건강", List.of("병원", "의원", "약국", "치과", "한의원", "건강", "검진"));
         INCOME_CATEGORY_KEYWORDS.put("급여", List.of("급여", "월급", "상여", "보너스"));
-        INCOME_CATEGORY_KEYWORDS.put("이자", List.of("이자", "예금이자"));
-        INCOME_CATEGORY_KEYWORDS.put("부수입", List.of("부수입", "정산", "수익", "판매"));
+        INCOME_CATEGORY_KEYWORDS.put("이자", List.of("이자", "예금이자", "입출금통장 이자"));
+        INCOME_CATEGORY_KEYWORDS.put("부수입", List.of("부수입", "정산", "수익", "판매", "환불", "취소"));
     }
 
     private final HouseholdRepository householdRepository;
@@ -77,6 +80,23 @@ public class ImportTextService {
     @Transactional(readOnly = true)
     public TextImportPreview preview(String rawText) {
         String sourceText = rawText == null ? "" : rawText;
+        List<TextImportItem> importedItems = parseLedgerLines(sourceText);
+        if (!importedItems.isEmpty()) {
+            TextImportItem first = importedItems.getFirst();
+            return new TextImportPreview(
+                    sourceText,
+                    first.type(),
+                    first.transactionDate(),
+                    first.amount(),
+                    first.merchant(),
+                    "다건 거래 자동 입력 후보 · " + importedItems.size() + "건",
+                    first.recommendedCategoryId(),
+                    first.recommendedCategoryName(),
+                    first.categoryRecommendationReason(),
+                    importedItems
+            );
+        }
+
         String normalized = normalize(sourceText);
         String primaryText = stripSupportingAmounts(normalized);
         List<ReceiptLineItem> receiptLineItems = extractReceiptLineItems(sourceText);
@@ -102,6 +122,118 @@ public class ImportTextService {
                 recommendation.category() == null ? null : recommendation.category().getName(),
                 recommendation.reason()
         );
+    }
+
+    private List<TextImportItem> parseLedgerLines(String rawText) {
+        if (rawText == null || rawText.isBlank()) {
+            return List.of();
+        }
+        List<TextImportItem> items = new ArrayList<>();
+        LocalDate currentDate = null;
+        for (String rawLine : rawText.lines().toList()) {
+            String line = StringValues.normalizeWhitespace(rawLine);
+            if (line.isBlank()) {
+                continue;
+            }
+            Optional<LocalDate> headerDate = parseDailyHeader(line);
+            if (headerDate.isPresent()) {
+                currentDate = headerDate.get();
+                continue;
+            }
+            parseLedgerLine(line, currentDate).ifPresent(items::add);
+        }
+        return items.size() <= 1 ? List.of() : items;
+    }
+
+    private Optional<LocalDate> parseDailyHeader(String line) {
+        Matcher matcher = DAILY_HEADER_PATTERN.matcher(line);
+        if (!matcher.matches()) {
+            return Optional.empty();
+        }
+        return Optional.of(LocalDate.of(
+                LocalDate.now().getYear(),
+                Integer.parseInt(matcher.group(1)),
+                Integer.parseInt(matcher.group(2))
+        ));
+    }
+
+    private Optional<TextImportItem> parseLedgerLine(String line, LocalDate currentDate) {
+        Matcher amountMatcher = SIGNED_WON_PATTERN.matcher(line);
+        if (!amountMatcher.find()) {
+            return Optional.empty();
+        }
+        BigDecimal amount = NumberValues.parseWonAmount(amountMatcher.group(2)).abs();
+        String sign = amountMatcher.group(1);
+        String remainder = StringValues.normalizeWhitespace(line.substring(amountMatcher.end()));
+        if (remainder.startsWith("|")) {
+            remainder = StringValues.normalizeWhitespace(remainder.substring(1));
+        }
+
+        String[] columns = splitColumns(remainder);
+        String merchant = columns.length == 0 || columns[0].isBlank() ? extractMerchant(line, line) : columns[0];
+        String assetName = columns.length >= 2 ? columns[1] : "";
+        String extraMemo = columns.length >= 3
+                ? java.util.Arrays.stream(columns).skip(2).collect(Collectors.joining(" | "))
+                : "";
+        TransactionType type = ledgerLineType(line, sign, merchant);
+        LocalDate date = currentDate == null ? extractDate(line) : currentDate;
+        CategoryRecommendation recommendation = recommendCategory(type, merchant);
+        String memo = ledgerLineMemo(line, assetName, extraMemo, itemsTransferHint(merchant));
+        return Optional.of(new TextImportItem(
+                line,
+                type,
+                date,
+                amount,
+                merchant,
+                assetName,
+                memo,
+                recommendation.category() == null ? null : recommendation.category().getId(),
+                recommendation.category() == null ? null : recommendation.category().getName(),
+                recommendation.reason()
+        ));
+    }
+
+    private String[] splitColumns(String text) {
+        return Pattern.compile("\\s*\\|\\s*")
+                .splitAsStream(text)
+                .map(StringValues::normalizeWhitespace)
+                .filter(value -> !value.isBlank())
+                .toArray(String[]::new);
+    }
+
+    private TransactionType ledgerLineType(String line, String sign, String merchant) {
+        if (containsAny(line.toLowerCase(Locale.ROOT), "취소", "환불", "승인취소")) {
+            return TransactionType.INCOME;
+        }
+        if ("+".equals(sign)) {
+            return TransactionType.INCOME;
+        }
+        if (itemsTransferHint(merchant)) {
+            return TransactionType.TRANSFER;
+        }
+        return TransactionType.EXPENSE;
+    }
+
+    private boolean itemsTransferHint(String merchant) {
+        String normalized = StringValues.normalizeSearchKey(merchant);
+        return normalized.contains("→")
+                && containsAny(normalized, "내 ", "계좌", "카카오페이", "카카오페이 머니", "nh농협", "하나", "카카오뱅크")
+                && !containsAny(normalized, "보험료", "카드출금", "신한카드", "삼성카드", "kb카드");
+    }
+
+    private String ledgerLineMemo(String line, String assetName, String extraMemo, boolean transferHint) {
+        List<String> parts = new ArrayList<>();
+        parts.add(transferHint ? "다건 거래 자동 입력 후보 · 이체" : "다건 거래 자동 입력 후보");
+        if (!assetName.isBlank()) {
+            parts.add("자산: " + assetName);
+        }
+        if (!extraMemo.isBlank()) {
+            parts.add(extraMemo);
+        }
+        if (containsAny(line, "취소", "환불")) {
+            parts.add("취소/환불");
+        }
+        return String.join(" · ", parts);
     }
 
     private CategoryRecommendation recommendCategory(TransactionType type, String merchant) {
@@ -172,6 +304,7 @@ public class ImportTextService {
     private BigDecimal extractAmount(String rawText) {
         String amountSearchText = YEAR_DATE_PATTERN.matcher(rawText).replaceAll(" ");
         amountSearchText = MONTH_DATE_PATTERN.matcher(amountSearchText).replaceAll(" ");
+        amountSearchText = TIME_PATTERN.matcher(amountSearchText).replaceAll(" ");
         Matcher matcher = AMOUNT_PATTERN.matcher(amountSearchText);
         if (matcher.find()) {
             return NumberValues.parseWonAmount(matcher.group(1));
@@ -193,7 +326,7 @@ public class ImportTextService {
                 .map(StringValues::normalizeWhitespace)
                 .filter(line -> !line.isBlank())
                 .toList();
-        List<ReceiptLineItem> items = new java.util.ArrayList<>();
+        List<ReceiptLineItem> items = new ArrayList<>();
         boolean itemTableStarted = false;
         for (String line : lines) {
             if (!itemTableStarted) {
@@ -340,7 +473,7 @@ public class ImportTextService {
         if (remainingCount > 0) {
             itemsSummary += " 외 " + remainingCount + "건";
         }
-        return baseMemo + "\n항목: " + itemsSummary;
+        return baseMemo + "\n품목: " + itemsSummary;
     }
 
     private String importMemo(String rawText, TransactionType type, boolean receiptLike, List<ReceiptLineItem> receiptLineItems) {

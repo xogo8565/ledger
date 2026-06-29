@@ -28,7 +28,7 @@ import {
   RecurringManagerScreen
 } from './screens/ScheduleScreens';
 import { StatsScreen } from './screens/StatsScreen';
-import { EntryChoiceSheet, EntryScreen, ReceiptOcrScreen, TransactionDetailScreen } from './screens/TransactionScreens';
+import { EntryChoiceSheet, EntryScreen, ManualTextImportScreen, ReceiptOcrScreen, TransactionDetailScreen } from './screens/TransactionScreens';
 import { csvCell, downloadTextFile, filteredFileLabel } from './utils/csv';
 import { formatDate } from './utils/format';
 
@@ -44,6 +44,14 @@ const consumptionScopeLabels = {
   PERSONAL: '개인',
   SHARED: '공동'
 };
+
+function isLikelyIosBrowser() {
+  if (typeof navigator === 'undefined') return false;
+  const userAgent = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  const touchPoints = navigator.maxTouchPoints || 0;
+  return /iPad|iPhone|iPod/.test(userAgent) || (platform === 'MacIntel' && touchPoints > 1);
+}
 
 function App() {
   const [mainTab, setMainTab] = useState('ledger');
@@ -210,6 +218,14 @@ function App() {
     setReceiptFiles([]);
     setInstallmentReceiptTargetIndex(1);
     setPanel('receiptOcr');
+  }
+
+  function openManualTextImport() {
+    setEditingTransaction(null);
+    setEditingInstallmentGroup(null);
+    setReceiptFiles([]);
+    setInstallmentReceiptTargetIndex(1);
+    setPanel('textImport');
   }
 
   async function openTransactionDetail(transaction) {
@@ -431,16 +447,20 @@ function App() {
   }
 
   async function openClipboardEntry() {
+    if (isLikelyIosBrowser() || !navigator.clipboard?.readText) {
+      openManualTextImport();
+      return;
+    }
     let clipboardText = '';
     try {
       clipboardText = await navigator.clipboard.readText();
     } catch (error) {
       console.error(error);
-      window.alert('클립보드 내용을 읽을 수 없습니다. 브라우저의 클립보드 권한을 확인해 주세요.');
+      openManualTextImport();
       return;
     }
     if (!clipboardText.trim()) {
-      window.alert('클립보드에 분석할 문자 내용이 없습니다.');
+      openManualTextImport();
       return;
     }
     const result = await ledgerApi.parseTransactionText(clipboardText);
@@ -449,6 +469,24 @@ function App() {
       return;
     }
     const parsed = result.data;
+    setEditingTransaction(null);
+    setEditingInstallmentGroup(null);
+    setForm({
+      ...emptyTransactionForm(),
+      type: parsed.type || 'EXPENSE',
+      transactionDate: parsed.transactionDate || today,
+      amount: parsed.amount || '',
+      categoryId: parsed.recommendedCategoryId ? String(parsed.recommendedCategoryId) : '',
+      title: parsed.merchant || '',
+      memo: parsed.memo || '',
+      consumerMemberId: parsed.type === 'EXPENSE' || !parsed.type ? defaultConsumerMemberId(members) : ''
+    });
+    setEntryExpression(String(parsed.amount || ''));
+    setReceiptFiles([]);
+    setPanel('entry');
+  }
+
+  function applyTextImportPreview(parsed) {
     setEditingTransaction(null);
     setEditingInstallmentGroup(null);
     setForm({
@@ -599,6 +637,13 @@ function App() {
             previewReceiptOcr={ledgerApi.previewReceiptOcr}
             parseTransactionText={ledgerApi.parseTransactionText}
             applyReceiptOcrPreview={applyReceiptOcrPreview}
+            onClose={closePanel}
+          />
+        )}
+        {panel === 'textImport' && (
+          <ManualTextImportScreen
+            parseTransactionText={ledgerApi.parseTransactionText}
+            applyTextImportPreview={applyTextImportPreview}
             onClose={closePanel}
           />
         )}

@@ -133,6 +133,55 @@ export function EntryChoiceSheet({ openEntry, openClipboardEntry, openReceiptOcr
   );
 }
 
+export function ManualTextImportScreen({ parseTransactionText, applyTextImportPreview, onClose }) {
+  const [rawText, setRawText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!trimToEmpty(rawText)) {
+      setError('붙여넣을 카드/은행 문자 또는 거래 목록을 입력해 주세요.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    const response = await parseTransactionText(rawText);
+    setLoading(false);
+    if (!response.ok) {
+      setError(response.data?.message || '문자 분석에 실패했습니다.');
+      return;
+    }
+    applyTextImportPreview(response.data);
+  }
+
+  return (
+    <div className="full-panel">
+      <section className="receipt-ocr-screen">
+        <AppHeader title="문자 붙여넣기" left={<BackButton label="닫기" onClick={onClose} />} />
+        <form className="receipt-ocr-card" onSubmit={submit}>
+          <strong>수동 붙여넣기 자동 입력</strong>
+          <p>아이폰 Safari/Chrome에서는 브라우저가 클립보드 자동 읽기를 막을 수 있습니다. 문자나 거래 목록을 직접 붙여넣은 뒤 분석하세요.</p>
+          <textarea
+            className="ocr-raw-text-editor"
+            value={rawText}
+            onChange={(event) => {
+              setRawText(event.target.value);
+              setError('');
+            }}
+            autoFocus
+            rows={12}
+            placeholder="카드 승인 문자, 은행 입출금 문자, 날짜별 거래 목록을 붙여넣으세요."
+          />
+          {error && <em className="ocr-error">{error}</em>}
+          <button type="submit" disabled={loading}>{loading ? '분석 중...' : '분석 후 거래 입력'}</button>
+          <small>여러 건이 분석된 경우 현재 입력 화면은 첫 번째 거래 기준으로 채워집니다.</small>
+        </form>
+      </section>
+    </div>
+  );
+}
+
 export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, applyReceiptOcrPreview, onClose }) {
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
