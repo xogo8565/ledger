@@ -2,6 +2,7 @@ package com.comfortableledger.ledger.service.importing;
 
 import com.comfortableledger.ledger.domain.Asset;
 import com.comfortableledger.ledger.domain.AssetType;
+import com.comfortableledger.ledger.domain.CardProfile;
 import com.comfortableledger.ledger.domain.Category;
 import com.comfortableledger.ledger.domain.CategoryType;
 import com.comfortableledger.ledger.domain.Household;
@@ -12,6 +13,7 @@ import com.comfortableledger.ledger.domain.MonthlyBudget;
 import com.comfortableledger.ledger.domain.TransactionRecord;
 import com.comfortableledger.ledger.domain.TransactionType;
 import com.comfortableledger.ledger.repository.AssetRepository;
+import com.comfortableledger.ledger.repository.CardProfileRepository;
 import com.comfortableledger.ledger.repository.CategoryRepository;
 import com.comfortableledger.ledger.repository.HouseholdRepository;
 import com.comfortableledger.ledger.repository.InitialDataImportRepository;
@@ -48,6 +50,9 @@ public class DemoDataInitializer implements ApplicationRunner {
     private static final String RESOURCE_KIND_TRANSACTION = "TRANSACTION";
     private static final String ASSET_WORKBOOKS = "classpath*:initial-data/assets_*.xlsx";
     private static final String TRANSACTION_WORKBOOKS = "classpath*:initial-data/transactions_*.xlsx";
+    private static final String PLAN_ASSET_WORKBOOK = "assets_plan_20260629.xlsx";
+    private static final int PLAN_CARD_STATEMENT_CLOSING_DAY = 16;
+    private static final int PLAN_CARD_PAYMENT_DAY = 25;
     private static final String DEFAULT_OWNER_NAME = "석수";
     private static final String SECONDARY_OWNER_NAME = "유진";
     private static final LocalDate EXCEL_DATE_EPOCH = LocalDate.of(1899, 12, 30);
@@ -58,6 +63,7 @@ public class DemoDataInitializer implements ApplicationRunner {
     private final HouseholdRepository householdRepository;
     private final MemberRepository memberRepository;
     private final AssetRepository assetRepository;
+    private final CardProfileRepository cardProfileRepository;
     private final CategoryRepository categoryRepository;
     private final MonthlyBudgetRepository monthlyBudgetRepository;
     private final TransactionRepository transactionRepository;
@@ -67,6 +73,7 @@ public class DemoDataInitializer implements ApplicationRunner {
     public DemoDataInitializer(HouseholdRepository householdRepository,
                                MemberRepository memberRepository,
                                AssetRepository assetRepository,
+                               CardProfileRepository cardProfileRepository,
                                CategoryRepository categoryRepository,
                                MonthlyBudgetRepository monthlyBudgetRepository,
                                TransactionRepository transactionRepository,
@@ -75,6 +82,7 @@ public class DemoDataInitializer implements ApplicationRunner {
         this.householdRepository = householdRepository;
         this.memberRepository = memberRepository;
         this.assetRepository = assetRepository;
+        this.cardProfileRepository = cardProfileRepository;
         this.categoryRepository = categoryRepository;
         this.monthlyBudgetRepository = monthlyBudgetRepository;
         this.transactionRepository = transactionRepository;
@@ -105,7 +113,7 @@ public class DemoDataInitializer implements ApplicationRunner {
                 continue;
             }
             List<Map<String, String>> rows = InitialDataWorkbookReader.readRows(assetWorkbook);
-            assetRowCount += seedAssets(household, assetsByName, rows);
+            assetRowCount += seedAssets(household, assetsByName, rows, isPlanAssetWorkbook(assetWorkbook));
             markImported(RESOURCE_KIND_ASSET, assetWorkbook, rows.size());
             assetFileCount++;
         }
@@ -150,7 +158,8 @@ public class DemoDataInitializer implements ApplicationRunner {
                 .orElseGet(() -> memberRepository.save(new Member(household, name, role)));
     }
 
-    private int seedAssets(Household household, Map<String, Asset> assetsByName, List<Map<String, String>> rows) {
+    private int seedAssets(Household household, Map<String, Asset> assetsByName, List<Map<String, String>> rows,
+                           boolean planAssetWorkbook) {
         int count = 0;
         for (Map<String, String> row : skipHeader(rows)) {
             String name = StringValues.firstNonBlank(row.get("B"), row.get("E"));
@@ -158,19 +167,52 @@ public class DemoDataInitializer implements ApplicationRunner {
                 continue;
             }
 
-            BigDecimal balance = NumberValues.parseWonAmount(StringValues.firstNonBlank(row.get("F"), row.get("I")));
             String ownerName = ownerName(row.get("J"));
             AssetType assetType = inferAssetType(name);
+            BigDecimal balance = assetBalance(row, assetType, planAssetWorkbook);
             Asset asset = assetsByName.get(name);
             if (asset == null) {
                 asset = assetRepository.findByHouseholdIdAndNameIgnoreCase(household.getId(), name)
                         .orElseGet(() -> new Asset(household, assetType, name, balance, groupName(name)));
             }
             asset.update(assetType, name, balance, groupName(name), ownerName, asset.getMemo());
-            assetsByName.put(name, assetRepository.save(asset));
+            Asset savedAsset = assetRepository.save(asset);
+            if (planAssetWorkbook && savedAsset.getType() == AssetType.CARD) {
+                ensurePlanCardProfile(savedAsset);
+            }
+            assetsByName.put(name, savedAsset);
             count++;
         }
         return count;
+    }
+
+    private BigDecimal assetBalance(Map<String, String> row, AssetType assetType, boolean planAssetWorkbook) {
+        if (planAssetWorkbook && assetType == AssetType.CARD) {
+            return BigDecimal.ZERO;
+        }
+        return NumberValues.parseWonAmount(StringValues.firstNonBlank(row.get("F"), row.get("I")));
+    }
+
+    private void ensurePlanCardProfile(Asset cardAsset) {
+        CardProfile cardProfile = cardAsset.getCardProfile();
+        if (cardProfile == null) {
+            cardProfile = new CardProfile(
+                    cardAsset,
+                    null,
+                    PLAN_CARD_STATEMENT_CLOSING_DAY,
+                    PLAN_CARD_PAYMENT_DAY,
+                    false
+            );
+            cardProfileRepository.save(cardProfile);
+            cardAsset.setCardProfile(cardProfile);
+            return;
+        }
+        cardProfile.update(
+                cardProfile.getPaymentAccount(),
+                PLAN_CARD_STATEMENT_CLOSING_DAY,
+                PLAN_CARD_PAYMENT_DAY,
+                cardProfile.isAutoPayment()
+        );
     }
 
     private Resource[] sortedResources(Resource[] resources) {
@@ -198,6 +240,10 @@ public class DemoDataInitializer implements ApplicationRunner {
 
     private String resourceName(Resource resource) {
         return StringValues.firstNonBlank(resource.getFilename(), resource.getDescription());
+    }
+
+    private boolean isPlanAssetWorkbook(Resource resource) {
+        return PLAN_ASSET_WORKBOOK.equals(resourceName(resource));
     }
 
     private String checksum(Resource resource) throws IOException {

@@ -143,6 +143,7 @@ npm run dev
 - `initial-data/assets_*.xlsx`, `initial-data/transactions_*.xlsx` 엑셀 목록 기반 초기 자산·거래 데이터 주입
 - `initial-data` 파일 SHA-256 변경 감지 기반 재주입: 배포/업로드 후 변경된 파일만 자산 upsert, 거래 중복 skip 처리
 - `plan/*.png` 참고 자산을 `initial-data/assets_plan_20260629.xlsx`로 반영해 기본 자산 주입
+- `assets_plan_20260629.xlsx` 카드 자산은 금액 0원, 확정일 16일, 결제일 25일로 주입
 - 문자열/숫자/암호성 값 공통 유틸 분리
 - 프론트엔드 문자열/숫자/암호성 값 공통 유틸 분리
 - 백엔드 MVC 기준 패키지 세분화: `controller`, `dto`, `config`, `repository`, `service`, `domain`, `util`

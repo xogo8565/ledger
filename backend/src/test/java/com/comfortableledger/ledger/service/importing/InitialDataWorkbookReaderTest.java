@@ -56,5 +56,8 @@ class InitialDataWorkbookReaderTest {
                         "KB국민 코웨이III 카드",
                         "삼성카드 taptap O"
                 );
+        assertThat(rows.subList(12, rows.size()))
+                .extracting(row -> row.get("F"))
+                .containsOnly("0");
     }
 }
