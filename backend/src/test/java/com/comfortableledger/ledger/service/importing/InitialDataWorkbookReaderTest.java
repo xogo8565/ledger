@@ -45,6 +45,8 @@ class InitialDataWorkbookReaderTest {
 
         assertThat(rows).hasSize(18);
         assertThat(rows.get(0)).containsEntry("J", "명의");
+        assertThat(rows.get(0)).containsEntry("K", "확정일");
+        assertThat(rows.get(0)).containsEntry("L", "결제일");
         assertThat(rows.subList(1, rows.size()))
                 .extracting(row -> row.get("J"))
                 .containsOnly("석수");
@@ -59,5 +61,11 @@ class InitialDataWorkbookReaderTest {
         assertThat(rows.subList(12, rows.size()))
                 .extracting(row -> row.get("F"))
                 .containsOnly("0");
+        assertThat(rows.subList(12, rows.size()))
+                .extracting(row -> row.get("K"))
+                .containsOnly("16");
+        assertThat(rows.subList(12, rows.size()))
+                .extracting(row -> row.get("L"))
+                .containsOnly("25");
     }
 }

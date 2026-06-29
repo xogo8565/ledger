@@ -21,7 +21,8 @@ public final class AssetDtos {
             String groupName,
             String ownerName,
             String memo,
-            CardDto card
+            CardDto card,
+            DebtDto debt
     ) {
         public static AssetDto from(Asset asset) {
             CardDto card = asset.getCardProfile() == null
@@ -32,6 +33,15 @@ public final class AssetDtos {
                     asset.getCardProfile().getPaymentDay(),
                     asset.getCardProfile().isAutoPayment()
             );
+            DebtDto debt = asset.getDebtProfile() == null
+                    ? null
+                    : new DebtDto(
+                    asset.getDebtProfile().getPaymentAccount() == null ? null : asset.getDebtProfile().getPaymentAccount().getId(),
+                    asset.getDebtProfile().getAnnualInterestRate(),
+                    asset.getDebtProfile().getPaymentDay(),
+                    asset.getDebtProfile().isAutoDeduct(),
+                    asset.getDebtProfile().getLastDeductedMonth()
+            );
             return new AssetDto(
                     asset.getId(),
                     asset.getType(),
@@ -40,7 +50,8 @@ public final class AssetDtos {
                     asset.getGroupName(),
                     asset.getOwnerName(),
                     asset.getMemo(),
-                    card
+                    card,
+                    debt
             );
         }
     }
@@ -51,7 +62,13 @@ public final class AssetDtos {
             @NotNull BigDecimal balance,
             String groupName,
             String ownerName,
-            String memo
+            String memo,
+            Long debtPaymentAccountId,
+            BigDecimal annualInterestRate,
+            @Min(1)
+            @Max(31)
+            Integer debtPaymentDay,
+            Boolean debtAutoDeduct
     ) {
     }
 
@@ -73,6 +90,10 @@ public final class AssetDtos {
     }
 
     public record CardDto(Long paymentAccountId, int statementClosingDay, int paymentDay, boolean autoPayment) {
+    }
+
+    public record DebtDto(Long paymentAccountId, BigDecimal annualInterestRate, int paymentDay,
+                          boolean autoDeduct, String lastDeductedMonth) {
     }
 
     public record AssetSummaryDto(

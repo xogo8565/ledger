@@ -51,8 +51,6 @@ public class DemoDataInitializer implements ApplicationRunner {
     private static final String ASSET_WORKBOOKS = "classpath*:initial-data/assets_*.xlsx";
     private static final String TRANSACTION_WORKBOOKS = "classpath*:initial-data/transactions_*.xlsx";
     private static final String PLAN_ASSET_WORKBOOK = "assets_plan_20260629.xlsx";
-    private static final int PLAN_CARD_STATEMENT_CLOSING_DAY = 16;
-    private static final int PLAN_CARD_PAYMENT_DAY = 25;
     private static final String DEFAULT_OWNER_NAME = "석수";
     private static final String SECONDARY_OWNER_NAME = "유진";
     private static final LocalDate EXCEL_DATE_EPOCH = LocalDate.of(1899, 12, 30);
@@ -178,7 +176,7 @@ public class DemoDataInitializer implements ApplicationRunner {
             asset.update(assetType, name, balance, groupName(name), ownerName, asset.getMemo());
             Asset savedAsset = assetRepository.save(asset);
             if (planAssetWorkbook && savedAsset.getType() == AssetType.CARD) {
-                ensurePlanCardProfile(savedAsset);
+                ensurePlanCardProfile(savedAsset, row);
             }
             assetsByName.put(name, savedAsset);
             count++;
@@ -193,14 +191,16 @@ public class DemoDataInitializer implements ApplicationRunner {
         return NumberValues.parseWonAmount(StringValues.firstNonBlank(row.get("F"), row.get("I")));
     }
 
-    private void ensurePlanCardProfile(Asset cardAsset) {
+    private void ensurePlanCardProfile(Asset cardAsset, Map<String, String> row) {
+        int statementClosingDay = parseDay(row.get("K"), "Card statement closing day");
+        int paymentDay = parseDay(row.get("L"), "Card payment day");
         CardProfile cardProfile = cardAsset.getCardProfile();
         if (cardProfile == null) {
             cardProfile = new CardProfile(
                     cardAsset,
                     null,
-                    PLAN_CARD_STATEMENT_CLOSING_DAY,
-                    PLAN_CARD_PAYMENT_DAY,
+                    statementClosingDay,
+                    paymentDay,
                     false
             );
             cardProfileRepository.save(cardProfile);
@@ -209,10 +209,19 @@ public class DemoDataInitializer implements ApplicationRunner {
         }
         cardProfile.update(
                 cardProfile.getPaymentAccount(),
-                PLAN_CARD_STATEMENT_CLOSING_DAY,
-                PLAN_CARD_PAYMENT_DAY,
+                statementClosingDay,
+                paymentDay,
                 cardProfile.isAutoPayment()
         );
+    }
+
+    private int parseDay(String value, String fieldName) {
+        BigDecimal parsed = NumberValues.parseWonAmount(value);
+        int day = parsed.intValue();
+        if (day < 1 || day > 31) {
+            throw new IllegalArgumentException(fieldName + " must be between 1 and 31");
+        }
+        return day;
     }
 
     private Resource[] sortedResources(Resource[] resources) {

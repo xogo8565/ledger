@@ -31,6 +31,10 @@ app:
     auto-generate-enabled: ${RECURRING_TRANSACTION_AUTO_GENERATE_ENABLED:true}
     auto-generate-cron: ${RECURRING_TRANSACTION_AUTO_GENERATE_CRON:0 20 4 * * *}
     zone: ${RECURRING_TRANSACTION_ZONE:Asia/Seoul}
+  debt-auto-deduction:
+    enabled: ${DEBT_AUTO_DEDUCTION_ENABLED:true}
+    cron: ${DEBT_AUTO_DEDUCTION_CRON:0 30 4 * * *}
+    zone: ${DEBT_AUTO_DEDUCTION_ZONE:Asia/Seoul}
 
 logging:
   file:

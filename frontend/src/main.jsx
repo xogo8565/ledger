@@ -264,7 +264,11 @@ function App() {
       paymentAccountId: asset.card?.paymentAccountId ? String(asset.card.paymentAccountId) : '',
       statementClosingDay: asset.card?.statementClosingDay || 1,
       paymentDay: asset.card?.paymentDay || 1,
-      autoPayment: asset.card?.autoPayment ?? true
+      autoPayment: asset.card?.autoPayment ?? true,
+      debtPaymentAccountId: asset.debt?.paymentAccountId ? String(asset.debt.paymentAccountId) : '',
+      annualInterestRate: asset.debt?.annualInterestRate ? String(Number(asset.debt.annualInterestRate)) : '',
+      debtPaymentDay: asset.debt?.paymentDay || 25,
+      debtAutoDeduct: asset.debt?.autoDeduct ?? false
     } : emptyAssetForm());
     setPanel('assetForm');
   }
@@ -866,7 +870,11 @@ function emptyAssetForm() {
     paymentAccountId: '',
     statementClosingDay: 1,
     paymentDay: 1,
-    autoPayment: true
+    autoPayment: true,
+    debtPaymentAccountId: '',
+    annualInterestRate: '',
+    debtPaymentDay: 25,
+    debtAutoDeduct: false
   };
 }
 

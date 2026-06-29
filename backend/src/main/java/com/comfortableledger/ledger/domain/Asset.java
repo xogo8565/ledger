@@ -45,6 +45,9 @@ public class Asset {
     @OneToOne(mappedBy = "asset", cascade = CascadeType.ALL, orphanRemoval = true)
     private CardProfile cardProfile;
 
+    @OneToOne(mappedBy = "asset", cascade = CascadeType.ALL, orphanRemoval = true)
+    private DebtProfile debtProfile;
+
     protected Asset() {
     }
 
@@ -102,6 +105,14 @@ public class Asset {
 
     public void setCardProfile(CardProfile cardProfile) {
         this.cardProfile = cardProfile;
+    }
+
+    public DebtProfile getDebtProfile() {
+        return debtProfile;
+    }
+
+    public void setDebtProfile(DebtProfile debtProfile) {
+        this.debtProfile = debtProfile;
     }
 
     public void changeBalance(BigDecimal delta) {

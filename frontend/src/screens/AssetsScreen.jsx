@@ -262,6 +262,48 @@ export function AssetFormScreen({ form, setForm, assets, members, editingAsset, 
               </label>
             </section>
           )}
+          {form.type === 'DEBT' && (
+            <section className="card-profile-fields">
+              <h2>부채 자동 차감 설정</h2>
+              <LineField label="출금계좌">
+                <select
+                  value={form.debtPaymentAccountId}
+                  onChange={(event) => setForm((prev) => ({ ...prev, debtPaymentAccountId: event.target.value }))}
+                  required={form.debtAutoDeduct}
+                >
+                  <option value="">선택</option>
+                  {paymentAccounts.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
+                </select>
+              </LineField>
+              <LineField label="연 금리(%)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  value={form.annualInterestRate}
+                  onChange={(event) => setForm((prev) => ({ ...prev, annualInterestRate: event.target.value }))}
+                  placeholder="0"
+                />
+              </LineField>
+              <LineField label="차감일">
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={form.debtPaymentDay}
+                  onChange={(event) => setForm((prev) => ({ ...prev, debtPaymentDay: event.target.value }))}
+                />
+              </LineField>
+              <label className="toggle-line">
+                <span>이자 자동 차감</span>
+                <input
+                  type="checkbox"
+                  checked={form.debtAutoDeduct}
+                  onChange={(event) => setForm((prev) => ({ ...prev, debtAutoDeduct: event.target.checked }))}
+                />
+              </label>
+            </section>
+          )}
         </section>
         <button className="wide-save-button" type="submit">저장</button>
       </form>

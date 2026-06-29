@@ -17,7 +17,7 @@ export function AppShell({
 }) {
   return (
     <main className="page-frame">
-      <section className="phone-shell" aria-label="편한가계부 미리보기">
+      <section className="phone-shell" aria-label="가계부 미리보기">
         {content}
         {showAddAction && (
           <div className="floating-actions">

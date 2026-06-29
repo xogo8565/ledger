@@ -5,6 +5,7 @@ import com.comfortableledger.ledger.domain.AssetType;
 import com.comfortableledger.ledger.domain.CardProfile;
 import com.comfortableledger.ledger.domain.Category;
 import com.comfortableledger.ledger.domain.CategoryType;
+import com.comfortableledger.ledger.domain.DebtProfile;
 import com.comfortableledger.ledger.domain.Household;
 import com.comfortableledger.ledger.domain.Member;
 import com.comfortableledger.ledger.dto.AssetDtos.AssetDto;
@@ -16,6 +17,7 @@ import com.comfortableledger.ledger.dto.CategoryDtos.SaveCategoryRequest;
 import com.comfortableledger.ledger.repository.AssetRepository;
 import com.comfortableledger.ledger.repository.CardProfileRepository;
 import com.comfortableledger.ledger.repository.CategoryRepository;
+import com.comfortableledger.ledger.repository.DebtProfileRepository;
 import com.comfortableledger.ledger.repository.HouseholdRepository;
 import com.comfortableledger.ledger.repository.MemberRepository;
 import com.comfortableledger.ledger.util.StringValues;
@@ -34,15 +36,18 @@ public class AssetManagementService {
     private final AssetRepository assetRepository;
     private final CategoryRepository categoryRepository;
     private final CardProfileRepository cardProfileRepository;
+    private final DebtProfileRepository debtProfileRepository;
 
     public AssetManagementService(HouseholdRepository householdRepository, MemberRepository memberRepository,
                                   AssetRepository assetRepository, CategoryRepository categoryRepository,
-                                  CardProfileRepository cardProfileRepository) {
+                                  CardProfileRepository cardProfileRepository,
+                                  DebtProfileRepository debtProfileRepository) {
         this.householdRepository = householdRepository;
         this.memberRepository = memberRepository;
         this.assetRepository = assetRepository;
         this.categoryRepository = categoryRepository;
         this.cardProfileRepository = cardProfileRepository;
+        this.debtProfileRepository = debtProfileRepository;
     }
 
     @Transactional(readOnly = true)
@@ -94,7 +99,9 @@ public class AssetManagementService {
                 household, request.type(), request.name(), request.balance(),
                 normalizedAssetGroup(request.type(), request.groupName()));
         asset.update(asset.getType(), asset.getName(), asset.getBalance(), asset.getGroupName(), ownerName, request.memo());
-        return AssetDto.from(assetRepository.save(asset));
+        Asset savedAsset = assetRepository.save(asset);
+        updateDebtProfile(savedAsset, request);
+        return AssetDto.from(savedAsset);
     }
 
     @Transactional
@@ -122,6 +129,7 @@ public class AssetManagementService {
                 request.type(), request.name(), request.balance(),
                 normalizedAssetGroup(request.type(), request.groupName()),
                 registeredOwnerName(asset.getHousehold(), request.ownerName()), request.memo());
+        updateDebtProfile(asset, request);
         return AssetDto.from(asset);
     }
 
@@ -224,6 +232,40 @@ public class AssetManagementService {
             throw new IllegalArgumentException("Card payment account must be a cash, bank, or other asset");
         }
         return paymentAccount;
+    }
+
+    private void updateDebtProfile(Asset asset, SaveAssetRequest request) {
+        if (request.type() != AssetType.DEBT) {
+            if (asset.getDebtProfile() != null) {
+                debtProfileRepository.delete(asset.getDebtProfile());
+                asset.setDebtProfile(null);
+            }
+            return;
+        }
+
+        boolean autoDeduct = Boolean.TRUE.equals(request.debtAutoDeduct());
+        Asset paymentAccount = null;
+        if (request.debtPaymentAccountId() != null) {
+            paymentAccount = paymentAccountFor(asset.getHousehold(), request.debtPaymentAccountId());
+        }
+        if (autoDeduct && paymentAccount == null) {
+            throw new IllegalArgumentException("Debt payment account is required for auto deduction");
+        }
+        BigDecimal annualInterestRate = request.annualInterestRate() == null
+                ? BigDecimal.ZERO
+                : request.annualInterestRate();
+        if (annualInterestRate.signum() < 0) {
+            throw new IllegalArgumentException("Debt interest rate must not be negative");
+        }
+        int paymentDay = request.debtPaymentDay() == null ? 25 : request.debtPaymentDay();
+        DebtProfile debtProfile = asset.getDebtProfile();
+        if (debtProfile == null) {
+            debtProfile = new DebtProfile(asset, paymentAccount, annualInterestRate, paymentDay, autoDeduct);
+            debtProfileRepository.save(debtProfile);
+            asset.setDebtProfile(debtProfile);
+            return;
+        }
+        debtProfile.update(paymentAccount, annualInterestRate, paymentDay, autoDeduct);
     }
 
     private String normalizedAssetGroup(AssetType type, String groupName) {

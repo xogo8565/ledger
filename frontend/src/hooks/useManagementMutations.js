@@ -49,7 +49,11 @@ export function useManagementMutations({
       paymentAccountId: assetForm.paymentAccountId ? toNumber(assetForm.paymentAccountId) : null,
       statementClosingDay: toNumber(assetForm.statementClosingDay, 1),
       paymentDay: toNumber(assetForm.paymentDay, 1),
-      autoPayment: Boolean(assetForm.autoPayment)
+      autoPayment: Boolean(assetForm.autoPayment),
+      debtPaymentAccountId: assetForm.debtPaymentAccountId ? toNumber(assetForm.debtPaymentAccountId) : null,
+      annualInterestRate: toNumber(assetForm.annualInterestRate, 0),
+      debtPaymentDay: toNumber(assetForm.debtPaymentDay, 25),
+      debtAutoDeduct: Boolean(assetForm.debtAutoDeduct)
     };
     const result = await run(
       () => managementApi.saveAsset({
