@@ -1821,6 +1821,24 @@ button {
   font-size: 28px;
 }
 
+.app-version-card {
+  margin: 16px 18px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-muted);
+  background: var(--surface-soft);
+  font-size: 13px;
+}
+
+.app-version-card strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
 .full-panel {
   position: absolute;
   inset: 0;

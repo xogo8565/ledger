@@ -1,4 +1,7 @@
 import { AppHeader, BackButton, EmptyState, IconButton } from '../components/ui';
+import packageInfo from '../../package.json';
+
+const appVersion = import.meta.env.VITE_APP_VERSION || packageInfo.version || '0.0.0';
 
 export function MoreScreen({
   exportMonthlyTransactions,
@@ -12,6 +15,10 @@ export function MoreScreen({
         <button type="button" onClick={openCategoryManager}>카테고리 관리<span>›</span></button>
         <button type="button" onClick={openMemberManager}>명의 관리<span>›</span></button>
         <button type="button" onClick={exportMonthlyTransactions}>월 거래 CSV 내보내기<span>›</span></button>
+      </section>
+      <section className="app-version-card" aria-label="앱 버전">
+        <span>앱 버전</span>
+        <strong>v{appVersion}</strong>
       </section>
     </div>
   );

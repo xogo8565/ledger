@@ -45,12 +45,15 @@ const consumptionScopeLabels = {
   SHARED: '공동'
 };
 
-function isLikelyIosBrowser() {
+function isRestrictedMobileClipboardBrowser() {
   if (typeof navigator === 'undefined') return false;
   const userAgent = navigator.userAgent || '';
   const platform = navigator.platform || '';
   const touchPoints = navigator.maxTouchPoints || 0;
-  return /iPad|iPhone|iPod/.test(userAgent) || (platform === 'MacIntel' && touchPoints > 1);
+  const isiOS = /iPad|iPhone|iPod|CriOS|FxiOS|EdgiOS/i.test(userAgent)
+    || (platform === 'MacIntel' && touchPoints > 1);
+  const isMobileWebKit = /Mobile\/.+Safari/i.test(userAgent);
+  return isiOS || isMobileWebKit;
 }
 
 function App() {
@@ -447,7 +450,7 @@ function App() {
   }
 
   async function openClipboardEntry() {
-    if (isLikelyIosBrowser() || !navigator.clipboard?.readText) {
+    if (isRestrictedMobileClipboardBrowser() || !navigator.clipboard?.readText) {
       openManualTextImport();
       return;
     }
@@ -465,25 +468,10 @@ function App() {
     }
     const result = await ledgerApi.parseTransactionText(clipboardText);
     if (!result.ok) {
-      window.alert('클립보드 문자 분석에 실패했습니다.');
+      openManualTextImport();
       return;
     }
-    const parsed = result.data;
-    setEditingTransaction(null);
-    setEditingInstallmentGroup(null);
-    setForm({
-      ...emptyTransactionForm(),
-      type: parsed.type || 'EXPENSE',
-      transactionDate: parsed.transactionDate || today,
-      amount: parsed.amount || '',
-      categoryId: parsed.recommendedCategoryId ? String(parsed.recommendedCategoryId) : '',
-      title: parsed.merchant || '',
-      memo: parsed.memo || '',
-      consumerMemberId: parsed.type === 'EXPENSE' || !parsed.type ? defaultConsumerMemberId(members) : ''
-    });
-    setEntryExpression(String(parsed.amount || ''));
-    setReceiptFiles([]);
-    setPanel('entry');
+    applyTextImportPreview(result.data);
   }
 
   function applyTextImportPreview(parsed) {

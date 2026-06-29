@@ -25,8 +25,11 @@
 ### iOS fallback 처리
 
 - iPhone/iPad 계열 브라우저를 감지하면 `navigator.clipboard.readText()`를 시도하지 않고 바로 수동 붙여넣기 화면을 연다.
+- iOS Chrome(`CriOS`), iOS Firefox(`FxiOS`), iOS Edge(`EdgiOS`) user-agent도 제한 브라우저로 판단한다.
+- Mobile Safari 계열 브라우저도 수동 붙여넣기 우선으로 처리한다.
 - `navigator.clipboard.readText`가 없는 브라우저도 수동 붙여넣기 화면으로 이동한다.
 - 클립보드 읽기 예외 또는 빈 클립보드도 alert 종료 대신 수동 붙여넣기 화면으로 이동한다.
+- 클립보드 텍스트 분석 API가 실패해도 alert 종료 대신 수동 붙여넣기 화면으로 이동한다.
 - 기존 데스크톱 브라우저의 자동 클립보드 읽기 흐름은 유지했다.
 
 ## 4. 적용 파일
