@@ -56,6 +56,10 @@ public class DebtProfile {
         return asset;
     }
 
+    public Long getId() {
+        return id;
+    }
+
     public Asset getPaymentAccount() {
         return paymentAccount;
     }

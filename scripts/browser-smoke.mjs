@@ -33,6 +33,32 @@ async function assertNoHorizontalOverflow(page, label) {
   );
 }
 
+async function assertNoBrokenKoreanText(page, label) {
+  const brokenText = await page.evaluate(() => {
+    const brokenPattern = /[\uFFFD\u00C3\u00C2]|\?\?|[\u5A9B\u6028\u6E72\u81FE\u6E6F\uF98F\uF9DE]/;
+    return Array.from(document.body.querySelectorAll('button, label, option, h1, h2, h3, p, span, strong, small'))
+      .map((element) => (element.textContent || '').trim())
+      .filter((text) => text && brokenPattern.test(text))
+      .slice(0, 5);
+  });
+  assert(brokenText.length === 0, `${label} contains broken Korean text: ${brokenText.join(' | ')}`);
+}
+
+async function assertFullPanelFitsViewport(page, label) {
+  const panel = page.locator('.full-panel').first();
+  await panel.waitFor({ state: 'visible', timeout: 15000 });
+  const box = await panel.boundingBox();
+  const viewport = page.viewportSize();
+  assert(box, `${label} full panel has no bounding box`);
+  assert(viewport, `${label} viewport is not available`);
+  assert(box.x >= -1, `${label} full panel starts outside viewport: x=${box.x}`);
+  assert(box.y >= -1, `${label} full panel starts outside viewport: y=${box.y}`);
+  assert(box.width <= viewport.width + 1, `${label} full panel exceeds viewport width: ${box.width}px > ${viewport.width}px`);
+  assert(box.height <= viewport.height + 1, `${label} full panel exceeds viewport height: ${box.height}px > ${viewport.height}px`);
+  await assertNoHorizontalOverflow(page, label);
+  await assertNoBrokenKoreanText(page, label);
+}
+
 function firstByType(items, type) {
   return items.find((item) => item.type === type);
 }
@@ -167,9 +193,11 @@ try {
   await assertVisible(page, '.month-totals', 'month totals are not visible');
   await page.screenshot({ path: screenshotPath, fullPage: true });
   await assertNoHorizontalOverflow(page, 'mobile ledger screen');
+  await assertNoBrokenKoreanText(page, 'mobile ledger screen');
 
   await clickBottomTab(page, 2, '.assets-screen');
   await assertVisible(page, '.owner-asset-summary', 'owner asset summary did not render');
+  await assertNoBrokenKoreanText(page, 'mobile assets screen');
   const assetRows = await page.locator('.asset-row').count();
   assert(assetRows > 0, 'assets screen did not render any asset rows');
   await page.screenshot({ path: `${screenshotDir}/browser-smoke-assets-mobile.png`, fullPage: true });
@@ -190,6 +218,7 @@ try {
   const assetUpdatedName = `${assetName}-updated`;
   await page.locator('.asset-actions .top-icon-button').last().click();
   await assertVisible(page, '.simple-edit-screen', 'asset form did not open');
+  await assertFullPanelFitsViewport(page, 'mobile asset form');
   await page.locator('.simple-edit-screen .line-field').nth(1).locator('input').fill(assetName);
   const ownerSelect = page.locator('.simple-edit-screen .line-field').nth(2).locator('select');
   await ownerSelect.selectOption({ index: 1 });
@@ -221,6 +250,7 @@ try {
   if (cardButtons > 0) {
     await page.locator('.card-pay-button').first().click();
     await assertVisible(page, '.card-payment-manager', 'card payment manager did not open');
+    await assertFullPanelFitsViewport(page, 'mobile card payment manager');
     await page.locator('.card-payment-form .wide-save-button').click();
     assert(
       mutationRequests.filter((requestItem) => requestItem.includes('/api/cards/') && requestItem.includes('/payment-schedules')).length === 0,
@@ -248,8 +278,10 @@ try {
   }
 
   await clickBottomTab(page, 3, '.more-screen');
+  await assertNoBrokenKoreanText(page, 'mobile more screen');
   await page.locator('.more-list button').nth(0).click();
   await assertVisible(page, '.category-manager', 'category manager did not open');
+  await assertFullPanelFitsViewport(page, 'mobile category manager');
   const categoryName = `browser-smoke-category-${Date.now()}`;
   const categoryUpdatedName = `${categoryName}-updated`;
   await page.locator('.category-inline-form input').nth(1).fill(categoryName);
@@ -275,6 +307,7 @@ try {
 
   await page.locator('.more-list button').nth(1).click();
   await assertVisible(page, '.member-manager', 'member manager did not open');
+  await assertFullPanelFitsViewport(page, 'mobile member manager');
   await assertVisible(page, '.consumer-migration-card', 'consumer migration status did not render');
   const migrationStatusResponse = await api.get('/api/members/consumer-migration');
   await assertResponseOk(migrationStatusResponse, 'consumer migration status');
@@ -313,14 +346,20 @@ try {
   await page.locator('.full-panel .back-button').first().click();
   await assertVisible(page, '.more-screen', 'more screen did not return after closing member manager');
   const moreActions = await page.locator('.more-list button').allTextContents();
-  assert(!moreActions.some((text) => text.includes('반복 거래')), 'recurring transaction entry remained in more menu');
+  assert(moreActions.some((text) => text.includes('반복 거래')), 'recurring transaction entry did not render in more menu');
   assert(!moreActions.some((text) => text.includes('영수증 업로드')), 'receipt OCR entry remained in more menu');
+  await page.locator('.more-list button', { hasText: '반복 거래 관리' }).click();
+  await assertVisible(page, '.recurring-manager', 'recurring manager did not open');
+  await assertFullPanelFitsViewport(page, 'mobile recurring manager');
+  await page.locator('.full-panel .back-button').first().click();
+  await assertVisible(page, '.more-screen', 'more screen did not return after closing recurring manager');
 
   await clickBottomTab(page, 0, '.ledger-screen');
   await page.locator('.fab').click();
   await assertVisible(page, '.entry-choice-sheet', 'transaction entry choice did not open for receipt OCR');
   await page.getByRole('button', { name: /영수증 자동 입력/ }).click();
   await assertVisible(page, '.receipt-ocr-screen', 'receipt OCR upload screen did not open from entry choice');
+  await assertFullPanelFitsViewport(page, 'mobile receipt OCR screen');
   await assertVisible(page, '.receipt-ocr-card', 'receipt OCR upload card did not render');
   await page.locator('.full-panel .back-button').first().click();
   await assertVisible(page, '.ledger-screen', 'ledger screen did not return after closing receipt OCR screen');
@@ -329,6 +368,7 @@ try {
   await assertVisible(page, '.entry-choice-sheet', 'transaction entry choice did not open');
   await page.getByRole('button', { name: '직접 입력' }).click();
   await assertVisible(page, '.entry-screen-form', 'transaction entry panel did not open');
+  await assertFullPanelFitsViewport(page, 'mobile transaction entry panel');
   await page.locator('.entry-screen-form button[type="submit"]').click();
   assert(
     mutationRequests.filter((requestItem) => requestItem.includes('/api/transactions')).length === 0,
@@ -490,6 +530,7 @@ try {
   await page.locator('.ledger-filters button', { hasText: '초기화' }).click();
 
   await clickBottomTab(page, 1, '.stats-screen');
+  await assertNoBrokenKoreanText(page, 'mobile stats screen');
   await page.getByRole('button', { name: '기간' }).click();
   await assertVisible(page, '.stats-range-filter', 'range stats filter did not render');
   await page.getByLabel('통계 시작일').fill(`${transaction.transactionDate.slice(0, 7)}-01`);
@@ -533,6 +574,7 @@ try {
   cleanup.originalBudgetSettings = await budgetSettingsResponse.json();
   await page.locator('.budget-headline button').click();
   await assertVisible(page, '.budget-settings-screen', 'budget settings screen did not open');
+  await assertFullPanelFitsViewport(page, 'mobile budget settings screen');
   const originalBudgetTotal = Number(cleanup.originalBudgetSettings.totalAmount || 0);
   await page.locator('.budget-total-edit input').fill(String(originalBudgetTotal + 1111));
   const [budgetSaveResponse] = await Promise.all([
@@ -546,6 +588,7 @@ try {
   await page.goto(frontendUrl, { waitUntil: 'networkidle', timeout: 30000 });
   await assertVisible(page, '.ledger-screen', 'desktop ledger screen is not visible');
   await assertNoHorizontalOverflow(page, 'desktop ledger screen');
+  await assertNoBrokenKoreanText(page, 'desktop ledger screen');
   await page.screenshot({ path: `${screenshotDir}/browser-smoke-ledger-desktop.png`, fullPage: true });
 
   assert(browserErrors.length === 0, browserErrors.join('\n'));

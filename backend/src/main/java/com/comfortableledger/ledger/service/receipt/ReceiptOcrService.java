@@ -2,6 +2,7 @@ package com.comfortableledger.ledger.service.receipt;
 
 import com.comfortableledger.ledger.dto.ImportDtos.TextImportPreview;
 import com.comfortableledger.ledger.dto.ReceiptDtos.ReceiptOcrCandidates;
+import com.comfortableledger.ledger.dto.ReceiptDtos.ReceiptOcrCandidateDetail;
 import com.comfortableledger.ledger.dto.ReceiptDtos.ReceiptOcrPolicy;
 import com.comfortableledger.ledger.dto.ReceiptDtos.ReceiptOcrPreview;
 import com.comfortableledger.ledger.service.importing.ImportTextService;
@@ -15,21 +16,26 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class ReceiptOcrService {
+    private static final Logger log = LoggerFactory.getLogger(ReceiptOcrService.class);
     private static final String OCR_TEMP_PREFIX = "receipt-ocr-";
     private static final Duration OCR_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration STALE_TEMP_FILE_AGE = Duration.ofHours(24);
@@ -45,6 +51,9 @@ public class ReceiptOcrService {
     private static final Pattern PHONE_PATTERN = Pattern.compile("\\b0\\d{1,2}[- ]?\\d{3,4}[- ]?\\d{4}\\b");
     private static final Pattern CARD_MASK_PATTERN = Pattern.compile("\\b\\d{4}[-* ]?\\*{2,4}[-* ]?\\*{2,4}[-* ]?\\d{2,4}\\b");
     private static final List<String> TOTAL_AMOUNT_KEYWORDS = List.of("합계", "총액", "결제금액", "받을금액", "매출금액", "승인금액", "total");
+    private static final List<String> ITEM_HEADER_NAME_WORDS = List.of("품명", "품목", "상품", "상품명", "메뉴", "제품");
+    private static final List<String> ITEM_HEADER_UNIT_WORDS = List.of("단가", "수량", "단 위", "qty", "quantity");
+    private static final List<String> ITEM_HEADER_AMOUNT_WORDS = List.of("금액", "금 액", "합계", "total", "amount");
     private static final List<String> NOISE_TITLE_WORDS = List.of(
             "영수증", "매출전표", "사업자", "대표", "주소", "전화", "tel", "품명", "단가", "수량", "금액",
             "합계", "총액", "결제", "승인", "카드", "부가세", "과세", "면세", "거스름", "받을금액", "total",
@@ -76,23 +85,50 @@ public class ReceiptOcrService {
     }
 
     public ReceiptOcrPreview preview(MultipartFile file) throws IOException, InterruptedException {
+        Instant requestStartedAt = Instant.now();
         validateFile(file);
+        String originalFilename = file.getOriginalFilename() == null ? "receipt" : file.getOriginalFilename();
+        long fileSize = file.getSize();
         Path tempFile = Files.createTempFile(OCR_TEMP_PREFIX, extension(file.getOriginalFilename()));
         try {
             file.transferTo(tempFile);
             OcrResult ocr = runTesseract(tempFile);
-            TextImportPreview preview = importTextService.preview(ocr.rawText());
-            ReceiptOcrCandidates candidates = candidateOptions(ocr.rawText(), preview);
-            List<String> warnings = new ArrayList<>(ocr.warnings());
-            warnings.addAll(qualityWarnings(ocr.rawText(), preview, candidates));
-            return new ReceiptOcrPreview(
-                    file.getOriginalFilename() == null ? "receipt" : file.getOriginalFilename(),
-                    ocr.rawText(),
-                    preview,
-                    warnings,
-                    candidates,
-                    ReceiptOcrPolicy.from(warnings, candidates)
+            ReceiptOcrPreview response = previewFromText(originalFilename, ocr.rawText(), ocr.warnings());
+            log.info(
+                    "receipt_ocr status=success file=\"{}\" sizeBytes={} durationMs={} tesseractMs={} rawTextLength={} warnings={} dateCandidates={} titleCandidates={} amountCandidates={}",
+                    originalFilename,
+                    fileSize,
+                    elapsedMillis(requestStartedAt),
+                    ocr.durationMillis(),
+                    ocr.rawText().length(),
+                    response.warnings().size(),
+                    response.candidates().dateCandidates().size(),
+                    response.candidates().titleCandidates().size(),
+                    response.candidates().amountCandidates().size()
             );
+            return response;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            log.warn(
+                    "receipt_ocr status=interrupted file=\"{}\" sizeBytes={} durationMs={} errorType={} message=\"{}\"",
+                    originalFilename,
+                    fileSize,
+                    elapsedMillis(requestStartedAt),
+                    exception.getClass().getSimpleName(),
+                    exception.getMessage()
+            );
+            throw exception;
+        } catch (IOException | RuntimeException exception) {
+            log.warn(
+                    "receipt_ocr status={} file=\"{}\" sizeBytes={} durationMs={} errorType={} message=\"{}\"",
+                    exception instanceof ReceiptOcrTimeoutException ? "timeout" : "failed",
+                    originalFilename,
+                    fileSize,
+                    elapsedMillis(requestStartedAt),
+                    exception.getClass().getSimpleName(),
+                    exception.getMessage()
+            );
+            throw exception;
         } finally {
             Files.deleteIfExists(tempFile);
         }
@@ -122,6 +158,7 @@ public class ReceiptOcrService {
     }
 
     private OcrResult runTesseract(Path imagePath) throws IOException, InterruptedException {
+        Instant tesseractStartedAt = Instant.now();
         ProcessBuilder builder = new ProcessBuilder(
                 tesseractCommand,
                 imagePath.toString(),
@@ -147,7 +184,9 @@ public class ReceiptOcrService {
         boolean finished = process.waitFor(OCR_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();
-            throw new IllegalStateException("Tesseract OCR timed out");
+            throw new ReceiptOcrTimeoutException(
+                    "OCR 처리 시간이 " + OCR_TIMEOUT.toSeconds() + "초를 초과했습니다. 더 밝고 선명한 영수증 사진으로 다시 시도하거나 직접 입력해 주세요."
+            );
         }
 
         String rawText = new String(process.getInputStream().readAllBytes()).trim();
@@ -162,7 +201,7 @@ public class ReceiptOcrService {
         if (rawText.isBlank()) {
             warnings.add("OCR 텍스트를 찾지 못했습니다. 영수증 전체가 밝고 선명하게 보이도록 다시 촬영해 주세요.");
         }
-        return new OcrResult(rawText, warnings);
+        return new OcrResult(rawText, warnings, elapsedMillis(tesseractStartedAt));
     }
 
     boolean isInformationalTesseractMessage(String errorText) {
@@ -206,11 +245,79 @@ public class ReceiptOcrService {
 
     ReceiptOcrCandidates candidateOptions(String rawText, TextImportPreview preview) {
         String sourceText = rawText == null ? "" : rawText;
+        List<LocalDate> dateCandidates = dateCandidates(sourceText, preview);
+        List<String> titleCandidates = titleCandidates(sourceText, preview);
+        List<BigDecimal> amountCandidates = amountCandidates(sourceText, preview);
         return new ReceiptOcrCandidates(
-                dateCandidates(sourceText, preview),
-                titleCandidates(sourceText, preview),
-                amountCandidates(sourceText, preview)
+                dateCandidates,
+                titleCandidates,
+                amountCandidates,
+                candidateDetails(sourceText, preview, dateCandidates, titleCandidates, amountCandidates)
         );
+    }
+
+    private List<ReceiptOcrCandidateDetail> candidateDetails(String rawText, TextImportPreview preview,
+                                                            List<LocalDate> dates, List<String> titles,
+                                                            List<BigDecimal> amounts) {
+        Map<String, ReceiptOcrCandidateDetail> details = new LinkedHashMap<>();
+        for (LocalDate date : dates) {
+            String value = date.toString();
+            String sourceLine = firstLineContaining(rawText, value).orElse("");
+            int score = date.equals(preview.transactionDate()) ? 90 : (sourceLine.isBlank() ? 65 : 85);
+            putCandidateDetail(details, new ReceiptOcrCandidateDetail(
+                    "date",
+                    value,
+                    score,
+                    sourceLine,
+                    date.equals(preview.transactionDate()) ? "거래 초안 날짜" : "OCR 원문 날짜 후보"
+            ));
+        }
+        for (String title : titles) {
+            String sourceLine = firstLineContaining(rawText, title).orElse("");
+            boolean previewTitle = title.equals(preview.merchant());
+            boolean itemName = receiptItemNames(rawText).contains(title);
+            putCandidateDetail(details, new ReceiptOcrCandidateDetail(
+                    "title",
+                    title,
+                    previewTitle ? 95 : (itemName ? 80 : 60),
+                    sourceLine,
+                    previewTitle ? "거래 초안 내용" : (itemName ? "품목표 품명 후보" : "OCR 원문 가맹점 후보")
+            ));
+        }
+        for (BigDecimal amount : amounts) {
+            String value = amount.stripTrailingZeros().toPlainString();
+            String sourceLine = firstLineContaining(rawText, value).orElse("");
+            boolean previewAmount = preview.amount() != null && preview.amount().compareTo(amount) == 0;
+            boolean labeledTotal = labeledTotalAmounts(rawText).stream().anyMatch(candidate -> candidate.compareTo(amount) == 0);
+            boolean itemAmount = receiptItemAmounts(rawText).stream().anyMatch(candidate -> candidate.compareTo(amount) == 0);
+            putCandidateDetail(details, new ReceiptOcrCandidateDetail(
+                    "amount",
+                    value,
+                    previewAmount ? 100 : (labeledTotal ? 95 : (itemAmount ? 75 : 55)),
+                    sourceLine,
+                    previewAmount ? "거래 초안 금액" : (labeledTotal ? "합계/결제금액 라벨 후보" : (itemAmount ? "품목표 금액 후보" : "OCR 원문 금액 후보"))
+            ));
+        }
+        return details.values().stream()
+                .sorted((left, right) -> Integer.compare(right.score(), left.score()))
+                .limit(18)
+                .toList();
+    }
+
+    private void putCandidateDetail(Map<String, ReceiptOcrCandidateDetail> details, ReceiptOcrCandidateDetail detail) {
+        String key = detail.field() + ":" + detail.value();
+        details.putIfAbsent(key, detail);
+    }
+
+    private Optional<String> firstLineContaining(String rawText, String value) {
+        String needle = value == null ? "" : value.trim();
+        if (needle.isBlank()) {
+            return Optional.empty();
+        }
+        String compactNeedle = needle.replaceAll("[,\\s]", "");
+        return normalizedLines(rawText).stream()
+                .filter(line -> line.contains(needle) || line.replaceAll("[,\\s]", "").contains(compactNeedle))
+                .findFirst();
     }
 
     private List<LocalDate> dateCandidates(String rawText, TextImportPreview preview) {
@@ -354,9 +461,9 @@ public class ReceiptOcrService {
     }
 
     private boolean isItemHeader(String compactLine) {
-        return (compactLine.contains("품명") || compactLine.contains("상품"))
-                && (compactLine.contains("단가") || compactLine.contains("수량"))
-                && (compactLine.contains("금액") || compactLine.contains("total"));
+        return containsAny(compactLine, ITEM_HEADER_NAME_WORDS)
+                && containsAny(compactLine, ITEM_HEADER_UNIT_WORDS)
+                && containsAny(compactLine, ITEM_HEADER_AMOUNT_WORDS);
     }
 
     private boolean isItemTableEnd(String line) {
@@ -405,6 +512,10 @@ public class ReceiptOcrService {
         return false;
     }
 
+    private boolean containsAny(String text, List<String> words) {
+        return words.stream().anyMatch(word -> text.contains(word.replaceAll("\\s+", "")));
+    }
+
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Receipt image is required");
@@ -422,6 +533,49 @@ public class ReceiptOcrService {
         return filename.substring(index).replaceAll("[^a-zA-Z0-9.]", "");
     }
 
-    private record OcrResult(String rawText, List<String> warnings) {
+    private static long elapsedMillis(Instant startedAt) {
+        return Duration.between(startedAt, Instant.now()).toMillis();
+    }
+
+    private static final class ReceiptOcrTimeoutException extends IllegalStateException {
+        private ReceiptOcrTimeoutException(String message) {
+            super(message);
+        }
+    }
+
+    public ReceiptOcrPreview reparse(String rawText) {
+        if (rawText == null || rawText.isBlank()) {
+            throw new IllegalArgumentException("OCR raw text is required");
+        }
+        Instant startedAt = Instant.now();
+        ReceiptOcrPreview response = previewFromText("edited-ocr-text", rawText, List.of());
+        log.info(
+                "receipt_ocr_reparse status=success durationMs={} rawTextLength={} warnings={} dateCandidates={} titleCandidates={} amountCandidates={}",
+                elapsedMillis(startedAt),
+                rawText.length(),
+                response.warnings().size(),
+                response.candidates().dateCandidates().size(),
+                response.candidates().titleCandidates().size(),
+                response.candidates().amountCandidates().size()
+        );
+        return response;
+    }
+
+    private ReceiptOcrPreview previewFromText(String originalFilename, String rawText, List<String> baseWarnings) {
+        TextImportPreview preview = importTextService.preview(rawText);
+        ReceiptOcrCandidates candidates = candidateOptions(rawText, preview);
+        List<String> warnings = new ArrayList<>(baseWarnings == null ? List.of() : baseWarnings);
+        warnings.addAll(qualityWarnings(rawText, preview, candidates));
+        return new ReceiptOcrPreview(
+                originalFilename,
+                rawText,
+                preview,
+                warnings,
+                candidates,
+                ReceiptOcrPolicy.from(warnings, candidates)
+        );
+    }
+
+    private record OcrResult(String rawText, List<String> warnings, long durationMillis) {
     }
 }

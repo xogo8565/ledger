@@ -662,20 +662,147 @@ button {
   }
 
   .ocr-candidate-chip {
+    display: grid;
+    gap: 2px;
     min-height: 32px;
-    padding: 0 10px;
+    max-width: 100%;
+    padding: 7px 10px;
     border: 1px solid var(--line-strong);
-    border-radius: 999px;
+    border-radius: 10px;
     background: var(--surface);
     color: var(--text);
     font-size: 12px;
     font-weight: 900;
+    text-align: left;
   }
 
   .ocr-candidate-chip.active {
     border-color: var(--accent);
     background: var(--accent);
     color: white;
+  }
+
+  .ocr-candidate-detail {
+    display: grid;
+    gap: 1px;
+    max-width: 210px;
+    color: var(--subtle);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .ocr-candidate-detail em {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: inherit;
+    font-style: normal;
+    opacity: 0.8;
+  }
+
+  .ocr-candidate-chip.active .ocr-candidate-detail {
+    color: rgba(255, 255, 255, 0.86);
+  }
+
+  .ocr-policy-card {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface-soft);
+  }
+
+  .ocr-policy-card.good {
+    border-color: rgba(75, 166, 106, 0.32);
+    background: rgba(75, 166, 106, 0.08);
+  }
+
+  .ocr-policy-card.warn {
+    border-color: rgba(245, 158, 11, 0.34);
+    background: rgba(245, 158, 11, 0.08);
+  }
+
+  .ocr-policy-card.bad {
+    border-color: rgba(255, 98, 92, 0.32);
+    background: rgba(255, 98, 92, 0.08);
+  }
+
+  .ocr-policy-card header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .ocr-policy-card header strong {
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 900;
+  }
+
+  .ocr-policy-card header span {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    border-radius: 999px;
+    color: var(--accent);
+    background: var(--surface);
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .ocr-confidence-meter {
+    height: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.08);
+  }
+
+  .ocr-confidence-meter i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+  }
+
+  .ocr-policy-card.good .ocr-confidence-meter i {
+    background: var(--transfer);
+  }
+
+  .ocr-policy-card.warn .ocr-confidence-meter i {
+    background: #f59e0b;
+  }
+
+  .ocr-policy-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .ocr-policy-fields span {
+    padding: 5px 8px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    color: var(--subtle);
+    background: var(--surface);
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .ocr-policy-fields span.recognized {
+    border-color: transparent;
+    color: white;
+    background: var(--text);
+  }
+
+  .ocr-policy-card ul {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.45;
   }
 
 .receipt-ocr-result h2 {
@@ -1847,18 +1974,153 @@ button {
   border: 1px solid rgba(59, 130, 246, 0.28);
   border-radius: 14px;
   display: grid;
-  gap: 4px;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
   color: var(--text);
   background: rgba(59, 130, 246, 0.08);
 }
 
 .text-import-progress-card strong {
+  display: block;
   font-size: 14px;
 }
 
 .text-import-progress-card span {
+  display: block;
+  margin-top: 4px;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.text-import-progress-card button {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.text-import-review-screen {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  overflow: hidden;
+  background: var(--surface-soft);
+}
+
+.text-import-review-summary {
+  display: grid;
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.text-import-review-summary strong {
+  font-size: 18px;
+}
+
+.text-import-review-summary span {
+  color: var(--subtle);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.text-import-review-summary div,
+.text-import-review-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.text-import-review-summary button,
+.text-import-review-actions button {
+  min-height: 42px;
+  border-radius: 8px;
+  font-weight: 900;
+}
+
+.text-import-review-list {
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+.text-import-review-row {
+  min-height: 88px;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: start;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.text-import-review-row.selected {
+  background: #fffafa;
+}
+
+.text-import-review-row input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.text-import-review-row div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.text-import-review-row strong,
+.text-import-review-row span,
+.text-import-review-row em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-import-review-row strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.text-import-review-row span,
+.text-import-review-row em {
+  color: var(--subtle);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.text-import-review-row p {
+  margin: 2px 0 0;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.text-import-review-actions {
+  padding: 12px 18px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.text-import-review-actions button:last-child {
+  border: 0;
+  color: white;
+  background: var(--accent);
+}
+
+.text-import-review-actions button:disabled {
+  cursor: not-allowed;
+  background: var(--line-strong);
 }
 
 .full-panel {

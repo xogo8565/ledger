@@ -3,11 +3,13 @@ package com.comfortableledger.ledger.controller;
 import static com.comfortableledger.ledger.controller.support.ApiResponses.ok;
 
 import com.comfortableledger.ledger.dto.ApiResponse;
+import com.comfortableledger.ledger.dto.ImportDtos.TextImportRequest;
 import com.comfortableledger.ledger.service.receipt.ReceiptOcrService;
 import com.comfortableledger.ledger.dto.ReceiptDtos.ReceiptOcrPreview;
 import java.io.IOException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,6 +27,11 @@ public class ReceiptOcrController {
     @PostMapping
     public ResponseEntity<ApiResponse<ReceiptOcrPreview>> preview(@RequestPart MultipartFile file) throws IOException, InterruptedException {
         return ok(receiptOcrService.preview(file));
+    }
+
+    @PostMapping("/reparse")
+    public ResponseEntity<ApiResponse<ReceiptOcrPreview>> reparse(@RequestBody TextImportRequest request) {
+        return ok(receiptOcrService.reparse(request.rawText()));
     }
 }
 

@@ -6,4 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface DebtProfileRepository extends JpaRepository<DebtProfile, Long> {
     List<DebtProfile> findByAutoDeductTrue();
+
+    List<DebtProfile> findAllByOrderByPaymentDayAscIdAsc();
 }

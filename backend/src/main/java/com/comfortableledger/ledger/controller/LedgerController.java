@@ -4,8 +4,10 @@ import static com.comfortableledger.ledger.controller.support.ApiResponses.ok;
 
 import com.comfortableledger.ledger.service.asset.BudgetService;
 import com.comfortableledger.ledger.service.asset.CardService;
+import com.comfortableledger.ledger.service.asset.DebtAutoDeductionService;
 import com.comfortableledger.ledger.service.asset.AssetManagementService;
 import com.comfortableledger.ledger.service.member.MemberService;
+import com.comfortableledger.ledger.service.importing.InitialDataImportService;
 import com.comfortableledger.ledger.service.statistics.StatisticsService;
 import com.comfortableledger.ledger.service.transaction.TransactionQueryService;
 import com.comfortableledger.ledger.service.transaction.TransactionSearchCriteria;
@@ -19,6 +21,9 @@ import com.comfortableledger.ledger.dto.BudgetDtos.BudgetSettingsDto;
 import com.comfortableledger.ledger.dto.CardPaymentDtos.CardPaymentScheduleDto;
 import com.comfortableledger.ledger.dto.CategoryDtos.CategoryDto;
 import com.comfortableledger.ledger.dto.CardPaymentDtos.CreatePaymentScheduleRequest;
+import com.comfortableledger.ledger.dto.DebtDtos.DebtAutoDeductionOverviewDto;
+import com.comfortableledger.ledger.dto.InitialDataDtos.InitialDataImportDto;
+import com.comfortableledger.ledger.dto.RecurringDtos.RecurringGenerationResult;
 import com.comfortableledger.ledger.dto.TransactionDtos.CreateTransactionRequest;
 import com.comfortableledger.ledger.dto.MemberDtos.ConsumerMigrationDto;
 import com.comfortableledger.ledger.dto.SummaryDtos.MonthlySummaryDto;
@@ -65,11 +70,15 @@ public class LedgerController {
     private final TransactionQueryService transactionQueryService;
     private final TransactionCommandService transactionCommandService;
     private final CardService cardService;
+    private final InitialDataImportService initialDataImportService;
+    private final DebtAutoDeductionService debtAutoDeductionService;
 
     public LedgerController(AssetManagementService assetManagementService, StatisticsService statisticsService,
                             MemberService memberService,
                             BudgetService budgetService, TransactionQueryService transactionQueryService,
-                            TransactionCommandService transactionCommandService, CardService cardService) {
+                            TransactionCommandService transactionCommandService, CardService cardService,
+                            InitialDataImportService initialDataImportService,
+                            DebtAutoDeductionService debtAutoDeductionService) {
         this.assetManagementService = assetManagementService;
         this.statisticsService = statisticsService;
         this.memberService = memberService;
@@ -77,6 +86,8 @@ public class LedgerController {
         this.transactionQueryService = transactionQueryService;
         this.transactionCommandService = transactionCommandService;
         this.cardService = cardService;
+        this.initialDataImportService = initialDataImportService;
+        this.debtAutoDeductionService = debtAutoDeductionService;
     }
 
     @GetMapping("/bootstrap")
@@ -88,6 +99,25 @@ public class LedgerController {
                 transactionQueryService.transactions(targetMonth),
                 statisticsService.monthlySummary(targetMonth)
         ));
+    }
+
+    @GetMapping("/initial-data/imports")
+    public ResponseEntity<ApiResponse<List<InitialDataImportDto>>> initialDataImportHistory() {
+        return ok(initialDataImportService.importHistory());
+    }
+
+    @GetMapping("/debts/auto-deductions")
+    public ResponseEntity<ApiResponse<DebtAutoDeductionOverviewDto>> debtAutoDeductionStatus(
+            @RequestParam(required = false) LocalDate date
+    ) {
+        return ok(debtAutoDeductionService.deductionStatus(date));
+    }
+
+    @PostMapping("/debts/auto-deductions/execute")
+    public ResponseEntity<ApiResponse<RecurringGenerationResult>> executeDebtAutoDeductions(
+            @RequestParam(required = false) LocalDate date
+    ) {
+        return ok(debtAutoDeductionService.executeDueDeductions(date));
     }
 
     @GetMapping("/assets")

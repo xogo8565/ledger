@@ -46,8 +46,10 @@ GitHub Actions workflow는 `.github/workflows/deploy-oci.yml`에 있습니다.
 - 백엔드 테스트
 - 프론트엔드 빌드
 - 백엔드/프론트엔드 Docker 이미지 빌드
+- GHCR 이미지 push
 - OCI 서버 SSH 접속 후 `git reset --hard origin/main`
-- `docker compose up -d --build`
+- `docker compose pull`
+- `docker compose up -d`
 - 백엔드 `http://localhost:8080/api/bootstrap`, 프론트엔드 `http://localhost:8081` 확인
 
 GitHub Repository Secrets:
@@ -75,6 +77,50 @@ cp .env.example .env
 ```
 
 서버의 `.env`와 `data/`는 배포 workflow가 삭제하지 않습니다.
+
+배포 전 로컬/서버 준비 상태 점검:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\oci-deploy-readiness.ps1 -SkipSsh
+```
+
+SSH까지 포함한 서버 점검:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\oci-deploy-readiness.ps1 `
+  -HostName 217.142.229.9 `
+  -User ubuntu `
+  -KeyPath C:\ssh\oci.key `
+  -AppDir /opt/comfortable-ledger/app
+```
+
+점검 항목:
+
+- workflow, compose, `.env.example`, `data` 디렉터리 존재
+- GHCR 이미지 설정과 workflow의 수동 실행/secret 검증/health check
+- SSH 접속, 서버 git/docker/docker compose, 앱 경로, `.env`, `data`, git repository 존재
+
+초기 데이터 주입 이력 확인:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/api/initial-data/imports
+```
+
+응답에는 `resourceKind`, `resourceName`, `checksum`, `importedAt`, `rowCount`가 포함됩니다. 서버에 새 `initial-data/*.xlsx`를 반영한 뒤 백엔드를 재시작했을 때 어떤 파일이 마지막으로 주입됐는지 확인하는 용도입니다.
+
+부채 이자 자동 차감 상태 확인:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/api/debts/auto-deductions
+```
+
+필요할 때 오늘 기준 차감 대상을 수동 실행:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8080/api/debts/auto-deductions/execute
+```
+
+상태 응답에는 예상 월 이자, 차감일, 마지막 차감 월, 실행 가능 여부와 `EXECUTABLE`, `NOT_DUE`, `ALREADY_DEDUCTED`, `PAYMENT_ACCOUNT_MISSING`, `NO_INTEREST` 같은 상태 코드가 포함됩니다.
 
 ## 로컬 개발 실행
 
@@ -106,11 +152,13 @@ npm run dev
 - 자산 생성/수정/삭제
 - 등록 명의 목록 기반 자산 명의 선택·저장 및 명의별 자산·부채·순자산 집계
 - 더보기 명의 관리: 목록·추가·수정·삭제와 기본 명의 보호
+- 더보기 반복 거래 관리: 반복 규칙 생성·수정·삭제와 오늘분 수동 생성
 - 더보기 화면 앱 버전 표시
 - 기존 명의 미지정 개인 지출 대상 확인 및 기본 OWNER 명의 일괄 연결
 - 카드 자산 생성/수정 시 결제 계좌/확정일/결제일/자동 결제 설정
 - 카드 자산 등록/수정 시 결제계좌 및 결제일 검증
 - 부채 자산 금리/출금계좌/차감일/이자 자동 차감 설정 및 매월 이자 지출 자동 생성
+- 부채 이자 자동 차감 상태 조회 및 수동 실행 API
 - 카테고리 기본 데이터 및 카테고리 관리
 - 월별 수입/지출/예산 요약
 - 카테고리별 예산 사용률과 초과 표시
@@ -125,14 +173,19 @@ npm run dev
 - 영수증 사진 신규/기존 거래 다중 첨부, 조회, 미리보기, 삭제 및 거래 삭제 시 파일 정리
 - 영수증 업로드 Tesseract OCR 분석 및 거래 입력 초안 자동 채움
 - OCR 원문 편집 후 재분석 및 수정된 거래 후보 반영
+- OCR 원문 재분석 API에서도 후보 DTO와 정책 메타데이터 반환
 - OCR 품목표 여러 행 메모 요약
 - OCR 실패/낮은 신뢰도 경고 및 직접 입력 전환
 - OCR 임시 파일 서버 시작 시 정리
 - OCR 결과 제목/금액 후보 선택
 - OCR 결과 날짜 후보 선택
 - 백엔드 OCR 후보 DTO 기반 날짜/제목/금액 후보 제공
+- OCR 후보 상세 DTO 제공: 후보별 필드, 값, 점수, 원문 라인, 선택 이유
+- OCR 후보 카드에서 후보별 점수, 선택 이유, 원문 라인 표시
 - OCR 정책 메타데이터 제공: 신뢰도 점수, 검토 필요 여부, 인식 필드, 검토 사유
 - OCR 금액 후보 정책 고도화: 합계/결제금액 우선, 사업자번호·전화번호·카드번호 제외, 품목표 후보 보강
+- OCR 운영 로그: 요청 처리 시간, Tesseract 실행 시간, 성공/실패/timeout 상태, 후보·경고 개수 기록
+- OCR 후보 선택 이력 기반 정렬: 브라우저 로컬 이력으로 자주 선택한 날짜/품명/금액 후보 우선 표시
 - 클립보드 카드/은행 문자 자동 분석, 과거 이력·가맹점 키워드 카테고리 추천 및 거래 입력 확정
 - iPhone Safari/Chrome 클립보드 권한 제한 대응을 위한 수동 붙여넣기 문자 자동 입력
 - 날짜 헤더와 `|` 구분 거래 목록 텍스트 다건 파싱 후보 제공
@@ -143,6 +196,7 @@ npm run dev
 - DB 첫 실행 시 기본 명의 `석수`, 보조 명의 `유진` 자동 생성
 - `initial-data/assets_*.xlsx`, `initial-data/transactions_*.xlsx` 엑셀 목록 기반 초기 자산·거래 데이터 주입
 - `initial-data` 파일 SHA-256 변경 감지 기반 재주입: 배포/업로드 후 변경된 파일만 자산 upsert, 거래 중복 skip 처리
+- 초기 데이터 주입 이력 조회 API: `/api/initial-data/imports`
 - `plan/*.png` 참고 자산을 `initial-data/assets_plan_20260629.xlsx`로 반영해 기본 자산 주입
 - `assets_plan_20260629.xlsx` 카드 자산은 금액 0원, 엑셀 확정일/결제일 컬럼 기준으로 주입
 - 문자열/숫자/암호성 값 공통 유틸 분리
@@ -154,7 +208,8 @@ npm run dev
 
 ## 다음 작업
 
-- OCI 서버 최초 패키지 설치, 앱 clone, GitHub Secrets 등록 후 `workflow_dispatch` 배포 검증
+- `scripts/oci-deploy-readiness.ps1`로 OCI 배포 준비 상태 점검
+- GitHub Secrets 등록 후 `workflow_dispatch` 배포 검증
 
 ## Smoke Test
 
@@ -181,4 +236,4 @@ Docker Compose로 스택을 실행한 뒤:
 powershell -ExecutionPolicy Bypass -File .\scripts\browser-smoke.ps1
 ```
 
-Playwright를 Docker에서 실행해 가계부, 자산, 카드 결제, 반복 거래, 거래 입력 화면이 브라우저 오류 없이 열리는지 확인합니다. 또한 빈 폼 방지, UI 생성/수정 흐름, 자산/카테고리/예산 관리 흐름, 반응형 스크린샷, 테스트 데이터 자동 정리를 검증합니다.
+Playwright를 Docker에서 실행해 가계부, 자산, 카드 결제, 반복 거래, 거래 입력 화면이 브라우저 오류 없이 열리는지 확인합니다. 또한 빈 폼 방지, UI 생성/수정 흐름, 자산/카테고리/예산 관리 흐름, 모바일 전체 화면 패널의 viewport 맞춤, 주요 화면의 한글 깨짐 패턴, 반응형 스크린샷, 테스트 데이터 자동 정리를 검증합니다.

@@ -8,6 +8,8 @@ import { normalizeWhitespace, trimToEmpty, uniqueNonBlank } from '../utils/strin
 const API = '/api';
 const typeLabels = { INCOME: '수입', EXPENSE: '지출', TRANSFER: '이체' };
 const consumptionScopeLabels = { PERSONAL: '개인', SHARED: '공동' };
+const ocrFieldLabels = { date: '날짜', title: '내용/품명', amount: '금액' };
+const OCR_CANDIDATE_HISTORY_KEY = 'comfortable-ledger.ocrCandidateHistory.v1';
 
 function defaultConsumerMemberId(members) {
   const member = members.find((item) => item.role === 'OWNER') || members[0];
@@ -16,6 +18,120 @@ function defaultConsumerMemberId(members) {
 
 function uniqueValues(values) {
   return uniqueNonBlank(values);
+}
+
+function emptyOcrCandidateHistory() {
+  return {
+    dateCounts: {},
+    titleCounts: {},
+    amountCounts: {},
+    titleAmountCounts: {}
+  };
+}
+
+function readOcrCandidateHistory() {
+  if (typeof window === 'undefined') return emptyOcrCandidateHistory();
+  try {
+    return {
+      ...emptyOcrCandidateHistory(),
+      ...JSON.parse(window.localStorage.getItem(OCR_CANDIDATE_HISTORY_KEY) || '{}')
+    };
+  } catch {
+    return emptyOcrCandidateHistory();
+  }
+}
+
+function writeOcrCandidateHistory(history) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(OCR_CANDIDATE_HISTORY_KEY, JSON.stringify({
+    ...history,
+    updatedAt: new Date().toISOString()
+  }));
+}
+
+function ocrHistoryKey(value) {
+  return normalizeWhitespace(value).toLowerCase();
+}
+
+function normalizedAmountCandidate(value) {
+  const amount = toNumber(value);
+  return amount > 0 ? String(amount) : '';
+}
+
+function incrementHistoryCount(map, key) {
+  if (!key) return;
+  map[key] = Number(map[key] || 0) + 1;
+}
+
+function recordOcrCandidateChoice(field, value, contextTitle = '') {
+  const history = readOcrCandidateHistory();
+  if (field === 'date') {
+    incrementHistoryCount(history.dateCounts, trimToEmpty(value));
+  }
+  if (field === 'title') {
+    incrementHistoryCount(history.titleCounts, ocrHistoryKey(value));
+  }
+  if (field === 'amount') {
+    const amountKey = normalizedAmountCandidate(value);
+    incrementHistoryCount(history.amountCounts, amountKey);
+    const titleKey = ocrHistoryKey(contextTitle);
+    if (titleKey) {
+      history.titleAmountCounts[titleKey] = history.titleAmountCounts[titleKey] || {};
+      incrementHistoryCount(history.titleAmountCounts[titleKey], amountKey);
+    }
+  }
+  writeOcrCandidateHistory(history);
+}
+
+function ocrCandidateHistoryScore(history, field, value, contextTitle = '') {
+  if (field === 'title') {
+    return Number(history.titleCounts?.[ocrHistoryKey(value)] || 0);
+  }
+  if (field === 'date') {
+    return Number(history.dateCounts?.[trimToEmpty(value)] || 0);
+  }
+  if (field === 'amount') {
+    const amountKey = normalizedAmountCandidate(value);
+    const titleKey = ocrHistoryKey(contextTitle);
+    return (Number(history.titleAmountCounts?.[titleKey]?.[amountKey] || 0) * 10)
+      + Number(history.amountCounts?.[amountKey] || 0);
+  }
+  return 0;
+}
+
+function sortOcrCandidatesByHistory(candidates, field, contextTitle = '') {
+  const history = readOcrCandidateHistory();
+  return [...(candidates || [])].sort((left, right) => (
+    ocrCandidateHistoryScore(history, field, right, contextTitle)
+    - ocrCandidateHistoryScore(history, field, left, contextTitle)
+  ));
+}
+
+function hasOcrCandidateHistory(candidates, field, contextTitle = '') {
+  const history = readOcrCandidateHistory();
+  return (candidates || []).some((candidate) => ocrCandidateHistoryScore(history, field, candidate, contextTitle) > 0);
+}
+
+function candidateDetailKey(field, value) {
+  return `${field}:${field === 'amount' ? normalizedAmountCandidate(value) : trimToEmpty(value)}`;
+}
+
+function candidateDetailMap(details = []) {
+  return new Map((details || []).map((detail) => [candidateDetailKey(detail.field, detail.value), detail]));
+}
+
+function candidateDetailFor(details, field, value) {
+  return details.get(candidateDetailKey(field, value));
+}
+
+function CandidateDetailNote({ detail }) {
+  if (!detail) return null;
+  return (
+    <small className="ocr-candidate-detail">
+      <span>{detail.score}점 · {detail.reason}</span>
+      {detail.sourceLine && <em>{detail.sourceLine}</em>}
+    </small>
+  );
 }
 
 function extractAmountCandidates(rawText, currentAmount) {
@@ -73,7 +189,7 @@ function extractTitleCandidates(rawText, currentTitle) {
   let itemTableStarted = false;
   for (const line of lines) {
     const compact = line.replace(/\s+/g, '').toLowerCase();
-    if (!itemTableStarted && compact.includes('품명') && compact.includes('단가') && compact.includes('수량') && compact.includes('금액')) {
+    if (!itemTableStarted && isReceiptItemHeader(compact)) {
       itemTableStarted = true;
       continue;
     }
@@ -94,6 +210,36 @@ function extractTitleCandidates(rawText, currentTitle) {
   }
 
   return uniqueValues(values).slice(0, 6);
+}
+
+function isReceiptItemHeader(compactLine) {
+  const nameWords = ['품명', '품목', '상품', '상품명', '메뉴', '제품'];
+  const unitWords = ['단가', '수량', '단위', 'qty', 'quantity'];
+  const amountWords = ['금액', '합계', 'total', 'amount'];
+  return nameWords.some((word) => compactLine.includes(word))
+    && unitWords.some((word) => compactLine.includes(word))
+    && amountWords.some((word) => compactLine.includes(word));
+}
+
+function buildOcrPolicyFallback(warnings = [], candidates = {}) {
+  const recognizedFields = [];
+  if (candidates.dateCandidates?.length) recognizedFields.push('date');
+  if (candidates.titleCandidates?.length) recognizedFields.push('title');
+  if (candidates.amountCandidates?.length) recognizedFields.push('amount');
+  const warningCount = Array.isArray(warnings) ? warnings.length : 0;
+  const confidenceScore = Math.max(0, Math.min(100, 35 + (recognizedFields.length * 20) - (warningCount * 10)));
+  return {
+    confidenceScore,
+    needsReview: warningCount > 0 || recognizedFields.length < 3,
+    recognizedFields,
+    reviewReasons: Array.isArray(warnings) ? warnings : []
+  };
+}
+
+function ocrConfidenceTone(score) {
+  if (Number(score || 0) >= 75) return 'good';
+  if (Number(score || 0) >= 50) return 'warn';
+  return 'bad';
 }
 
 export function EntryChoiceSheet({ openEntry, openClipboardEntry, openReceiptOcr, onClose }) {
@@ -175,14 +321,71 @@ export function ManualTextImportScreen({ parseTransactionText, applyTextImportPr
           />
           {error && <em className="ocr-error">{error}</em>}
           <button type="submit" disabled={loading}>{loading ? '분석 중...' : '분석 후 거래 입력'}</button>
-          <small>여러 건이 분석된 경우 현재 입력 화면은 첫 번째 거래 기준으로 채워집니다.</small>
+          <small>여러 건이 분석된 경우 저장 전 목록에서 제외할 항목을 선택할 수 있습니다.</small>
         </form>
       </section>
     </div>
   );
 }
 
-export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, applyReceiptOcrPreview, onClose }) {
+export function ManualTextImportReviewScreen({ review, onStart, onBack, onClose }) {
+  const [items, setItems] = useState(() => review?.items || []);
+  const selectedCount = items.filter((item) => item.selected).length;
+  const warningCount = items.filter((item) => item.warnings?.length).length;
+
+  function toggleItem(importKey) {
+    setItems((current) => current.map((item) => (
+      item.importKey === importKey ? { ...item, selected: !item.selected } : item
+    )));
+  }
+
+  function selectAll(selected) {
+    setItems((current) => current.map((item) => ({ ...item, selected })));
+  }
+
+  if (!review) return null;
+
+  return (
+    <div className="full-panel">
+      <section className="text-import-review-screen">
+        <AppHeader title="가져오기 확인" left={<BackButton label="붙여넣기" onClick={onBack} />} right={<IconButton label="닫기" onClick={onClose}>×</IconButton>} />
+        <section className="text-import-review-summary">
+          <strong>{items.length}건 분석됨</strong>
+          <span>{selectedCount}건 저장 예정 · 확인 필요 {warningCount}건</span>
+          <div>
+            <button type="button" className="secondary-action" onClick={() => selectAll(true)}>전체 선택</button>
+            <button type="button" className="secondary-action" onClick={() => selectAll(false)}>전체 제외</button>
+          </div>
+        </section>
+        <section className="text-import-review-list">
+          {items.map((item, index) => (
+            <label className={`text-import-review-row ${item.selected ? 'selected' : ''}`} key={item.importKey}>
+              <input type="checkbox" checked={item.selected} onChange={() => toggleItem(item.importKey)} />
+              <div>
+                <strong>{item.merchant || item.rawLine || `${index + 1}번째 거래`}</strong>
+                <span>
+                  {item.transactionDate || '-'} · {typeLabels[item.type] || item.type || '지출'} · {formatNumber(item.amount)}원
+                </span>
+                <em>{item.assetName || '자산 미지정'}</em>
+                {item.warnings?.length > 0 && (
+                  <p>{item.warnings.join(' · ')}</p>
+                )}
+              </div>
+            </label>
+          ))}
+        </section>
+        <footer className="text-import-review-actions">
+          <button type="button" className="secondary-action" onClick={onClose}>취소</button>
+          <button type="button" onClick={() => onStart(items)} disabled={!selectedCount}>
+            {selectedCount}건 순차 입력
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+export function ReceiptOcrScreen({ previewReceiptOcr, reparseReceiptOcr, applyReceiptOcrPreview, onClose }) {
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [editedRawText, setEditedRawText] = useState('');
@@ -225,34 +428,38 @@ export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, appl
     }
     setReparsing(true);
     setError('');
-    const response = await parseTransactionText(editedRawText);
+    const response = await reparseReceiptOcr(editedRawText);
     setReparsing(false);
     if (!response.ok) {
       setError(response.data?.message || '수정한 OCR 원문 재분석에 실패했습니다.');
       return;
     }
-    setResult((current) => ({
-      ...(current || {}),
-      rawText: editedRawText,
-      preview: response.data,
-      candidates: null,
-      warnings: current?.warnings || []
-    }));
+    setResult(response.data);
   }
 
   const preview = result?.preview || {};
   const serverCandidates = result?.candidates || {};
-  const titleCandidates = result
+  const rawTitleCandidates = result
     ? (serverCandidates.titleCandidates?.length ? serverCandidates.titleCandidates : extractTitleCandidates(result.rawText || editedRawText, preview.merchant))
     : [];
-  const amountCandidates = result
+  const rawAmountCandidates = result
     ? (serverCandidates.amountCandidates?.length
       ? serverCandidates.amountCandidates.map((candidate) => String(toNumber(candidate)))
       : extractAmountCandidates(result.rawText || editedRawText, preview.amount))
     : [];
-  const dateCandidates = result
+  const rawDateCandidates = result
     ? (serverCandidates.dateCandidates?.length ? serverCandidates.dateCandidates : extractDateCandidates(result.rawText || editedRawText, preview.transactionDate))
     : [];
+  const dateCandidates = sortOcrCandidatesByHistory(rawDateCandidates, 'date');
+  const titleCandidates = sortOcrCandidatesByHistory(rawTitleCandidates, 'title');
+  const amountCandidates = sortOcrCandidatesByHistory(rawAmountCandidates, 'amount', preview.merchant);
+  const dateHistoryApplied = hasOcrCandidateHistory(rawDateCandidates, 'date');
+  const titleHistoryApplied = hasOcrCandidateHistory(rawTitleCandidates, 'title');
+  const amountHistoryApplied = hasOcrCandidateHistory(rawAmountCandidates, 'amount', preview.merchant);
+  const detailsByCandidate = candidateDetailMap(serverCandidates.candidateDetails);
+  const ocrPolicy = result
+    ? (result.policy || buildOcrPolicyFallback(result.warnings, { dateCandidates, titleCandidates, amountCandidates }))
+    : null;
 
   function updatePreviewCandidate(patch) {
     setResult((current) => ({
@@ -262,6 +469,28 @@ export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, appl
         ...patch
       }
     }));
+  }
+
+  function selectTitleCandidate(candidate) {
+    recordOcrCandidateChoice('title', candidate);
+    updatePreviewCandidate({ merchant: candidate });
+  }
+
+  function selectDateCandidate(candidate) {
+    recordOcrCandidateChoice('date', candidate);
+    updatePreviewCandidate({ transactionDate: candidate });
+  }
+
+  function selectAmountCandidate(candidate) {
+    recordOcrCandidateChoice('amount', candidate, preview.merchant);
+    updatePreviewCandidate({ amount: candidate });
+  }
+
+  function useReceiptOcrResult() {
+    recordOcrCandidateChoice('date', preview.transactionDate);
+    recordOcrCandidateChoice('title', preview.merchant);
+    recordOcrCandidateChoice('amount', preview.amount, preview.merchant);
+    applyReceiptOcrPreview(result, file);
   }
 
   return (
@@ -302,9 +531,35 @@ export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, appl
               <span>가맹점</span><strong>{preview.merchant || '-'}</strong>
               <span>추천 분류</span><strong>{preview.recommendedCategoryName || '-'}</strong>
             </div>
+            {ocrPolicy && (
+              <div className={`ocr-policy-card ${ocrConfidenceTone(ocrPolicy.confidenceScore)}`}>
+                <header>
+                  <strong>인식 신뢰도 {ocrPolicy.confidenceScore}점</strong>
+                  <span>{ocrPolicy.needsReview ? '확인 필요' : '바로 사용 가능'}</span>
+                </header>
+                <div className="ocr-confidence-meter" aria-label={`OCR 인식 신뢰도 ${ocrPolicy.confidenceScore}점`}>
+                  <i style={{ width: `${Math.max(0, Math.min(100, Number(ocrPolicy.confidenceScore || 0)))}%` }} />
+                </div>
+                <div className="ocr-policy-fields">
+                  {['date', 'title', 'amount'].map((field) => (
+                    <span className={ocrPolicy.recognizedFields?.includes(field) ? 'recognized' : ''} key={field}>
+                      {ocrFieldLabels[field]}
+                    </span>
+                  ))}
+                </div>
+                {ocrPolicy.reviewReasons?.length > 0 && (
+                  <ul>
+                    {ocrPolicy.reviewReasons.slice(0, 3).map((reason, index) => <li key={index}>{reason}</li>)}
+                  </ul>
+                )}
+              </div>
+            )}
             {(titleCandidates.length > 1 || amountCandidates.length > 1 || dateCandidates.length > 1) && (
               <div className="ocr-candidate-card">
                 <strong>OCR 후보 선택</strong>
+                {(dateHistoryApplied || titleHistoryApplied || amountHistoryApplied) && (
+                  <small>이전에 선택한 OCR 후보를 우선 표시했습니다.</small>
+                )}
                 {dateCandidates.length > 1 && (
                   <div className="ocr-candidate-group">
                     <span>날짜 후보</span>
@@ -314,9 +569,10 @@ export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, appl
                           key={candidate}
                           type="button"
                           className={preview.transactionDate === candidate ? 'ocr-candidate-chip active' : 'ocr-candidate-chip'}
-                          onClick={() => updatePreviewCandidate({ transactionDate: candidate })}
+                          onClick={() => selectDateCandidate(candidate)}
                         >
                           {candidate}
+                          <CandidateDetailNote detail={candidateDetailFor(detailsByCandidate, 'date', candidate)} />
                         </button>
                       ))}
                     </div>
@@ -331,9 +587,10 @@ export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, appl
                           key={candidate}
                           type="button"
                           className={preview.merchant === candidate ? 'ocr-candidate-chip active' : 'ocr-candidate-chip'}
-                          onClick={() => updatePreviewCandidate({ merchant: candidate })}
+                          onClick={() => selectTitleCandidate(candidate)}
                         >
                           {candidate}
+                          <CandidateDetailNote detail={candidateDetailFor(detailsByCandidate, 'title', candidate)} />
                         </button>
                       ))}
                     </div>
@@ -348,9 +605,10 @@ export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, appl
                           key={candidate}
                           type="button"
                           className={String(toNumber(preview.amount)) === candidate ? 'ocr-candidate-chip active' : 'ocr-candidate-chip'}
-                          onClick={() => updatePreviewCandidate({ amount: candidate })}
+                          onClick={() => selectAmountCandidate(candidate)}
                         >
                           {formatNumber(candidate)}원
+                          <CandidateDetailNote detail={candidateDetailFor(detailsByCandidate, 'amount', candidate)} />
                         </button>
                       ))}
                     </div>
@@ -381,7 +639,7 @@ export function ReceiptOcrScreen({ previewReceiptOcr, parseTransactionText, appl
             <button type="button" className="secondary-action" onClick={reparseEditedText} disabled={reparsing}>
               {reparsing ? '재분석 중...' : '수정한 원문으로 다시 분석'}
             </button>
-            <button type="button" onClick={() => applyReceiptOcrPreview(result, file)}>
+            <button type="button" onClick={useReceiptOcrResult}>
               거래 입력에 사용
             </button>
           </section>
@@ -464,6 +722,7 @@ export function EntryScreen({
   editingTransaction,
   editingInstallmentGroup,
   textImportQueueProgress,
+  skipTextImportItem,
   installmentReceiptTargetIndex,
   setInstallmentReceiptTargetIndex,
   onClose
@@ -526,8 +785,11 @@ export function EntryScreen({
         />
         {textImportQueueProgress && (
           <section className="text-import-progress-card">
-            <strong>자동 입력 처리 중</strong>
-            <span>{textImportQueueProgress.current}/{textImportQueueProgress.total}건 저장 후 다음 거래가 자동으로 표시됩니다.</span>
+            <div>
+              <strong>자동 입력 처리 중</strong>
+              <span>{textImportQueueProgress.current}/{textImportQueueProgress.total}건 저장 후 다음 거래가 자동으로 표시됩니다.</span>
+            </div>
+            <button type="button" className="secondary-action" onClick={skipTextImportItem}>건너뛰기</button>
           </section>
         )}
 

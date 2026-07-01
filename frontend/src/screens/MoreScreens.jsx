@@ -6,7 +6,8 @@ const appVersion = import.meta.env.VITE_APP_VERSION || packageInfo.version || '0
 export function MoreScreen({
   exportMonthlyTransactions,
   openCategoryManager,
-  openMemberManager
+  openMemberManager,
+  openRecurringManager
 }) {
   return (
     <div className="screen more-screen">
@@ -14,6 +15,7 @@ export function MoreScreen({
       <section className="more-list">
         <button type="button" onClick={openCategoryManager}>카테고리 관리<span>›</span></button>
         <button type="button" onClick={openMemberManager}>명의 관리<span>›</span></button>
+        <button type="button" onClick={openRecurringManager}>반복 거래 관리<span>›</span></button>
         <button type="button" onClick={exportMonthlyTransactions}>월 거래 CSV 내보내기<span>›</span></button>
       </section>
       <section className="app-version-card" aria-label="앱 버전">

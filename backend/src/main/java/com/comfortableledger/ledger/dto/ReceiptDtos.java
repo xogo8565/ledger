@@ -59,7 +59,24 @@ public final class ReceiptDtos {
     public record ReceiptOcrCandidates(
             List<LocalDate> dateCandidates,
             List<String> titleCandidates,
-            List<BigDecimal> amountCandidates
+            List<BigDecimal> amountCandidates,
+            List<ReceiptOcrCandidateDetail> candidateDetails
+    ) {
+        public ReceiptOcrCandidates(
+                List<LocalDate> dateCandidates,
+                List<String> titleCandidates,
+                List<BigDecimal> amountCandidates
+        ) {
+            this(dateCandidates, titleCandidates, amountCandidates, List.of());
+        }
+    }
+
+    public record ReceiptOcrCandidateDetail(
+            String field,
+            String value,
+            int score,
+            String sourceLine,
+            String reason
     ) {
     }
 

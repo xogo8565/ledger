@@ -7,6 +7,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
@@ -17,7 +18,21 @@ import java.time.OffsetDateTime;
 import java.util.Objects;
 
 @Entity
-@Table(name = "transactions")
+@Table(
+        name = "transactions",
+        indexes = {
+                @Index(name = "idx_tx_household_date_id", columnList = "household_id, transaction_date, id"),
+                @Index(name = "idx_tx_household_type_date", columnList = "household_id, type, transaction_date"),
+                @Index(name = "idx_tx_household_category_date", columnList = "household_id, category_id, transaction_date"),
+                @Index(name = "idx_tx_household_consumer_date", columnList = "household_id, consumer_id, transaction_date"),
+                @Index(name = "idx_tx_household_scope_date", columnList = "household_id, consumption_scope, transaction_date"),
+                @Index(name = "idx_tx_household_amount_date", columnList = "household_id, amount, transaction_date, id"),
+                @Index(name = "idx_tx_household_asset_date", columnList = "household_id, asset_id, transaction_date"),
+                @Index(name = "idx_tx_household_from_asset_date", columnList = "household_id, from_asset_id, transaction_date"),
+                @Index(name = "idx_tx_household_to_asset_date", columnList = "household_id, to_asset_id, transaction_date"),
+                @Index(name = "idx_tx_installment_group", columnList = "installment_group_id")
+        }
+)
 public class TransactionRecord {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -8,6 +8,8 @@ import com.comfortableledger.ledger.domain.Member;
 import com.comfortableledger.ledger.domain.MemberRole;
 import com.comfortableledger.ledger.domain.TransactionRecord;
 import com.comfortableledger.ledger.domain.TransactionType;
+import com.comfortableledger.ledger.dto.DebtDtos.DebtAutoDeductionOverviewDto;
+import com.comfortableledger.ledger.dto.DebtDtos.DebtAutoDeductionStatusDto;
 import com.comfortableledger.ledger.dto.RecurringDtos.RecurringGenerationResult;
 import com.comfortableledger.ledger.repository.CategoryRepository;
 import com.comfortableledger.ledger.repository.DebtProfileRepository;
@@ -18,6 +20,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Comparator;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -80,6 +83,63 @@ public class DebtAutoDeductionService {
             generatedCount++;
         }
         return new RecurringGenerationResult(generatedCount);
+    }
+
+    @Transactional(readOnly = true)
+    public DebtAutoDeductionOverviewDto deductionStatus(LocalDate today) {
+        LocalDate targetDate = today == null ? LocalDate.now() : today;
+        String targetMonth = YearMonth.from(targetDate).toString();
+        List<DebtAutoDeductionStatusDto> items = debtProfileRepository.findAllByOrderByPaymentDayAscIdAsc().stream()
+                .map(profile -> status(profile, targetDate, targetMonth))
+                .toList();
+        long executableCount = items.stream().filter(DebtAutoDeductionStatusDto::executable).count();
+        return new DebtAutoDeductionOverviewDto(targetDate, items.size(), Math.toIntExact(executableCount), items);
+    }
+
+    private DebtAutoDeductionStatusDto status(DebtProfile profile, LocalDate targetDate, String targetMonth) {
+        BigDecimal amount = monthlyInterestAmount(profile);
+        Asset paymentAccount = profile.getPaymentAccount();
+        boolean due = isDue(profile, targetDate, targetMonth);
+        String status = deductionStatusText(profile, amount, paymentAccount, due, targetMonth);
+        boolean executable = "EXECUTABLE".equals(status);
+        return new DebtAutoDeductionStatusDto(
+                profile.getId(),
+                profile.getAsset().getId(),
+                profile.getAsset().getName(),
+                profile.getAsset().getBalance(),
+                paymentAccount == null ? null : paymentAccount.getId(),
+                paymentAccount == null ? null : paymentAccount.getName(),
+                profile.getAnnualInterestRate(),
+                profile.getPaymentDay(),
+                profile.isAutoDeduct(),
+                profile.getLastDeductedMonth(),
+                amount,
+                due,
+                executable,
+                status
+        );
+    }
+
+    private String deductionStatusText(DebtProfile profile, BigDecimal amount, Asset paymentAccount, boolean due, String targetMonth) {
+        if (!profile.isAutoDeduct()) {
+            return "AUTO_DEDUCT_OFF";
+        }
+        if (targetMonth.equals(profile.getLastDeductedMonth())) {
+            return "ALREADY_DEDUCTED";
+        }
+        if (!due) {
+            return "NOT_DUE";
+        }
+        if (profile.getAsset().isHidden()) {
+            return "DEBT_ASSET_HIDDEN";
+        }
+        if (paymentAccount == null) {
+            return "PAYMENT_ACCOUNT_MISSING";
+        }
+        if (amount.signum() <= 0) {
+            return "NO_INTEREST";
+        }
+        return "EXECUTABLE";
     }
 
     private boolean isDue(DebtProfile profile, LocalDate targetDate, String targetMonth) {

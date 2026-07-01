@@ -66,3 +66,7 @@ export function previewReceiptOcr(file) {
   body.append('file', file);
   return requestResult('/receipts/ocr', { method: 'POST', body });
 }
+
+export function reparseReceiptOcr(rawText) {
+  return requestResult('/receipts/ocr/reparse', jsonOptions('POST', { rawText }));
+}

@@ -2,6 +2,7 @@ package com.comfortableledger.ledger.service.receipt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.comfortableledger.ledger.domain.TransactionType;
 import com.comfortableledger.ledger.dto.ImportDtos.TextImportPreview;
@@ -20,7 +21,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class ReceiptOcrServiceTest {
-    private final ReceiptOcrService service = new ReceiptOcrService(mock(ImportTextService.class), "tesseract", "kor+eng");
+    private final ImportTextService importTextService = mock(ImportTextService.class);
+    private final ReceiptOcrService service = new ReceiptOcrService(importTextService, "tesseract", "kor+eng");
 
     @Test
     void ignoresInformationalTesseractMessages() {
@@ -89,6 +91,18 @@ class ReceiptOcrServiceTest {
         assertThat(candidates.amountCandidates()).startsWith(new BigDecimal("9500"));
         assertThat(candidates.amountCandidates()).contains(new BigDecimal("4500"), new BigDecimal("5000"));
         assertThat(candidates.amountCandidates()).doesNotContain(new BigDecimal("1234567890"), new BigDecimal("212345678"));
+        assertThat(candidates.candidateDetails())
+                .anySatisfy(detail -> {
+                    assertThat(detail.field()).isEqualTo("amount");
+                    assertThat(detail.value()).isEqualTo("9500");
+                    assertThat(detail.reason()).contains("거래 초안 금액");
+                    assertThat(detail.score()).isGreaterThanOrEqualTo(90);
+                })
+                .anySatisfy(detail -> {
+                    assertThat(detail.field()).isEqualTo("title");
+                    assertThat(detail.value()).isEqualTo("Americano");
+                    assertThat(detail.sourceLine()).contains("Americano");
+                });
     }
 
     @Test
@@ -104,6 +118,24 @@ class ReceiptOcrServiceTest {
         assertThat(policy.recognizedFields()).containsExactly("date", "title", "amount");
         assertThat(policy.needsReview()).isFalse();
         assertThat(policy.confidenceScore()).isGreaterThanOrEqualTo(90);
+    }
+
+    @Test
+    void reparsesEditedOcrTextWithCandidatesAndPolicy() {
+        String rawText = """
+                카페테스트
+                2026-06-26
+                합계 9,500원
+                """;
+        when(importTextService.preview(rawText)).thenReturn(preview(new BigDecimal("9500"), "카페테스트"));
+
+        var result = service.reparse(rawText);
+
+        assertThat(result.preview().merchant()).isEqualTo("카페테스트");
+        assertThat(result.candidates().dateCandidates()).contains(LocalDate.of(2026, 6, 26));
+        assertThat(result.candidates().amountCandidates()).contains(new BigDecimal("9500"));
+        assertThat(result.candidates().candidateDetails()).isNotEmpty();
+        assertThat(result.policy().recognizedFields()).contains("date", "title", "amount");
     }
 
     private TextImportPreview preview(BigDecimal amount, String merchant) {

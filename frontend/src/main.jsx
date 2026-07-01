@@ -28,7 +28,14 @@ import {
   RecurringManagerScreen
 } from './screens/ScheduleScreens';
 import { StatsScreen } from './screens/StatsScreen';
-import { EntryChoiceSheet, EntryScreen, ManualTextImportScreen, ReceiptOcrScreen, TransactionDetailScreen } from './screens/TransactionScreens';
+import {
+  EntryChoiceSheet,
+  EntryScreen,
+  ManualTextImportReviewScreen,
+  ManualTextImportScreen,
+  ReceiptOcrScreen,
+  TransactionDetailScreen
+} from './screens/TransactionScreens';
 import { csvCell, downloadTextFile, filteredFileLabel } from './utils/csv';
 import { formatDate } from './utils/format';
 
@@ -95,6 +102,7 @@ function App() {
   const [installmentReceiptTargetIndex, setInstallmentReceiptTargetIndex] = useState(1);
   const [textImportQueue, setTextImportQueue] = useState([]);
   const [textImportQueueProgress, setTextImportQueueProgress] = useState(null);
+  const [textImportReview, setTextImportReview] = useState(null);
   const {
     data,
     loading,
@@ -343,6 +351,7 @@ function App() {
     setInstallmentReceiptTargetIndex(1);
     setTextImportQueue([]);
     setTextImportQueueProgress(null);
+    setTextImportReview(null);
   }
 
   function updateForm(key, value) {
@@ -486,14 +495,54 @@ function App() {
   function applyTextImportPreview(parsed) {
     const importedItems = Array.isArray(parsed?.items) ? parsed.items.filter((item) => Number(item.amount || 0) > 0) : [];
     if (importedItems.length > 1) {
-      setTextImportQueue(importedItems.slice(1));
-      setTextImportQueueProgress({ current: 1, total: importedItems.length });
-      applyTextImportItem(importedItems[0], { current: 1, total: importedItems.length });
+      setTextImportReview({
+        raw: parsed,
+        items: importedItems.map((item, index) => enrichTextImportItem(item, index))
+      });
+      setTextImportQueue([]);
+      setTextImportQueueProgress(null);
+      setPanel('textImportReview');
       return;
     }
     setTextImportQueue([]);
     setTextImportQueueProgress(null);
+    setTextImportReview(null);
     applyTextImportItem(parsed, null);
+  }
+
+  function enrichTextImportItem(item, index) {
+    const matchedAssetId = findAssetIdByName(item.assetName);
+    const transferAssets = item.type === 'TRANSFER' ? findTransferAssetIds(item.merchant || '') : {};
+    const warnings = [];
+    if (item.type === 'TRANSFER') {
+      if (!transferAssets.fromAssetId) warnings.push('출금 자산 확인 필요');
+      if (!transferAssets.toAssetId) warnings.push('입금 자산 확인 필요');
+    } else if (item.assetName && !matchedAssetId) {
+      warnings.push('자산명 매칭 실패');
+    } else if (!item.assetName) {
+      warnings.push('자산 미지정');
+    }
+    if (!item.recommendedCategoryId && item.type !== 'TRANSFER') {
+      warnings.push('분류 확인 필요');
+    }
+    return {
+      ...item,
+      importKey: `${index}-${item.transactionDate || ''}-${item.amount || ''}-${item.merchant || ''}`,
+      selected: true,
+      warnings
+    };
+  }
+
+  function startReviewedTextImport(items) {
+    const selectedItems = items.filter((item) => item.selected && Number(item.amount || 0) > 0);
+    if (!selectedItems.length) {
+      window.alert('저장할 거래를 1건 이상 선택해 주세요.');
+      return;
+    }
+    setTextImportReview(null);
+    setTextImportQueue(selectedItems.slice(1));
+    setTextImportQueueProgress({ current: 1, total: selectedItems.length });
+    applyTextImportItem(selectedItems[0], { current: 1, total: selectedItems.length });
   }
 
   function normalizeAssetKey(value) {
@@ -560,6 +609,23 @@ function App() {
     applyTextImportItem(nextItem, { current, total });
     await load();
     return true;
+  }
+
+  async function skipTextImportItem() {
+    if (!textImportQueueProgress) return;
+    if (!textImportQueue.length) {
+      setTextImportQueue([]);
+      setTextImportQueueProgress(null);
+      closePanel();
+      await load();
+      return;
+    }
+    const [nextItem, ...remainingItems] = textImportQueue;
+    const total = textImportQueueProgress.total || textImportQueue.length + 1;
+    const current = total - remainingItems.length;
+    setTextImportQueue(remainingItems);
+    setTextImportQueueProgress({ current, total });
+    applyTextImportItem(nextItem, { current, total });
   }
 
   function applyReceiptOcrPreview(result, file) {
@@ -650,6 +716,7 @@ function App() {
             exportMonthlyTransactions={exportMonthlyTransactions}
             openCategoryManager={openCategoryManager}
             openMemberManager={openMemberManager}
+            openRecurringManager={openRecurringManager}
           />
         )}
     </>
@@ -686,6 +753,7 @@ function App() {
             editingTransaction={editingTransaction}
             editingInstallmentGroup={editingInstallmentGroup}
             textImportQueueProgress={textImportQueueProgress}
+            skipTextImportItem={skipTextImportItem}
             installmentReceiptTargetIndex={installmentReceiptTargetIndex}
             setInstallmentReceiptTargetIndex={setInstallmentReceiptTargetIndex}
             onClose={closePanel}
@@ -694,7 +762,7 @@ function App() {
         {panel === 'receiptOcr' && (
           <ReceiptOcrScreen
             previewReceiptOcr={ledgerApi.previewReceiptOcr}
-            parseTransactionText={ledgerApi.parseTransactionText}
+            reparseReceiptOcr={ledgerApi.reparseReceiptOcr}
             applyReceiptOcrPreview={applyReceiptOcrPreview}
             onClose={closePanel}
           />
@@ -703,6 +771,14 @@ function App() {
           <ManualTextImportScreen
             parseTransactionText={ledgerApi.parseTransactionText}
             applyTextImportPreview={applyTextImportPreview}
+            onClose={closePanel}
+          />
+        )}
+        {panel === 'textImportReview' && (
+          <ManualTextImportReviewScreen
+            review={textImportReview}
+            onStart={startReviewedTextImport}
+            onBack={() => setPanel('textImport')}
             onClose={closePanel}
           />
         )}

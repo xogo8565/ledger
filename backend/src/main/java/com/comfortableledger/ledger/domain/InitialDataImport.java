@@ -45,12 +45,24 @@ public class InitialDataImport {
         return resourceName;
     }
 
+    public Long getId() {
+        return id;
+    }
+
     public String getResourceKind() {
         return resourceKind;
     }
 
     public String getChecksum() {
         return checksum;
+    }
+
+    public OffsetDateTime getImportedAt() {
+        return importedAt;
+    }
+
+    public int getRowCount() {
+        return rowCount;
     }
 
     public void markImported(String checksum, int rowCount) {
