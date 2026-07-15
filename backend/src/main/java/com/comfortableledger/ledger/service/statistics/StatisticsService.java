@@ -195,7 +195,7 @@ public class StatisticsService {
         Map<String, TagSpendAccumulator> totals = new LinkedHashMap<>();
         records.stream().filter(record -> record.getType() == TransactionType.EXPENSE)
                 .filter(record -> record.getSpendingTag() != null && !record.getSpendingTag().isBlank())
-                .forEach(record -> java.util.Arrays.stream(record.getSpendingTag().split("[,竊?"))
+                .forEach(record -> java.util.Arrays.stream(splitSpendingTags(record.getSpendingTag()))
                         .map(String::trim).map(tag -> tag.startsWith("#") ? tag.substring(1).trim() : tag)
                         .filter(tag -> !tag.isBlank()).map(tag -> tag.replaceAll("\\s+", " ")).distinct()
                         .forEach(tag -> totals.computeIfAbsent(
@@ -207,6 +207,10 @@ public class StatisticsService {
                 .sorted(Comparator.comparing(MonthlySummaryDto.TagSpend::amount).reversed()
                         .thenComparing(MonthlySummaryDto.TagSpend::transactionCount, Comparator.reverseOrder())
                         .thenComparing(MonthlySummaryDto.TagSpend::tagName)).toList();
+    }
+
+    private static String[] splitSpendingTags(String value) {
+        return value.replace('#', ',').split(",");
     }
 
     static List<MonthlySummaryDto.ScopeSpend> scopeSpends(List<TransactionRecord> records) {

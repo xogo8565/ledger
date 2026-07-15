@@ -33,13 +33,17 @@ export function emptyLedgerFilters() {
   };
 }
 
+export function isAllFilterValue(value) {
+  return value === '' || value === null || value === undefined || value === 'ALL';
+}
+
 export function hasLedgerFilters(filters) {
   return Boolean(
     filters.query
-    || filters.categoryId
-    || filters.consumptionScope
-    || filters.consumerMemberId
-    || filters.assetId
+    || !isAllFilterValue(filters.categoryId)
+    || !isAllFilterValue(filters.consumptionScope)
+    || !isAllFilterValue(filters.consumerMemberId)
+    || !isAllFilterValue(filters.assetId)
     || filters.minAmount
     || filters.maxAmount
     || filters.type !== 'ALL'
@@ -48,12 +52,16 @@ export function hasLedgerFilters(filters) {
 
 function filterTransactions(transactions, filters) {
   const query = (filters.query || '').trim().toLowerCase();
+  const categoryId = isAllFilterValue(filters.categoryId) ? '' : filters.categoryId;
+  const consumptionScope = isAllFilterValue(filters.consumptionScope) ? '' : filters.consumptionScope;
+  const consumerMemberId = isAllFilterValue(filters.consumerMemberId) ? '' : filters.consumerMemberId;
+  const assetId = isAllFilterValue(filters.assetId) ? '' : filters.assetId;
   return transactions.filter((item) => {
     if (filters.type !== 'ALL' && item.type !== filters.type) return false;
-    if (filters.categoryId && String(item.categoryId || '') !== String(filters.categoryId)) return false;
-    if (filters.consumptionScope && item.consumptionScope !== filters.consumptionScope) return false;
-    if (filters.consumerMemberId && String(item.consumerMemberId || '') !== String(filters.consumerMemberId)) return false;
-    if (filters.assetId && ![item.assetId, item.fromAssetId, item.toAssetId].some((id) => String(id || '') === String(filters.assetId))) return false;
+    if (categoryId && String(item.categoryId || '') !== String(categoryId)) return false;
+    if (consumptionScope && item.consumptionScope !== consumptionScope) return false;
+    if (consumerMemberId && String(item.consumerMemberId || '') !== String(consumerMemberId)) return false;
+    if (assetId && ![item.assetId, item.fromAssetId, item.toAssetId].some((id) => String(id || '') === String(assetId))) return false;
     if (filters.minAmount && Number(item.amount || 0) < toNumber(filters.minAmount)) return false;
     if (filters.maxAmount && Number(item.amount || 0) > toNumber(filters.maxAmount)) return false;
     if (!query) return true;

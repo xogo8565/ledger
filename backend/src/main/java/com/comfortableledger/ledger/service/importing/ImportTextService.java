@@ -36,7 +36,7 @@ public class ImportTextService {
     );
     private static final Pattern YEAR_DATE_PATTERN = Pattern.compile("(20\\d{2})[./-]\\s*(\\d{1,2})[./-]\\s*(\\d{1,2})");
     private static final Pattern MONTH_DATE_PATTERN = Pattern.compile("(\\d{1,2})[./월\\s]+(\\d{1,2})\\s*(?:일)?");
-    private static final Pattern DAILY_HEADER_PATTERN = Pattern.compile("^(\\d{1,2})월\\s*(\\d{1,2})일(?:\\s+\\S+요일)?\\s*$");
+    private static final Pattern DAILY_HEADER_PATTERN = Pattern.compile("^(?:\\[\\s*)?(\\d{1,2})(?:월|[./-])\\s*(\\d{1,2})(?:일)?(?:\\s*\\])?(?:\\s+\\S+요일)?\\s*$");
     private static final Pattern SUPPORTING_AMOUNT_PATTERN = Pattern.compile("(?:잔액|누적|한도|사용가능|총액)\\s*[: ]*([0-9,]+)\\s*원");
     private static final Pattern TIME_PATTERN = Pattern.compile("\\b\\d{1,2}[:시]\\d{2}\\b");
     private static final Pattern CARD_SUFFIX_PATTERN = Pattern.compile("\\b\\d{2,4}[-*]\\*{2,4}\\b|\\(\\d{3,4}\\)");
@@ -168,7 +168,7 @@ public class ImportTextService {
         }
         String sign = amountMatcher.group(1);
         String remainder = StringValues.normalizeWhitespace(line.substring(amountMatcher.end()));
-        if (remainder.startsWith("|")) {
+        if (remainder.startsWith("|") || remainder.startsWith("/")) {
             remainder = StringValues.normalizeWhitespace(remainder.substring(1));
         }
 
@@ -197,7 +197,8 @@ public class ImportTextService {
     }
 
     private String[] splitColumns(String text) {
-        return Pattern.compile("\\s*\\|\\s*")
+        String delimiterPattern = text.contains("|") ? "\\s*\\|\\s*" : "\\s+/\\s+";
+        return Pattern.compile(delimiterPattern)
                 .splitAsStream(text)
                 .map(StringValues::normalizeWhitespace)
                 .filter(value -> !value.isBlank())

@@ -87,4 +87,35 @@ class ImportTextServiceBasicTest {
         assertThat(preview.items().get(3).amount()).isEqualByComparingTo(new BigDecimal("1653"));
         assertThat(preview.items().get(3).memo()).contains("해외 결제", "취소/환불");
     }
+
+    @Test
+    void parsesBracketSlashDateHeadersAndSlashSeparatedLedgerLines() {
+        TextImportPreview preview = service.preview("""
+                [6/30]
+                3,600원 / 세븐일레븐 / 삼성카드 taptap O
+                2,000원 / 다이소 / 삼성카드 taptap O
+                2,400원 / CU / 삼성카드 taptap O
+                300,000원 / 내 계좌이체(하나→하나)
+                2,000원 / CU / 삼성카드 taptap O
+
+                [6/29]
+                2,000원 / CU / 삼성카드 taptap O
+                2,300원 / CU
+                2,300원 / CU
+                7,000원 / 삼성본점
+                7,000원 / 세븐일레븐
+                1,645원 / ORACLE SINGAPORE / KB국민 코웨이Ⅱ카드 (해외결제 취소)
+                507,890원 / 대출이자(55898021734142-00001)
+                """);
+
+        assertThat(preview.items()).hasSize(12);
+        assertThat(preview.transactionDate()).isEqualTo(LocalDate.of(LocalDate.now().getYear(), 6, 30));
+        assertThat(preview.merchant()).isEqualTo("세븐일레븐");
+        assertThat(preview.items().get(0).assetName()).isEqualTo("삼성카드 taptap O");
+        assertThat(preview.items().get(5).transactionDate()).isEqualTo(LocalDate.of(LocalDate.now().getYear(), 6, 29));
+        assertThat(preview.items().get(6).assetName()).isBlank();
+        assertThat(preview.items().get(10).type()).isEqualTo(TransactionType.INCOME);
+        assertThat(preview.items().get(10).merchant()).isEqualTo("ORACLE SINGAPORE");
+        assertThat(preview.items().get(10).assetName()).isEqualTo("KB국민 코웨이Ⅱ카드 (해외결제 취소)");
+    }
 }

@@ -226,10 +226,10 @@ public class LedgerController {
             @RequestParam(required = false) LocalDate startDate,
             @RequestParam(required = false) LocalDate endDate,
             @RequestParam(required = false) TransactionType type,
-            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String categoryId,
             @RequestParam(required = false) ConsumptionScope consumptionScope,
-            @RequestParam(required = false) Long consumerMemberId,
-            @RequestParam(required = false) Long assetId,
+            @RequestParam(required = false) String consumerMemberId,
+            @RequestParam(required = false) String assetId,
             @RequestParam(required = false) BigDecimal minAmount,
             @RequestParam(required = false) BigDecimal maxAmount,
             @RequestParam(required = false) String query,
@@ -238,8 +238,8 @@ public class LedgerController {
             @RequestParam(required = false) TransactionSearchSort sort
     ) {
         return ok(transactionQueryService.searchTransactions(new TransactionSearchCriteria(
-                startDate, endDate, type, categoryId, consumptionScope,
-                consumerMemberId, assetId, minAmount, maxAmount, query,
+                startDate, endDate, type, optionalLong(categoryId, "categoryId"), consumptionScope,
+                optionalLong(consumerMemberId, "consumerMemberId"), optionalLong(assetId, "assetId"), minAmount, maxAmount, query,
                 page, size, sort)));
     }
 
@@ -337,5 +337,16 @@ public class LedgerController {
     @PostMapping("/budgets/settings/copy-previous")
     public ResponseEntity<ApiResponse<BudgetSettingsDto>> copyPreviousBudget(@RequestParam(required = false) String month) {
         return ok(budgetService.copyPreviousBudget(month));
+    }
+
+    private static Long optionalLong(String value, String fieldName) {
+        if (value == null || value.isBlank() || "ALL".equalsIgnoreCase(value.trim())) {
+            return null;
+        }
+        try {
+            return Long.valueOf(value.trim());
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(fieldName + " must be a number");
+        }
     }
 }

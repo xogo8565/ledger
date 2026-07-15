@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as ledgerApi from '../api/ledgerApi';
 import * as managementApi from '../api/managementApi';
-import { hasLedgerFilters } from '../screens/LedgerScreen';
+import { hasLedgerFilters, isAllFilterValue } from '../screens/LedgerScreen';
 import { formatDate } from '../utils/format';
 import { toNumber } from '../utils/numberValues';
 import { trimToEmpty } from '../utils/stringValues';
@@ -96,7 +96,7 @@ export function useLedgerData({ month, ledgerFilters, statsRange }) {
     if (query) params.set('query', query);
     if (ledgerFilters.type !== 'ALL') params.set('type', ledgerFilters.type);
     ['categoryId', 'consumptionScope', 'consumerMemberId', 'assetId', 'minAmount', 'maxAmount'].forEach((key) => {
-      if (ledgerFilters[key] !== '') {
+      if (!isAllFilterValue(ledgerFilters[key])) {
         params.set(key, key === 'minAmount' || key === 'maxAmount' ? String(toNumber(ledgerFilters[key])) : ledgerFilters[key]);
       }
     });
