@@ -34,9 +34,16 @@ export function useLedgerData({ month, ledgerFilters, statsRange }) {
 
   async function reload() {
     setLoading(true);
-    const { bootstrap, assetSummary, members: loadedMembers } = await ledgerApi.getDashboard(month);
+    const [
+      { bootstrap, assetSummary, members: loadedMembers },
+      loadedSearchResult
+    ] = await Promise.all([
+      ledgerApi.getDashboard(month),
+      loadSearchTransactions()
+    ]);
     setMembers(loadedMembers);
     setData({ ...bootstrap, assetSummary });
+    setSearchResult(loadedSearchResult);
     setLoading(false);
   }
 
