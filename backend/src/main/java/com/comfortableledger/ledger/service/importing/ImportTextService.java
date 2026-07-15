@@ -52,17 +52,50 @@ public class ImportTextService {
     private static final Map<String, List<String>> INCOME_CATEGORY_KEYWORDS = new LinkedHashMap<>();
 
     static {
-        EXPENSE_CATEGORY_KEYWORDS.put("식비", List.of("스타벅스", "카페", "커피", "식당", "김밥", "치킨", "피자", "버거", "배달", "푸드", "맥도날드", "스시", "휴게소"));
-        EXPENSE_CATEGORY_KEYWORDS.put("마트/편의점", List.of("cu", "gs25", "세븐일레븐", "이마트", "원플러스", "롯데마트", "마트", "편의점", "다이소"));
-        EXPENSE_CATEGORY_KEYWORDS.put("교통/차량", List.of("택시", "카카오t", "주유", "충전소", "하이패스", "코레일", "철도", "버스", "지하철", "주차", "주차장"));
-        EXPENSE_CATEGORY_KEYWORDS.put("문화생활", List.of("영화", "극장", "서점", "공연", "예스24", "게임", "넷플릭스", "유튜브", "백화점"));
-        EXPENSE_CATEGORY_KEYWORDS.put("패션/미용", List.of("미용실", "헤어", "네일", "의류", "패션", "무신사", "올리브영"));
-        EXPENSE_CATEGORY_KEYWORDS.put("생활용품", List.of("다이소", "가구", "생활용품", "문구", "쿠팡"));
-        EXPENSE_CATEGORY_KEYWORDS.put("주거/통신", List.of("통신", "인터넷", "전기", "가스", "수도", "관리비", "월세", "oracle"));
-        EXPENSE_CATEGORY_KEYWORDS.put("건강", List.of("병원", "의원", "약국", "치과", "한의원", "건강", "검진"));
-        INCOME_CATEGORY_KEYWORDS.put("급여", List.of("급여", "월급", "상여", "보너스"));
-        INCOME_CATEGORY_KEYWORDS.put("이자", List.of("이자", "예금이자", "입출금통장 이자"));
-        INCOME_CATEGORY_KEYWORDS.put("부수입", List.of("부수입", "정산", "수익", "판매", "환불", "취소"));
+        EXPENSE_CATEGORY_KEYWORDS.put("편의점", List.of(
+                "cu", "씨유", "gs25", "지에스25", "세븐일레븐", "이마트24", "emart24", "미니스톱", "편의점"
+        ));
+        EXPENSE_CATEGORY_KEYWORDS.put("레오", List.of(
+                "동물병원", "몰리스", "몰리스펫샵", "펫샵", "펫마트", "펫프렌즈", "강아지", "반려동물", "애견", "사료", "동물약국", "수의", "수의사", "펫"
+        ));
+        EXPENSE_CATEGORY_KEYWORDS.put("식비", List.of(
+                "스타벅스", "투썸", "이디야", "메가커피", "빽다방", "컴포즈", "할리스", "커피빈", "공차",
+                "카페", "커피", "식당", "음식점", "한식", "중식", "일식", "분식", "김밥", "국밥", "마라탕",
+                "치킨", "피자", "버거", "배달", "푸드", "맥도날드", "버거킹", "롯데리아", "맘스터치", "써브웨이",
+                "bbq", "bhc", "교촌", "스시", "샐러드", "베이커리", "파리바게뜨", "뚜레쥬르", "던킨", "배스킨",
+                "배달의민족", "배민", "요기요", "쿠팡이츠", "휴게소",
+                "이마트", "원플러스", "롯데마트", "홈플러스", "코스트코", "트레이더스", "하나로마트", "농협하나로",
+                "노브랜드", "롯데슈퍼", "gs더프레시", "마켓컬리", "컬리", "ssg", "마트"
+        ));
+        EXPENSE_CATEGORY_KEYWORDS.put("교통/차량", List.of(
+                "택시", "카카오t", "카카오택시", "우티", "타다", "티머니", "후불교통", "코레일", "철도", "ktx",
+                "srt", "버스", "지하철", "주유", "주유소", "충전소", "전기차충전", "sk에너지", "gs칼텍스",
+                "s-oil", "에쓰오일", "현대오일뱅크", "하이패스", "톨게이트", "주차", "주차장", "쏘카", "그린카"
+        ));
+        EXPENSE_CATEGORY_KEYWORDS.put("문화생활", List.of(
+                "영화", "극장", "cgv", "롯데시네마", "메가박스", "서점", "교보문고", "영풍문고", "알라딘",
+                "예스24", "공연", "티켓", "인터파크", "게임", "스팀", "플레이스테이션", "닌텐도", "넷플릭스",
+                "유튜브", "디즈니", "왓챠", "티빙", "웨이브", "멜론", "지니뮤직", "벅스", "백화점"
+        ));
+        EXPENSE_CATEGORY_KEYWORDS.put("패션/미용", List.of(
+                "미용실", "헤어", "네일", "의류", "패션", "무신사", "지그재그", "에이블리", "브랜디", "w컨셉",
+                "29cm", "올리브영", "화장품", "뷰티", "클리닉", "피부", "왁싱"
+        ));
+        EXPENSE_CATEGORY_KEYWORDS.put("생활용품", List.of(
+                "다이소", "쿠팡", "네이버페이", "오늘의집", "생활용품", "문구", "문구점", "가구", "이케아",
+                "모던하우스", "아트박스", "무인양품", "알파문구", "오피스디포"
+        ));
+        EXPENSE_CATEGORY_KEYWORDS.put("주거/통신", List.of(
+                "통신", "인터넷", "휴대폰", "핸드폰", "skt", "kt", "lg유플러스", "u+", "전기", "한국전력",
+                "가스", "삼천리", "수도", "관리비", "월세", "도시가스", "보험료", "렌탈", "정수기", "코웨이", "oracle"
+        ));
+        EXPENSE_CATEGORY_KEYWORDS.put("건강", List.of(
+                "병원", "의원", "약국", "치과", "한의원", "안과", "피부과", "내과", "정형외과", "이비인후과",
+                "소아과", "건강", "검진", "의료", "처방"
+        ));
+        INCOME_CATEGORY_KEYWORDS.put("급여", List.of("급여", "월급", "상여", "보너스", "성과급", "연말정산", "환급급여"));
+        INCOME_CATEGORY_KEYWORDS.put("이자", List.of("이자", "예금이자", "입출금통장 이자", "결산이자", "적금이자", "배당"));
+        INCOME_CATEGORY_KEYWORDS.put("부수입", List.of("부수입", "정산", "수익", "판매", "중고거래", "당근", "캐시백", "포인트", "환불", "취소"));
     }
 
     private final HouseholdRepository householdRepository;

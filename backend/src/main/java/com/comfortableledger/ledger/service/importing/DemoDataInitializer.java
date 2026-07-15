@@ -51,6 +51,8 @@ public class DemoDataInitializer implements ApplicationRunner {
     private static final String ASSET_WORKBOOKS = "classpath*:initial-data/assets_*.xlsx";
     private static final String TRANSACTION_WORKBOOKS = "classpath*:initial-data/transactions_*.xlsx";
     private static final String PLAN_ASSET_WORKBOOK = "assets_plan_20260629.xlsx";
+    private static final String LEGACY_CONVENIENCE_CATEGORY_NAME = "마트/편의점";
+    private static final String CONVENIENCE_CATEGORY_NAME = "편의점";
     private static final String DEFAULT_OWNER_NAME = "석수";
     private static final String SECONDARY_OWNER_NAME = "유진";
     private static final LocalDate EXCEL_DATE_EPOCH = LocalDate.of(1899, 12, 30);
@@ -285,7 +287,7 @@ public class DemoDataInitializer implements ApplicationRunner {
             }
 
             TransactionType transactionType = parseTransactionType(row.get("G"));
-            String categoryName = StringValues.firstNonBlank(row.get("C"), row.get("D"), "기타");
+            String categoryName = normalizeCategoryName(StringValues.firstNonBlank(row.get("C"), row.get("D"), "기타"));
             Category category = categoryFor(household, categoriesByKey, transactionType, categoryName);
             String assetName = row.get("B");
             Asset asset = assetFor(household, assetsByName, assetName);
@@ -326,9 +328,23 @@ public class DemoDataInitializer implements ApplicationRunner {
         Map<CategoryKey, Category> categoriesByKey = new HashMap<>();
         for (CategoryType categoryType : CategoryType.values()) {
             categoryRepository.findByHouseholdIdAndTypeAndActiveTrueOrderBySortOrderAscIdAsc(household.getId(), categoryType)
-                    .forEach(category -> categoriesByKey.put(new CategoryKey(category.getType(), category.getName()), category));
+                    .forEach(category -> {
+                        String normalizedName = normalizeCategoryName(category.getName());
+                        if (!category.getName().equals(normalizedName)) {
+                            category.update(normalizedName, category.getIcon(), category.getColor());
+                        }
+                        categoriesByKey.put(new CategoryKey(category.getType(), normalizedName), category);
+                    });
         }
         return categoriesByKey;
+    }
+
+    private String normalizeCategoryName(String categoryName) {
+        String normalizedName = StringValues.normalizeWhitespace(categoryName).replaceAll("\\s*/\\s*", "/");
+        if (LEGACY_CONVENIENCE_CATEGORY_NAME.equals(normalizedName)) {
+            return CONVENIENCE_CATEGORY_NAME;
+        }
+        return StringValues.normalizeWhitespace(categoryName);
     }
 
     private Category categoryFor(Household household,

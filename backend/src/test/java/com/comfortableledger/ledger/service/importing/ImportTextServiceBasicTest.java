@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.comfortableledger.ledger.domain.Category;
+import com.comfortableledger.ledger.domain.CategoryType;
+import com.comfortableledger.ledger.domain.Household;
 import com.comfortableledger.ledger.domain.TransactionType;
 import com.comfortableledger.ledger.dto.ImportDtos.TextImportPreview;
 import com.comfortableledger.ledger.repository.CategoryRepository;
@@ -11,7 +14,10 @@ import com.comfortableledger.ledger.repository.HouseholdRepository;
 import com.comfortableledger.ledger.repository.TransactionRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class ImportTextServiceBasicTest {
     private final HouseholdRepository households = mock(HouseholdRepository.class);
@@ -117,5 +123,82 @@ class ImportTextServiceBasicTest {
         assertThat(preview.items().get(10).type()).isEqualTo(TransactionType.INCOME);
         assertThat(preview.items().get(10).merchant()).isEqualTo("ORACLE SINGAPORE");
         assertThat(preview.items().get(10).assetName()).isEqualTo("KB국민 코웨이Ⅱ카드 (해외결제 취소)");
+    }
+
+    @Test
+    void recommendsMartMerchantsAsFoodAndConvenienceStoresAsConvenience() {
+        Household household = new Household("테스트");
+        ReflectionTestUtils.setField(household, "id", 1L);
+        Category food = category(household, 10L, "식비");
+        Category convenience = category(household, 11L, "편의점");
+        when(households.findFirstByOrderByIdAsc()).thenReturn(Optional.of(household));
+        when(categories.findByHouseholdIdAndTypeAndActiveTrueOrderBySortOrderAscIdAsc(1L, CategoryType.EXPENSE))
+                .thenReturn(List.of(food, convenience));
+        when(transactions.findTop200ByHouseholdIdOrderByTransactionDateDescIdDesc(1L)).thenReturn(List.of());
+
+        TextImportPreview martPreview = service.preview("[신한카드] 06/22 승인 이마트 8,900원");
+        TextImportPreview conveniencePreview = service.preview("[신한카드] 06/22 승인 CU 2,400원");
+
+        assertThat(martPreview.recommendedCategoryName()).isEqualTo("식비");
+        assertThat(conveniencePreview.recommendedCategoryName()).isEqualTo("편의점");
+    }
+
+    @Test
+    void recommendsExpandedExpenseCategoryKeywords() {
+        Household household = new Household("테스트");
+        ReflectionTestUtils.setField(household, "id", 1L);
+        when(households.findFirstByOrderByIdAsc()).thenReturn(Optional.of(household));
+        when(categories.findByHouseholdIdAndTypeAndActiveTrueOrderBySortOrderAscIdAsc(1L, CategoryType.EXPENSE))
+                .thenReturn(List.of(
+                        category(household, 10L, "식비"),
+                        category(household, 11L, "편의점"),
+                        category(household, 18L, "레오"),
+                        category(household, 12L, "교통/차량"),
+                        category(household, 13L, "문화생활"),
+                        category(household, 14L, "패션/미용"),
+                        category(household, 15L, "생활용품"),
+                        category(household, 16L, "주거/통신"),
+                        category(household, 17L, "건강")
+                ));
+        when(transactions.findTop200ByHouseholdIdOrderByTransactionDateDescIdDesc(1L)).thenReturn(List.of());
+
+        assertThat(service.preview("[신한카드] 06/22 승인 배달의민족 18,900원").recommendedCategoryName()).isEqualTo("식비");
+        assertThat(service.preview("[신한카드] 06/22 승인 이마트24 2,400원").recommendedCategoryName()).isEqualTo("편의점");
+        assertThat(service.preview("[신한카드] 06/22 승인 몰리스펫샵 31,000원").recommendedCategoryName()).isEqualTo("레오");
+        assertThat(service.preview("[신한카드] 06/22 승인 우리동물병원 88,000원").recommendedCategoryName()).isEqualTo("레오");
+        assertThat(service.preview("[신한카드] 06/22 승인 코레일 52,000원").recommendedCategoryName()).isEqualTo("교통/차량");
+        assertThat(service.preview("[신한카드] 06/22 승인 넷플릭스 17,000원").recommendedCategoryName()).isEqualTo("문화생활");
+        assertThat(service.preview("[신한카드] 06/22 승인 올리브영 23,000원").recommendedCategoryName()).isEqualTo("패션/미용");
+        assertThat(service.preview("[신한카드] 06/22 승인 쿠팡 34,000원").recommendedCategoryName()).isEqualTo("생활용품");
+        assertThat(service.preview("[신한카드] 06/22 승인 코웨이 29,900원").recommendedCategoryName()).isEqualTo("주거/통신");
+        assertThat(service.preview("[신한카드] 06/22 승인 약국 8,000원").recommendedCategoryName()).isEqualTo("건강");
+    }
+
+    @Test
+    void recommendsExpandedIncomeCategoryKeywords() {
+        Household household = new Household("테스트");
+        ReflectionTestUtils.setField(household, "id", 1L);
+        when(households.findFirstByOrderByIdAsc()).thenReturn(Optional.of(household));
+        when(categories.findByHouseholdIdAndTypeAndActiveTrueOrderBySortOrderAscIdAsc(1L, CategoryType.INCOME))
+                .thenReturn(List.of(
+                        category(household, CategoryType.INCOME, 20L, "급여"),
+                        category(household, CategoryType.INCOME, 21L, "이자"),
+                        category(household, CategoryType.INCOME, 22L, "부수입")
+                ));
+        when(transactions.findTop200ByHouseholdIdOrderByTransactionDateDescIdDesc(1L)).thenReturn(List.of());
+
+        assertThat(service.preview("우리은행 입금 2026.06.22 성과급 500,000원").recommendedCategoryName()).isEqualTo("급여");
+        assertThat(service.preview("우리은행 입금 2026.06.22 배당 12,000원").recommendedCategoryName()).isEqualTo("이자");
+        assertThat(service.preview("우리은행 입금 2026.06.22 캐시백 3,000원").recommendedCategoryName()).isEqualTo("부수입");
+    }
+
+    private Category category(Household household, Long id, String name) {
+        return category(household, CategoryType.EXPENSE, id, name);
+    }
+
+    private Category category(Household household, CategoryType type, Long id, String name) {
+        Category category = new Category(household, type, name, "•", "#111111", 0);
+        ReflectionTestUtils.setField(category, "id", id);
+        return category;
     }
 }
