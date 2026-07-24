@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Check whitespace
         run: git diff --check
@@ -30,7 +30,7 @@ jobs:
         run: docker run --rm -v "${PWD}/backend:/workspace" -w /workspace gradle:8.10.2-jdk21 gradle test --no-daemon
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
 

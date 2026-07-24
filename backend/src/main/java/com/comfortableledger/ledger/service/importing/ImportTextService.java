@@ -36,7 +36,7 @@ public class ImportTextService {
     );
     private static final Pattern YEAR_DATE_PATTERN = Pattern.compile("(20\\d{2})[./-]\\s*(\\d{1,2})[./-]\\s*(\\d{1,2})");
     private static final Pattern MONTH_DATE_PATTERN = Pattern.compile("(\\d{1,2})[./월\\s]+(\\d{1,2})\\s*(?:일)?");
-    private static final Pattern DAILY_HEADER_PATTERN = Pattern.compile("^(?:\\[\\s*)?(\\d{1,2})(?:월|[./-])\\s*(\\d{1,2})(?:일)?(?:\\s*\\])?(?:\\s+\\S+요일)?\\s*$");
+    private static final Pattern DAILY_HEADER_PATTERN = Pattern.compile("^(?:\\[\\s*)?(?:(20\\d{2})(?:년|[./-])\\s*)?(\\d{1,2})(?:월|[./-])\\s*(\\d{1,2})(?:일)?(?:\\s*\\])?(?:\\s+\\S+요일)?\\s*$");
     private static final Pattern SUPPORTING_AMOUNT_PATTERN = Pattern.compile("(?:잔액|누적|한도|사용가능|총액)\\s*[: ]*([0-9,]+)\\s*원");
     private static final Pattern TIME_PATTERN = Pattern.compile("\\b\\d{1,2}[:시]\\d{2}\\b");
     private static final Pattern CARD_SUFFIX_PATTERN = Pattern.compile("\\b\\d{2,4}[-*]\\*{2,4}\\b|\\(\\d{3,4}\\)");
@@ -63,7 +63,7 @@ public class ImportTextService {
                 "카페", "커피", "식당", "음식점", "한식", "중식", "일식", "분식", "김밥", "국밥", "마라탕",
                 "치킨", "피자", "버거", "배달", "푸드", "맥도날드", "버거킹", "롯데리아", "맘스터치", "써브웨이",
                 "bbq", "bhc", "교촌", "스시", "샐러드", "베이커리", "파리바게뜨", "뚜레쥬르", "던킨", "배스킨",
-                "배달의민족", "배민", "요기요", "쿠팡이츠", "휴게소",
+                "배달의민족", "우아한형제들", "배민", "요기요", "쿠팡이츠", "휴게소",
                 "이마트", "원플러스", "롯데마트", "홈플러스", "코스트코", "트레이더스", "하나로마트", "농협하나로",
                 "노브랜드", "롯데슈퍼", "gs더프레시", "마켓컬리", "컬리", "ssg", "마트"
         ));
@@ -75,7 +75,8 @@ public class ImportTextService {
         EXPENSE_CATEGORY_KEYWORDS.put("문화생활", List.of(
                 "영화", "극장", "cgv", "롯데시네마", "메가박스", "서점", "교보문고", "영풍문고", "알라딘",
                 "예스24", "공연", "티켓", "인터파크", "게임", "스팀", "플레이스테이션", "닌텐도", "넷플릭스",
-                "유튜브", "디즈니", "왓챠", "티빙", "웨이브", "멜론", "지니뮤직", "벅스", "백화점"
+                "유튜브", "디즈니", "왓챠", "티빙", "웨이브", "멜론", "지니뮤직", "벅스", "애플스토어",
+                "apple", "앱스토어", "동행복권", "복권", "백화점"
         ));
         EXPENSE_CATEGORY_KEYWORDS.put("패션/미용", List.of(
                 "미용실", "헤어", "네일", "의류", "패션", "무신사", "지그재그", "에이블리", "브랜디", "w컨셉",
@@ -87,11 +88,15 @@ public class ImportTextService {
         ));
         EXPENSE_CATEGORY_KEYWORDS.put("주거/통신", List.of(
                 "통신", "인터넷", "휴대폰", "핸드폰", "skt", "kt", "lg유플러스", "u+", "전기", "한국전력",
-                "가스", "삼천리", "수도", "관리비", "월세", "도시가스", "보험료", "렌탈", "정수기", "코웨이", "oracle"
+                "가스", "삼천리", "수도", "관리비", "월세", "도시가스", "보험료", "렌탈", "정수기", "코웨이",
+                "oracle", "서울가스", "건물관", "오성건설"
         ));
         EXPENSE_CATEGORY_KEYWORDS.put("건강", List.of(
                 "병원", "의원", "약국", "치과", "한의원", "안과", "피부과", "내과", "정형외과", "이비인후과",
                 "소아과", "건강", "검진", "의료", "처방"
+        ));
+          EXPENSE_CATEGORY_KEYWORDS.put("보험", List.of(
+                "보험"
         ));
         INCOME_CATEGORY_KEYWORDS.put("급여", List.of("급여", "월급", "상여", "보너스", "성과급", "연말정산", "환급급여"));
         INCOME_CATEGORY_KEYWORDS.put("이자", List.of("이자", "예금이자", "입출금통장 이자", "결산이자", "적금이자", "배당"));
@@ -184,9 +189,9 @@ public class ImportTextService {
             return Optional.empty();
         }
         return Optional.of(LocalDate.of(
-                LocalDate.now().getYear(),
-                Integer.parseInt(matcher.group(1)),
-                Integer.parseInt(matcher.group(2))
+                matcher.group(1) == null ? LocalDate.now().getYear() : Integer.parseInt(matcher.group(1)),
+                Integer.parseInt(matcher.group(2)),
+                Integer.parseInt(matcher.group(3))
         ));
     }
 
@@ -242,6 +247,9 @@ public class ImportTextService {
         if (containsAny(line.toLowerCase(Locale.ROOT), "취소", "환불", "승인취소")) {
             return TransactionType.INCOME;
         }
+        if (containsAny(line.toLowerCase(Locale.ROOT), "[입금]", "기타입금", "자동입금")) {
+            return TransactionType.INCOME;
+        }
         if ("+".equals(sign)) {
             return TransactionType.INCOME;
         }
@@ -253,6 +261,9 @@ public class ImportTextService {
 
     private boolean itemsTransferHint(String merchant) {
         String normalized = StringValues.normalizeSearchKey(merchant);
+        if (containsAny(normalized, "동행복권", "서울가스", "건물관", "오성건설")) {
+            return false;
+        }
         return normalized.contains("→")
                 && containsAny(normalized, "내 ", "계좌", "카카오페이", "카카오페이 머니", "nh농협", "하나", "카카오뱅크")
                 && !containsAny(normalized, "보험료", "카드출금", "신한카드", "삼성카드", "kb카드");
@@ -444,8 +455,8 @@ public class ImportTextService {
         String candidate = primaryText;
         candidate = candidate.replaceAll("\\[[^\\]]+]", " ");
         candidate = YEAR_DATE_PATTERN.matcher(candidate).replaceAll(" ");
-        candidate = MONTH_DATE_PATTERN.matcher(candidate).replaceAll(" ");
         candidate = AMOUNT_PATTERN.matcher(candidate).replaceAll(" ");
+        candidate = MONTH_DATE_PATTERN.matcher(candidate).replaceAll(" ");
         candidate = TIME_PATTERN.matcher(candidate).replaceAll(" ");
         candidate = CARD_SUFFIX_PATTERN.matcher(candidate).replaceAll(" ");
         candidate = candidate.replaceAll("승인번호\\s*\\S+", " ");
