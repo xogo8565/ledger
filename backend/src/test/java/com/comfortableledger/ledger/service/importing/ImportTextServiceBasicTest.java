@@ -208,7 +208,7 @@ class ImportTextServiceBasicTest {
         assertThat(service.preview("[신한카드] 06/22 승인 코레일 52,000원").recommendedCategoryName()).isEqualTo("교통/차량");
         assertThat(service.preview("[신한카드] 06/22 승인 넷플릭스 17,000원").recommendedCategoryName()).isEqualTo("문화생활");
         assertThat(service.preview("[신한카드] 06/22 승인 올리브영 23,000원").recommendedCategoryName()).isEqualTo("패션/미용");
-        assertThat(service.preview("[신한카드] 06/22 승인 쿠팡 34,000원").recommendedCategoryName()).isEqualTo("생활용품");
+        assertThat(service.preview("[신한카드] 06/22 승인 쿠팡 34,000원").recommendedCategoryName()).isEqualTo("식비");
         assertThat(service.preview("[신한카드] 06/22 승인 코웨이 29,900원").recommendedCategoryName()).isEqualTo("주거/통신");
         assertThat(service.preview("[신한카드] 06/22 승인 약국 8,000원").recommendedCategoryName()).isEqualTo("건강");
     }
