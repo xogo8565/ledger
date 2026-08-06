@@ -288,11 +288,20 @@ function CategoryRanking({ spends, total, categoryByName, openLedgerCategory }) 
         const category = categoryByName.get(item.categoryName);
         const percent = total ? Math.round((Number(item.amount) / total) * 100) : 0;
         const color = category?.color || palette[index % palette.length];
+        const hasBudget = Number(item.budgetAmount || 0) > 0;
+        const remaining = Number(item.remainingAmount || 0);
+        const exceeded = hasBudget && remaining < 0;
+        const remainingLabel = hasBudget
+          ? (exceeded ? `${numberOnly(Math.abs(remaining))} 초과` : `${numberOnly(remaining)} 남음`)
+          : null;
         return (
           <button className="ranking-row" type="button" key={item.categoryName} onClick={() => openLedgerCategory(item)}>
             <span className="percent-badge" style={{ backgroundColor: color }}>{percent}%</span>
             <strong>{category?.icon || '•'} {item.categoryName}</strong>
-            <b>{money(item.amount)}</b>
+            <b>
+              {money(item.amount)}
+              {remainingLabel && <small className={exceeded ? 'over' : ''}>{remainingLabel}</small>}
+            </b>
           </button>
         );
       })}

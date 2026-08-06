@@ -87,6 +87,20 @@ class StatisticsServiceBudgetTest {
         assertThat(livingUsage.spentAmount()).isEqualByComparingTo(new BigDecimal("80000"));
         assertThat(livingUsage.remainingAmount()).isEqualByComparingTo(new BigDecimal("-30000"));
         assertThat(livingUsage.exceeded()).isTrue();
+
+        var foodSpend = summary.categorySpends().stream()
+                .filter(item -> item.categoryId().equals(10L))
+                .findFirst()
+                .orElseThrow();
+        assertThat(foodSpend.budgetAmount()).isEqualByComparingTo(new BigDecimal("150000"));
+        assertThat(foodSpend.remainingAmount()).isEqualByComparingTo(new BigDecimal("30000"));
+
+        var livingSpend = summary.categorySpends().stream()
+                .filter(item -> item.categoryId().equals(11L))
+                .findFirst()
+                .orElseThrow();
+        assertThat(livingSpend.budgetAmount()).isEqualByComparingTo(new BigDecimal("50000"));
+        assertThat(livingSpend.remainingAmount()).isEqualByComparingTo(new BigDecimal("-30000"));
     }
 
     @Test

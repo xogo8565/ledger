@@ -422,7 +422,7 @@ function DailyLedger({ transactions, openInstallmentSchedule, openTransactionDet
   );
 }
 
-function TransactionRow({ item, openInstallmentSchedule, openTransactionDetail }) {
+function TransactionRow({ item, openInstallmentSchedule, openTransactionDetail, showMemo = true }) {
   const hasInstallment = item.installmentGroupId && item.installmentMonths > 1;
   return (
     <div className={`transaction-row ${hasInstallment ? 'has-installment' : ''}`} role="button" tabIndex={0} onClick={() => openTransactionDetail?.(item)} onKeyDown={(event) => {
@@ -432,6 +432,7 @@ function TransactionRow({ item, openInstallmentSchedule, openTransactionDetail }
       <div className="transaction-main">
         <strong>{item.title || item.categoryName || typeLabels[item.type]}</strong>
         <span>{item.assetName || transferLabel(item) || '자산 미지정'}</span>
+        {showMemo && item.memo && <span className="transaction-memo">메모 · {item.memo}</span>}
         {hasInstallment && <button className="installment-chip" type="button" onClick={(event) => {
           event.stopPropagation();
           openInstallmentSchedule(item);
@@ -531,6 +532,6 @@ function MemoLedger({ transactions, openInstallmentSchedule, openTransactionDeta
   const memoTransactions = transactions.filter((item) => item.memo);
   if (!memoTransactions.length) return <EmptyState icon="▤" label="데이터가 없습니다." />;
   return <section className="plain-list">{memoTransactions.map((item) => <article className="memo-row" key={item.id}>
-    <TransactionRow item={item} openInstallmentSchedule={openInstallmentSchedule} openTransactionDetail={openTransactionDetail} /><p>{item.memo}</p>
+    <TransactionRow item={item} openInstallmentSchedule={openInstallmentSchedule} openTransactionDetail={openTransactionDetail} showMemo={false} /><p>{item.memo}</p>
   </article>)}</section>;
 }

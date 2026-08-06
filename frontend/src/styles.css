@@ -810,6 +810,11 @@ button {
   font-size: 15px;
 }
 
+.transaction-main .transaction-memo {
+  color: #6f7782;
+  font-size: 14px;
+}
+
 .ocr-preview-grid {
   display: grid;
   grid-template-columns: 88px 1fr;
@@ -1353,6 +1358,23 @@ button {
   min-width: 0;
   overflow-wrap: anywhere;
   font-size: 18px;
+}
+
+.ranking-row b {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  text-align: right;
+}
+
+.ranking-row b small {
+  color: var(--subtle);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ranking-row b small.over {
+  color: var(--accent);
 }
 
 .tag-ranking-list {

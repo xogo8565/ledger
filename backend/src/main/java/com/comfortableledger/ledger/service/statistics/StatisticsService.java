@@ -76,12 +76,13 @@ public class StatisticsService {
         MonthlyBudget monthlyBudget = monthlyBudgetRepository
                 .findByHouseholdIdAndBudgetMonth(household.getId(), yearMonth.toString()).orElse(null);
         BigDecimal budget = monthlyBudget == null ? BigDecimal.ZERO : monthlyBudget.getTotalAmount();
+        Map<Long, BigDecimal> budgetByCategoryId = budgetByCategoryId(monthlyBudget);
         return new MonthlySummaryDto(
                 yearMonth.toString(), income, expense, transfer, assetTotal, liabilityTotal,
                 assetTotal.subtract(liabilityTotal), budget, budget.subtract(expense),
-                usageRate(expense, budget), categorySpends(records), tagSpends(records),
+                usageRate(expense, budget), categorySpends(records, budgetByCategoryId), tagSpends(records),
                 scopeSpends(records), memberSpends(records),
-                categoryBudgetUsages(household, monthlyBudget, records), weeklyTotals(yearMonth, records));
+                categoryBudgetUsages(household, budgetByCategoryId, records), weeklyTotals(yearMonth, records));
     }
 
     @Transactional(readOnly = true)
@@ -101,7 +102,7 @@ public class StatisticsService {
                 }).toList();
         return new YearlySummaryDto(
                 targetYear, sum(records, TransactionType.INCOME), sum(records, TransactionType.EXPENSE),
-                sum(records, TransactionType.TRANSFER), monthlyTotals, categorySpends(records),
+                sum(records, TransactionType.TRANSFER), monthlyTotals, categorySpends(records, Map.of()),
                 tagSpends(records), scopeSpends(records), memberSpends(records));
     }
 
@@ -150,7 +151,7 @@ public class StatisticsService {
         return new PeriodSummaryDto(
                 startDate + " ~ " + endDate, startDate, endDate,
                 sum(records, TransactionType.INCOME), sum(records, TransactionType.EXPENSE),
-                sum(records, TransactionType.TRANSFER), categorySpends(records), tagSpends(records),
+                sum(records, TransactionType.TRANSFER), categorySpends(records, Map.of()), tagSpends(records),
                 scopeSpends(records), memberSpends(records));
     }
 
@@ -177,7 +178,8 @@ public class StatisticsService {
         return totals;
     }
 
-    static List<MonthlySummaryDto.CategorySpend> categorySpends(List<TransactionRecord> records) {
+    static List<MonthlySummaryDto.CategorySpend> categorySpends(
+            List<TransactionRecord> records, Map<Long, BigDecimal> budgetByCategoryId) {
         Map<Category, BigDecimal> totals = records.stream()
                 .filter(record -> record.getType() == TransactionType.EXPENSE)
                 .filter(record -> record.getCategory() != null)
@@ -187,8 +189,13 @@ public class StatisticsService {
                                 Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))));
         return totals.entrySet().stream()
                 .sorted(Map.Entry.<Category, BigDecimal>comparingByValue(Comparator.reverseOrder()))
-                .map(entry -> new MonthlySummaryDto.CategorySpend(
-                        entry.getKey().getId(), entry.getKey().getName(), entry.getValue())).toList();
+                .map(entry -> {
+                    BigDecimal amount = entry.getValue();
+                    BigDecimal budgetAmount = budgetByCategoryId.getOrDefault(entry.getKey().getId(), BigDecimal.ZERO);
+                    return new MonthlySummaryDto.CategorySpend(
+                            entry.getKey().getId(), entry.getKey().getName(), amount,
+                            budgetAmount, budgetAmount.subtract(amount));
+                }).toList();
     }
 
     static List<MonthlySummaryDto.TagSpend> tagSpends(List<TransactionRecord> records) {
@@ -248,8 +255,14 @@ public class StatisticsService {
                         .thenComparing(item -> item.memberName() == null ? "" : item.memberName())).toList();
     }
 
+    private Map<Long, BigDecimal> budgetByCategoryId(MonthlyBudget monthlyBudget) {
+        return monthlyBudget == null ? Map.of()
+                : categoryBudgetRepository.findByMonthlyBudgetId(monthlyBudget.getId()).stream()
+                .collect(Collectors.toMap(item -> item.getCategory().getId(), CategoryBudget::getAmount));
+    }
+
     private List<MonthlySummaryDto.CategoryBudgetUsage> categoryBudgetUsages(
-            Household household, MonthlyBudget monthlyBudget, List<TransactionRecord> records) {
+            Household household, Map<Long, BigDecimal> budgetByCategoryId, List<TransactionRecord> records) {
         Map<Long, BigDecimal> spentByCategoryId = records.stream()
                 .filter(record -> record.getType() == TransactionType.EXPENSE)
                 .filter(record -> record.getCategory() != null)
@@ -257,9 +270,6 @@ public class StatisticsService {
                         record -> record.getCategory().getId(),
                         Collectors.mapping(TransactionRecord::getAmount,
                                 Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))));
-        Map<Long, BigDecimal> budgetByCategoryId = monthlyBudget == null ? Map.of()
-                : categoryBudgetRepository.findByMonthlyBudgetId(monthlyBudget.getId()).stream()
-                .collect(Collectors.toMap(item -> item.getCategory().getId(), CategoryBudget::getAmount));
         return categoryRepository.findByHouseholdIdAndTypeAndActiveTrueOrderBySortOrderAscIdAsc(
                         household.getId(), CategoryType.EXPENSE).stream()
                 .map(category -> categoryBudgetUsage(category, budgetByCategoryId, spentByCategoryId))

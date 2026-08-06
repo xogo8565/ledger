@@ -30,7 +30,9 @@ public final class SummaryDtos {
             List<CategoryBudgetUsage> categoryBudgetUsages,
             List<WeeklyTotals> weeklyTotals
     ) {
-        public record CategorySpend(Long categoryId, String categoryName, BigDecimal amount) {
+        public record CategorySpend(
+                Long categoryId, String categoryName, BigDecimal amount,
+                BigDecimal budgetAmount, BigDecimal remainingAmount) {
         }
 
         public record TagSpend(String tagName, BigDecimal amount, long transactionCount) {
