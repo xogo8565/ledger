@@ -1264,6 +1264,60 @@ button {
   background: var(--accent);
 }
 
+.stats-budget-summary {
+  min-height: 74px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.stats-budget-summary > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.stats-budget-summary span {
+  color: var(--subtle);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.stats-budget-summary strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 23px;
+  font-weight: 900;
+}
+
+.stats-budget-summary em {
+  min-width: 58px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  color: var(--income);
+  background: var(--surface);
+  font-style: normal;
+  font-weight: 900;
+  text-align: center;
+}
+
+.stats-budget-summary p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #6f7782;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.stats-budget-summary.over strong,
+.stats-budget-summary.over em {
+  color: var(--accent);
+}
+
 .stats-breakdown-tabs {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

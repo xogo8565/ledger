@@ -100,6 +100,9 @@ export function StatsScreen({
         <MonthNav month={month} setMonth={setMonth} />
       )}
       <IncomeExpenseSwitch summary={activeSummary} />
+      {statsMode === 'stats' && activePeriod === 'monthly' && Number(summary.budget || 0) > 0 && (
+        <RemainingBudgetSummary summary={summary} />
+      )}
       {statsMode === 'stats' && (
         <nav className="stats-breakdown-tabs" aria-label="지출 통계 기준">
           <button type="button" className={statsBreakdown === 'category' ? 'active' : ''} onClick={() => setStatsBreakdown('category')}>카테고리</button>
@@ -165,6 +168,23 @@ function IncomeExpenseSwitch({ summary }) {
       <button type="button">수입</button>
       <button type="button" className="active">지출 {money(summary.expense)}</button>
     </div>
+  );
+}
+
+function RemainingBudgetSummary({ summary }) {
+  const remaining = Number(summary.remainingBudget || 0);
+  const usage = Number(summary.budgetUsageRate || 0);
+  const exceeded = remaining < 0;
+
+  return (
+    <section className={`stats-budget-summary ${exceeded ? 'over' : ''}`} aria-label="월 예산 잔여 현황">
+      <div>
+        <span>{exceeded ? '예산 초과' : '잔여예산'}</span>
+        <strong>{money(exceeded ? Math.abs(remaining) : remaining)}</strong>
+      </div>
+      <em>{usage}%</em>
+      <p>월 예산 {money(summary.budget)} 중 {money(summary.expense)} 사용</p>
+    </section>
   );
 }
 
