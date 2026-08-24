@@ -71,6 +71,7 @@ function App() {
   const [statsPeriod, setStatsPeriod] = useState('monthly');
   const [budgetPeriod, setBudgetPeriod] = useState('monthly');
   const [statsBreakdown, setStatsBreakdown] = useState('category');
+  const [statsAmountType, setStatsAmountType] = useState('expense');
   const [month, setMonth] = useState(currentMonth);
   const [statsRange, setStatsRange] = useState({ startDate: `${currentMonth}-01`, endDate: today });
   const [panel, setPanel] = useState(null);
@@ -358,11 +359,11 @@ function App() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function openLedgerCategory(category) {
+  function openLedgerCategory(category, type = 'EXPENSE') {
     const categoryId = category?.categoryId || category?.id;
     setLedgerFilters({
       ...emptyLedgerFilters(),
-      type: 'EXPENSE',
+      type,
       categoryId: categoryId ? String(categoryId) : ''
     });
     setLedgerMode('daily');
@@ -462,7 +463,6 @@ function App() {
       frequency: rule.frequency || 'MONTHLY',
       intervalValue: rule.intervalValue || 1,
       startDate: rule.startDate || today,
-      endDate: rule.endDate || '',
       nextRunDate: rule.nextRunDate || rule.startDate || today
     });
   }
@@ -691,6 +691,8 @@ function App() {
             setBudgetPeriod={setBudgetPeriod}
             statsBreakdown={statsBreakdown}
             setStatsBreakdown={setStatsBreakdown}
+            statsAmountType={statsAmountType}
+            setStatsAmountType={setStatsAmountType}
             yearlySummary={yearlySummary}
             yearlyBudgetSummary={yearlyBudgetSummary}
             rangeSummary={rangeSummary}
@@ -907,7 +909,10 @@ function emptyTransactionForm() {
     spendingTag: '',
     consumptionScope: 'PERSONAL',
     consumerMemberId: '',
-    installmentMonths: 0
+    installmentMonths: 0,
+    isRecurring: false,
+    recurringFrequency: 'MONTHLY',
+    recurringIntervalValue: 1
   };
 }
 

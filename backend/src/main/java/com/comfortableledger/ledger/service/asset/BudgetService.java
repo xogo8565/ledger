@@ -117,6 +117,37 @@ public class BudgetService {
         return budgetSettings(targetMonth.toString());
     }
 
+    /**
+     * Carries the previous month's budget forward into {@code targetMonth} when that month has not
+     * been configured yet (no total amount and no category amounts). Existing budgets are left untouched
+     * so a user's edits for the current month are never overwritten.
+     *
+     * @return true if a previous month's budget was copied in, false if there was nothing to do
+     */
+    @Transactional
+    public boolean carryOverBudgetIfUnset(YearMonth targetMonth) {
+        Household household = defaultHousehold();
+        MonthlyBudget existingBudget = monthlyBudgetRepository
+                .findByHouseholdIdAndBudgetMonth(household.getId(), targetMonth.toString())
+                .orElse(null);
+        if (existingBudget != null && isConfigured(existingBudget)) {
+            return false;
+        }
+        try {
+            copyPreviousBudget(targetMonth.toString());
+            return true;
+        } catch (IllegalArgumentException noPreviousBudget) {
+            return false;
+        }
+    }
+
+    private boolean isConfigured(MonthlyBudget monthlyBudget) {
+        if (monthlyBudget.getTotalAmount().signum() > 0) {
+            return true;
+        }
+        return !categoryBudgetRepository.findByMonthlyBudgetId(monthlyBudget.getId()).isEmpty();
+    }
+
     private void saveCategoryBudget(MonthlyBudget monthlyBudget, Map<Long, CategoryBudget> existing,
                                     SaveBudgetRequest.SaveCategoryBudget item) {
         if (item.amount() == null || item.amount().signum() < 0) {

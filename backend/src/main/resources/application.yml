@@ -35,6 +35,10 @@ app:
     enabled: ${DEBT_AUTO_DEDUCTION_ENABLED:true}
     cron: ${DEBT_AUTO_DEDUCTION_CRON:0 30 4 * * *}
     zone: ${DEBT_AUTO_DEDUCTION_ZONE:Asia/Seoul}
+  budget-carry-over:
+    auto-copy-enabled: ${BUDGET_CARRY_OVER_AUTO_COPY_ENABLED:true}
+    auto-copy-cron: ${BUDGET_CARRY_OVER_AUTO_COPY_CRON:0 40 4 * * *}
+    zone: ${BUDGET_CARRY_OVER_ZONE:Asia/Seoul}
 
 logging:
   file:

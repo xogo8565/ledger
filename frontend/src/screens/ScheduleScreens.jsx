@@ -22,7 +22,6 @@ export function emptyRecurringForm(baseDate = formatDate(new Date())) {
     frequency: 'MONTHLY',
     intervalValue: 1,
     startDate: baseDate,
-    endDate: '',
     nextRunDate: baseDate
   };
 }
@@ -163,9 +162,6 @@ export function RecurringManagerScreen({
             </LineField>
             <LineField label="다음">
               <input type="date" value={form.nextRunDate} onChange={(event) => updateField('nextRunDate', event.target.value)} />
-            </LineField>
-            <LineField label="종료">
-              <input type="date" value={form.endDate} onChange={(event) => updateField('endDate', event.target.value)} />
             </LineField>
           </div>
           <button className="wide-save-button" type="submit">{editingRule ? '수정' : '저장'}</button>

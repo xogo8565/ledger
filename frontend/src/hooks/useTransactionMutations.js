@@ -53,6 +53,11 @@ export function useTransactionMutations({
     event.preventDefault();
     const amount = toNumber(form.amount);
     if (!amount) return;
+
+    if (form.isRecurring && !editingTransaction && !editingInstallmentGroup) {
+      return submitRecurringEntry(amount);
+    }
+
     const payload = {
       ...form,
       amount,
@@ -76,6 +81,38 @@ export function useTransactionMutations({
     if (!await createTransferFee()) return;
     const handled = afterSubmitSuccess ? await afterSubmitSuccess(created) : false;
     if (handled) return;
+    resetEntry();
+    closePanel();
+    await reload();
+  }
+
+  async function submitRecurringEntry(amount) {
+    const recurringPayload = {
+      type: form.type,
+      amount,
+      categoryId: form.categoryId ? toNumber(form.categoryId) : null,
+      assetId: form.assetId ? toNumber(form.assetId) : null,
+      fromAssetId: form.fromAssetId ? toNumber(form.fromAssetId) : null,
+      toAssetId: form.toAssetId ? toNumber(form.toAssetId) : null,
+      title: form.title,
+      memo: form.memo,
+      installmentMonths: toNumber(form.installmentMonths),
+      frequency: form.recurringFrequency,
+      intervalValue: toNumber(form.recurringIntervalValue, 1) || 1,
+      startDate: form.transactionDate,
+      endDate: null,
+      nextRunDate: form.transactionDate
+    };
+    const savedRule = await run(
+      () => scheduleApi.saveRecurringRule(null, recurringPayload),
+      '반복 거래 등록에 실패했습니다.'
+    );
+    if (!savedRule) return;
+    const generated = await run(
+      () => scheduleApi.generateRecurringDue(),
+      '반복 거래로 오늘 거래를 생성하지 못했습니다.'
+    );
+    if (!generated) return;
     resetEntry();
     closePanel();
     await reload();

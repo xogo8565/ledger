@@ -80,7 +80,8 @@ public class StatisticsService {
         return new MonthlySummaryDto(
                 yearMonth.toString(), income, expense, transfer, assetTotal, liabilityTotal,
                 assetTotal.subtract(liabilityTotal), budget, budget.subtract(expense),
-                usageRate(expense, budget), categorySpends(records, budgetByCategoryId), tagSpends(records),
+                usageRate(expense, budget), categorySpends(records, budgetByCategoryId, TransactionType.EXPENSE),
+                categorySpends(records, Map.of(), TransactionType.INCOME), tagSpends(records),
                 scopeSpends(records), memberSpends(records),
                 categoryBudgetUsages(household, budgetByCategoryId, records), weeklyTotals(yearMonth, records));
     }
@@ -102,7 +103,9 @@ public class StatisticsService {
                 }).toList();
         return new YearlySummaryDto(
                 targetYear, sum(records, TransactionType.INCOME), sum(records, TransactionType.EXPENSE),
-                sum(records, TransactionType.TRANSFER), monthlyTotals, categorySpends(records, Map.of()),
+                sum(records, TransactionType.TRANSFER), monthlyTotals,
+                categorySpends(records, Map.of(), TransactionType.EXPENSE),
+                categorySpends(records, Map.of(), TransactionType.INCOME),
                 tagSpends(records), scopeSpends(records), memberSpends(records));
     }
 
@@ -151,7 +154,8 @@ public class StatisticsService {
         return new PeriodSummaryDto(
                 startDate + " ~ " + endDate, startDate, endDate,
                 sum(records, TransactionType.INCOME), sum(records, TransactionType.EXPENSE),
-                sum(records, TransactionType.TRANSFER), categorySpends(records, Map.of()), tagSpends(records),
+                sum(records, TransactionType.TRANSFER), categorySpends(records, Map.of(), TransactionType.EXPENSE),
+                categorySpends(records, Map.of(), TransactionType.INCOME), tagSpends(records),
                 scopeSpends(records), memberSpends(records));
     }
 
@@ -179,9 +183,9 @@ public class StatisticsService {
     }
 
     static List<MonthlySummaryDto.CategorySpend> categorySpends(
-            List<TransactionRecord> records, Map<Long, BigDecimal> budgetByCategoryId) {
+            List<TransactionRecord> records, Map<Long, BigDecimal> budgetByCategoryId, TransactionType type) {
         Map<Category, BigDecimal> totals = records.stream()
-                .filter(record -> record.getType() == TransactionType.EXPENSE)
+                .filter(record -> record.getType() == type)
                 .filter(record -> record.getCategory() != null)
                 .collect(Collectors.groupingBy(
                         TransactionRecord::getCategory,

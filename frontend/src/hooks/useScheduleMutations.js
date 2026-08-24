@@ -48,7 +48,7 @@ export function useScheduleMutations({
       toAssetId: recurringForm.toAssetId ? toNumber(recurringForm.toAssetId) : null,
       intervalValue: toNumber(recurringForm.intervalValue, 1),
       installmentMonths: toNumber(recurringForm.installmentMonths),
-      endDate: recurringForm.endDate || null,
+      endDate: null,
       nextRunDate: recurringForm.nextRunDate || recurringForm.startDate
     };
     const savedRule = await run(

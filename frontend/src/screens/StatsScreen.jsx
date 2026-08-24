@@ -17,6 +17,8 @@ export function StatsScreen({
   setBudgetPeriod,
   statsBreakdown,
   setStatsBreakdown,
+  statsAmountType,
+  setStatsAmountType,
   yearlySummary,
   yearlyBudgetSummary,
   rangeSummary,
@@ -99,11 +101,16 @@ export function StatsScreen({
       ) : (
         <MonthNav month={month} setMonth={setMonth} />
       )}
-      <IncomeExpenseSwitch summary={activeSummary} />
-      {statsMode === 'stats' && activePeriod === 'monthly' && Number(summary.budget || 0) > 0 && (
+      <IncomeExpenseSwitch
+        summary={activeSummary}
+        amountType={statsAmountType}
+        onChange={setStatsAmountType}
+        interactive={statsMode === 'stats'}
+      />
+      {statsMode === 'stats' && statsAmountType === 'expense' && activePeriod === 'monthly' && Number(summary.budget || 0) > 0 && (
         <RemainingBudgetSummary summary={summary} />
       )}
-      {statsMode === 'stats' && (
+      {statsMode === 'stats' && statsAmountType === 'expense' && (
         <nav className="stats-breakdown-tabs" aria-label="지출 통계 기준">
           <button type="button" className={statsBreakdown === 'category' ? 'active' : ''} onClick={() => setStatsBreakdown('category')}>카테고리</button>
           <button type="button" className={statsBreakdown === 'tag' ? 'active' : ''} onClick={() => setStatsBreakdown('tag')}>소비 태그</button>
@@ -117,19 +124,22 @@ export function StatsScreen({
       ) : (
         <>
           {statsMode === 'stats' && activePeriod === 'monthly' && (
-            statsBreakdown === 'category'
-              ? <CategoryStats summary={summary} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />
-              : statsBreakdown === 'tag'
-                ? <TagStats summary={summary} openLedgerTag={openLedgerTag} />
-                : statsBreakdown === 'scope'
-                  ? <ScopeStats summary={summary} openLedgerScope={openLedgerScope} />
-                  : <MemberStats summary={summary} openLedgerMember={openLedgerMember} />
+            statsAmountType === 'income'
+              ? <CategoryStats summary={summary} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} amountType="income" />
+              : statsBreakdown === 'category'
+                ? <CategoryStats summary={summary} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />
+                : statsBreakdown === 'tag'
+                  ? <TagStats summary={summary} openLedgerTag={openLedgerTag} />
+                  : statsBreakdown === 'scope'
+                    ? <ScopeStats summary={summary} openLedgerScope={openLedgerScope} />
+                    : <MemberStats summary={summary} openLedgerMember={openLedgerMember} />
           )}
           {statsMode === 'stats' && activePeriod === 'yearly' && (
             <YearlyStats
               summary={yearlySummary || {}}
               categoryByName={categoryByName}
               breakdown={statsBreakdown}
+              amountType={statsAmountType}
               openLedgerCategory={openLedgerCategory}
               openLedgerTag={openLedgerTag}
               openLedgerScope={openLedgerScope}
@@ -143,6 +153,7 @@ export function StatsScreen({
                   summary={rangeSummary || {}}
                   categoryByName={categoryByName}
                   breakdown={statsBreakdown}
+                  amountType={statsAmountType}
                   openLedgerCategory={openLedgerCategory}
                   openLedgerTag={openLedgerTag}
                   openLedgerScope={openLedgerScope}
@@ -162,11 +173,24 @@ export function StatsScreen({
   );
 }
 
-function IncomeExpenseSwitch({ summary }) {
+function IncomeExpenseSwitch({ summary, amountType, onChange, interactive = true }) {
+  const isIncomeActive = interactive && amountType === 'income';
   return (
     <div className="income-expense-switch">
-      <button type="button">수입</button>
-      <button type="button" className="active">지출 {money(summary.expense)}</button>
+      <button
+        type="button"
+        className={isIncomeActive ? 'active' : ''}
+        onClick={interactive ? () => onChange('income') : undefined}
+      >
+        수입 {money(summary.income)}
+      </button>
+      <button
+        type="button"
+        className={isIncomeActive ? '' : 'active'}
+        onClick={interactive ? () => onChange('expense') : undefined}
+      >
+        지출 {money(summary.expense)}
+      </button>
     </div>
   );
 }
@@ -188,8 +212,9 @@ function RemainingBudgetSummary({ summary }) {
   );
 }
 
-function CategoryStats({ summary, categoryByName, openLedgerCategory }) {
-  const spends = summary.categorySpends || [];
+function CategoryStats({ summary, categoryByName, openLedgerCategory, amountType = 'expense' }) {
+  const isIncome = amountType === 'income';
+  const spends = (isIncome ? summary.incomeCategorySpends : summary.categorySpends) || [];
   const total = spends.reduce((sum, item) => sum + Number(item.amount), 0);
   const chartStyle = { background: buildChartGradient(spends, total, categoryByName) };
 
@@ -197,10 +222,15 @@ function CategoryStats({ summary, categoryByName, openLedgerCategory }) {
     <section className="stats-content">
       <div className="chart-zone">
         <div className="donut-chart" style={chartStyle}>
-          <span>{total ? '지출' : '0원'}</span>
+          <span>{total ? (isIncome ? '수입' : '지출') : '0원'}</span>
         </div>
       </div>
-      <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />
+      <CategoryRanking
+        spends={spends}
+        total={total}
+        categoryByName={categoryByName}
+        openLedgerCategory={(item) => openLedgerCategory(item, isIncome ? 'INCOME' : 'EXPENSE')}
+      />
     </section>
   );
 }
@@ -230,58 +260,65 @@ function MemberStats({ summary, openLedgerMember }) {
   );
 }
 
-function YearlyStats({ summary, categoryByName, breakdown, openLedgerCategory, openLedgerTag, openLedgerScope, openLedgerMember }) {
-  const spends = summary.categorySpends || [];
+function YearlyStats({ summary, categoryByName, breakdown, amountType = 'expense', openLedgerCategory, openLedgerTag, openLedgerScope, openLedgerMember }) {
+  const isIncome = amountType === 'income';
+  const spends = (isIncome ? summary.incomeCategorySpends : summary.categorySpends) || [];
   const total = spends.reduce((sum, item) => sum + Number(item.amount), 0);
   const rows = summary.monthlyTotals || [];
-  const maxExpense = Math.max(1, ...rows.map((item) => Number(item.expense || 0)));
+  const maxValue = Math.max(1, ...rows.map((item) => Number((isIncome ? item.income : item.expense) || 0)));
 
   return (
     <section className="stats-content yearly-stats">
       <div className="yearly-headline">
         <span>{summary.year || ''}년</span>
-        <strong>{money(summary.expense)}</strong>
+        <strong>{money(isIncome ? summary.income : summary.expense)}</strong>
       </div>
       <div className="yearly-month-list">
         {rows.map((item) => {
-          const width = Math.round((Number(item.expense || 0) / maxExpense) * 100);
+          const value = Number((isIncome ? item.income : item.expense) || 0);
+          const width = Math.round((value / maxValue) * 100);
           return (
             <div className="yearly-month-row" key={item.month}>
               <span>{Number(item.month.slice(5, 7))}월</span>
               <div><i style={{ width: `${width}%` }} /></div>
-              <b>{money(item.expense)}</b>
+              <b>{money(value)}</b>
             </div>
           );
         })}
       </div>
-      {breakdown === 'tag'
-        ? <TagRanking tags={summary.tagSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerTag={openLedgerTag} />
-        : breakdown === 'scope'
-          ? <ScopeRanking scopes={summary.scopeSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerScope={openLedgerScope} />
-          : breakdown === 'member'
-            ? <MemberRanking members={summary.memberSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerMember={openLedgerMember} />
-            : <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />}
+      {isIncome
+        ? <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={(item) => openLedgerCategory(item, 'INCOME')} />
+        : breakdown === 'tag'
+          ? <TagRanking tags={summary.tagSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerTag={openLedgerTag} />
+          : breakdown === 'scope'
+            ? <ScopeRanking scopes={summary.scopeSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerScope={openLedgerScope} />
+            : breakdown === 'member'
+              ? <MemberRanking members={summary.memberSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerMember={openLedgerMember} />
+              : <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />}
     </section>
   );
 }
 
-function PeriodStats({ summary, categoryByName, breakdown, openLedgerCategory, openLedgerTag, openLedgerScope, openLedgerMember }) {
-  const spends = summary.categorySpends || [];
+function PeriodStats({ summary, categoryByName, breakdown, amountType = 'expense', openLedgerCategory, openLedgerTag, openLedgerScope, openLedgerMember }) {
+  const isIncome = amountType === 'income';
+  const spends = (isIncome ? summary.incomeCategorySpends : summary.categorySpends) || [];
   const total = spends.reduce((sum, item) => sum + Number(item.amount), 0);
 
   return (
     <section className="stats-content period-stats">
       <div className="period-headline">
         <span>{summary.period || ''}</span>
-        <strong>{money(summary.expense)}</strong>
+        <strong>{money(isIncome ? summary.income : summary.expense)}</strong>
       </div>
-      {breakdown === 'tag'
-        ? <TagRanking tags={summary.tagSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerTag={openLedgerTag} />
-        : breakdown === 'scope'
-          ? <ScopeRanking scopes={summary.scopeSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerScope={openLedgerScope} />
-          : breakdown === 'member'
-            ? <MemberRanking members={summary.memberSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerMember={openLedgerMember} />
-            : <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />}
+      {isIncome
+        ? <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={(item) => openLedgerCategory(item, 'INCOME')} />
+        : breakdown === 'tag'
+          ? <TagRanking tags={summary.tagSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerTag={openLedgerTag} />
+          : breakdown === 'scope'
+            ? <ScopeRanking scopes={summary.scopeSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerScope={openLedgerScope} />
+            : breakdown === 'member'
+              ? <MemberRanking members={summary.memberSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerMember={openLedgerMember} />
+              : <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />}
     </section>
   );
 }

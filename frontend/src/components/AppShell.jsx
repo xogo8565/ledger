@@ -1,7 +1,12 @@
 import React from 'react';
 
+function getTodayLabel() {
+  const today = new Date();
+  return `${today.getMonth() + 1}. ${today.getDate()}.`;
+}
+
 const navigationTabs = [
-  ['ledger', '▤', '6. 22.'],
+  ['ledger', '▤', getTodayLabel()],
   ['stats', '▥', '통계'],
   ['assets', '◎', '자산'],
   ['more', '···', '더보기']

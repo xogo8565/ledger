@@ -9,7 +9,6 @@ import com.comfortableledger.ledger.domain.Household;
 import com.comfortableledger.ledger.domain.InitialDataImport;
 import com.comfortableledger.ledger.domain.Member;
 import com.comfortableledger.ledger.domain.MemberRole;
-import com.comfortableledger.ledger.domain.MonthlyBudget;
 import com.comfortableledger.ledger.domain.TransactionRecord;
 import com.comfortableledger.ledger.domain.TransactionType;
 import com.comfortableledger.ledger.repository.AssetRepository;
@@ -18,8 +17,8 @@ import com.comfortableledger.ledger.repository.CategoryRepository;
 import com.comfortableledger.ledger.repository.HouseholdRepository;
 import com.comfortableledger.ledger.repository.InitialDataImportRepository;
 import com.comfortableledger.ledger.repository.MemberRepository;
-import com.comfortableledger.ledger.repository.MonthlyBudgetRepository;
 import com.comfortableledger.ledger.repository.TransactionRepository;
+import com.comfortableledger.ledger.service.asset.BudgetService;
 import com.comfortableledger.ledger.util.NumberValues;
 import com.comfortableledger.ledger.util.StringValues;
 import java.io.IOException;
@@ -65,29 +64,29 @@ public class DemoDataInitializer implements ApplicationRunner {
     private final AssetRepository assetRepository;
     private final CardProfileRepository cardProfileRepository;
     private final CategoryRepository categoryRepository;
-    private final MonthlyBudgetRepository monthlyBudgetRepository;
     private final TransactionRepository transactionRepository;
     private final InitialDataImportRepository initialDataImportRepository;
     private final ResourcePatternResolver resourcePatternResolver;
+    private final BudgetService budgetService;
 
     public DemoDataInitializer(HouseholdRepository householdRepository,
                                MemberRepository memberRepository,
                                AssetRepository assetRepository,
                                CardProfileRepository cardProfileRepository,
                                CategoryRepository categoryRepository,
-                               MonthlyBudgetRepository monthlyBudgetRepository,
                                TransactionRepository transactionRepository,
                                InitialDataImportRepository initialDataImportRepository,
-                               ResourcePatternResolver resourcePatternResolver) {
+                               ResourcePatternResolver resourcePatternResolver,
+                               BudgetService budgetService) {
         this.householdRepository = householdRepository;
         this.memberRepository = memberRepository;
         this.assetRepository = assetRepository;
         this.cardProfileRepository = cardProfileRepository;
         this.categoryRepository = categoryRepository;
-        this.monthlyBudgetRepository = monthlyBudgetRepository;
         this.transactionRepository = transactionRepository;
         this.initialDataImportRepository = initialDataImportRepository;
         this.resourcePatternResolver = resourcePatternResolver;
+        this.budgetService = budgetService;
     }
 
     @Override
@@ -137,10 +136,7 @@ public class DemoDataInitializer implements ApplicationRunner {
             transactionFileCount++;
         }
 
-        monthlyBudgetRepository.findByHouseholdIdAndBudgetMonth(household.getId(), YearMonth.now().toString())
-                .orElseGet(() -> monthlyBudgetRepository.save(
-                        new MonthlyBudget(household, YearMonth.now().toString(), BigDecimal.ZERO)
-                ));
+        budgetService.carryOverBudgetIfUnset(YearMonth.now());
         log.info("Seeded changed initial data workbooks. assetFiles={}, transactionFiles={}, assetRows={}, transactions={}, categories={}",
                 assetFileCount, transactionFileCount, assetRowCount, transactionCount, categoriesByKey.size());
     }

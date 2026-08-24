@@ -24,6 +24,7 @@ public final class SummaryDtos {
             BigDecimal remainingBudget,
             BigDecimal budgetUsageRate,
             List<CategorySpend> categorySpends,
+            List<CategorySpend> incomeCategorySpends,
             List<TagSpend> tagSpends,
             List<ScopeSpend> scopeSpends,
             List<MemberSpend> memberSpends,
@@ -81,6 +82,7 @@ public final class SummaryDtos {
             BigDecimal transfer,
             List<MonthlyTotals> monthlyTotals,
             List<MonthlySummaryDto.CategorySpend> categorySpends,
+            List<MonthlySummaryDto.CategorySpend> incomeCategorySpends,
             List<MonthlySummaryDto.TagSpend> tagSpends,
             List<MonthlySummaryDto.ScopeSpend> scopeSpends,
             List<MonthlySummaryDto.MemberSpend> memberSpends
@@ -116,6 +118,7 @@ public final class SummaryDtos {
             BigDecimal expense,
             BigDecimal transfer,
             List<MonthlySummaryDto.CategorySpend> categorySpends,
+            List<MonthlySummaryDto.CategorySpend> incomeCategorySpends,
             List<MonthlySummaryDto.TagSpend> tagSpends,
             List<MonthlySummaryDto.ScopeSpend> scopeSpends,
             List<MonthlySummaryDto.MemberSpend> memberSpends

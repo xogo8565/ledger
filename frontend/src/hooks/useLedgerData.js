@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as ledgerApi from '../api/ledgerApi';
 import * as managementApi from '../api/managementApi';
 import { hasLedgerFilters, isAllFilterValue } from '../screens/LedgerScreen';
@@ -23,6 +23,11 @@ const emptySearchResult = {
   sort: 'DATE_DESC'
 };
 
+// Only free-text fields need debouncing while the user is typing. Discrete picks
+// (dropdowns, pagination, sort) should search immediately - there is no typing to wait out.
+const DEBOUNCED_FILTER_KEYS = ['query', 'minAmount', 'maxAmount'];
+const SEARCH_DEBOUNCE_MS = 250;
+
 export function useLedgerData({ month, ledgerFilters, statsRange }) {
   const [data, setData] = useState(emptyData);
   const [members, setMembers] = useState([]);
@@ -31,19 +36,35 @@ export function useLedgerData({ month, ledgerFilters, statsRange }) {
   const [yearlyBudgetSummary, setYearlyBudgetSummary] = useState(null);
   const [rangeSummary, setRangeSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Guards against out-of-order responses: only the most recently issued search request
+  // is allowed to update state, so a slow/stale request can never clobber a newer one.
+  const searchRequestIdRef = useRef(0);
+  const previousFiltersRef = useRef(ledgerFilters);
+
+  function nextSearchRequestId() {
+    searchRequestIdRef.current += 1;
+    return searchRequestIdRef.current;
+  }
+
+  async function runSearch(requestId) {
+    try {
+      const result = await loadSearchTransactions();
+      if (searchRequestIdRef.current === requestId) setSearchResult(result);
+    } catch (error) {
+      console.error(error);
+      if (searchRequestIdRef.current === requestId) setSearchResult(emptySearchResult);
+    }
+  }
 
   async function reload() {
     setLoading(true);
-    const [
-      { bootstrap, assetSummary, members: loadedMembers },
-      loadedSearchResult
-    ] = await Promise.all([
+    const requestId = nextSearchRequestId();
+    const [{ bootstrap, assetSummary, members: loadedMembers }] = await Promise.all([
       ledgerApi.getDashboard(month),
-      loadSearchTransactions()
+      runSearch(requestId)
     ]);
     setMembers(loadedMembers);
     setData({ ...bootstrap, assetSummary });
-    setSearchResult(loadedSearchResult);
     setLoading(false);
   }
 
@@ -77,16 +98,18 @@ export function useLedgerData({ month, ledgerFilters, statsRange }) {
   }, [statsRange.startDate, statsRange.endDate]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      loadSearchTransactions()
-        .then(setSearchResult)
-        .catch((error) => {
-          console.error(error);
-          setSearchResult(emptySearchResult);
-        });
-    }, 250);
+    const previousFilters = previousFiltersRef.current;
+    previousFiltersRef.current = ledgerFilters;
+    const changedKeys = Object.keys(ledgerFilters).filter((key) => ledgerFilters[key] !== previousFilters[key]);
+    const isTextEdit = changedKeys.length > 0 && changedKeys.every((key) => DEBOUNCED_FILTER_KEYS.includes(key));
+
+    const requestId = nextSearchRequestId();
+    // Clear stale results immediately so the UI never shows the previous filter's
+    // (possibly server-paginated, now mismatched) items mislabeled under the new filter state.
+    setSearchResult(null);
+    const timer = window.setTimeout(() => runSearch(requestId), isTextEdit ? SEARCH_DEBOUNCE_MS : 0);
     return () => window.clearTimeout(timer);
-  }, [ledgerFilters, month]);
+  }, [ledgerFilters]);
 
   async function loadSearchTransactions() {
     if (!hasLedgerFilters(ledgerFilters)) return null;

@@ -739,6 +739,7 @@ export function EntryScreen({
   );
   const amountDisplay = expression || (form.amount ? String(form.amount) : '');
   const amountPreview = amountFromExpression(amountDisplay);
+  const submitLabel = form.isRecurring ? '등록' : isEditing ? '저장' : '확인';
 
   function setType(type) {
     updateForm('type', type);
@@ -757,7 +758,7 @@ export function EntryScreen({
   }
 
   function handleKey(value) {
-    if (value === '확인' || value === '저장') return;
+    if (value === submitLabel) return;
     if (value === '⌫') {
       const next = expression.slice(0, -1);
       setExpression(next);
@@ -826,9 +827,11 @@ export function EntryScreen({
                   {assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
                 </select>
               </LineField>
-              <LineField label="수수료">
-                <MoneyInput value={form.fee} onValueChange={(fee) => updateForm('fee', fee)} placeholder="0" />
-              </LineField>
+              {!form.isRecurring && (
+                <LineField label="수수료">
+                  <MoneyInput value={form.fee} onValueChange={(fee) => updateForm('fee', fee)} placeholder="0" />
+                </LineField>
+              )}
             </>
           ) : (
             <>
@@ -864,10 +867,38 @@ export function EntryScreen({
             </>
           )}
 
+          {!isEditing && (
+            <>
+              <label className="toggle-line">
+                <span>반복 거래로 등록</span>
+                <input
+                  type="checkbox"
+                  checked={form.isRecurring}
+                  onChange={(event) => updateForm('isRecurring', event.target.checked)}
+                />
+              </label>
+              {form.isRecurring && (
+                <>
+                  <LineField label="반복">
+                    <select value={form.recurringFrequency} onChange={(event) => updateForm('recurringFrequency', event.target.value)}>
+                      <option value="DAILY">매일</option>
+                      <option value="WEEKLY">매주</option>
+                      <option value="MONTHLY">매월</option>
+                      <option value="YEARLY">매년</option>
+                    </select>
+                  </LineField>
+                  <LineField label="간격">
+                    <input inputMode="numeric" min="1" value={form.recurringIntervalValue} onChange={(event) => updateForm('recurringIntervalValue', event.target.value)} />
+                  </LineField>
+                </>
+              )}
+            </>
+          )}
+
           <LineField label="내용" side={<span className="memo-alert">!</span>}>
             <input value={form.title} onChange={(event) => updateForm('title', event.target.value)} placeholder="내용" />
           </LineField>
-          {form.type === 'EXPENSE' && (
+          {form.type === 'EXPENSE' && !form.isRecurring && (
             <>
               <LineField label="태그">
                 <input value={form.spendingTag} onChange={(event) => updateForm('spendingTag', event.target.value)} placeholder="식비, 생활, 고정비" />
@@ -910,31 +941,33 @@ export function EntryScreen({
             </LineField>
           )}
 
-          <label className="receipt-compact">
-            <strong>{isEditing ? '영수증 추가' : '영수증 사진'}</strong>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(event) => setReceiptFiles(Array.from(event.target.files || []).slice(0, 10))}
-            />
-            <em>최대 10장</em>
-            {receiptFiles.length > 0 && (
-              <span className="receipt-selection-list">
-                {receiptFiles.map((file, index) => (
-                  <button type="button" key={`${file.name}-${file.lastModified}-${index}`} onClick={(event) => {
-                    event.preventDefault();
-                    setReceiptFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
-                  }}>
-                    {file.name} ×
-                  </button>
-                ))}
-              </span>
-            )}
-          </label>
+          {!form.isRecurring && (
+            <label className="receipt-compact">
+              <strong>{isEditing ? '영수증 추가' : '영수증 사진'}</strong>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) => setReceiptFiles(Array.from(event.target.files || []).slice(0, 10))}
+              />
+              <em>최대 10장</em>
+              {receiptFiles.length > 0 && (
+                <span className="receipt-selection-list">
+                  {receiptFiles.map((file, index) => (
+                    <button type="button" key={`${file.name}-${file.lastModified}-${index}`} onClick={(event) => {
+                      event.preventDefault();
+                      setReceiptFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+                    }}>
+                      {file.name} ×
+                    </button>
+                  ))}
+                </span>
+              )}
+            </label>
+          )}
         </section>
 
-        <CalculatorPad onKey={handleKey} submitLabel={isEditing ? '저장' : '확인'} />
+        <CalculatorPad onKey={handleKey} submitLabel={submitLabel} />
       </form>
     </div>
   );
