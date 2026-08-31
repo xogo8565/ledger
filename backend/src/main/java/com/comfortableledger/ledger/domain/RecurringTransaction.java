@@ -64,6 +64,12 @@ public class RecurringTransaction {
     @NotNull
     private LocalDate nextRunDate;
 
+    // 반복 패턴(예: "매달 31일")의 기준일. 사용자가 등록/수정할 때 지정한 다음 실행일로
+    // 고정되며, 자동 생성(markGenerated) 시에는 변하지 않는다. 매달/매년 다음 실행일을
+    // 계산할 때 직전 실행일이 아닌 이 값을 기준으로 다시 계산해, 짧은 달(2월 등)을
+    // 지나며 날짜가 클램프되더라도 이후 큰 달에서 원래 날짜로 복귀할 수 있게 한다.
+    private LocalDate anchorDate;
+
     private boolean active = true;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
@@ -141,6 +147,12 @@ public class RecurringTransaction {
         return nextRunDate;
     }
 
+    public LocalDate getAnchorDate() {
+        // 이 컬럼이 생기기 전에 만들어진 기존 반복 거래는 anchorDate가 비어 있으므로
+        // 시작일을 기준일로 대신 사용한다.
+        return anchorDate == null ? startDate : anchorDate;
+    }
+
     public boolean isActive() {
         return active;
     }
@@ -163,6 +175,7 @@ public class RecurringTransaction {
         this.startDate = startDate;
         this.endDate = endDate;
         this.nextRunDate = nextRunDate;
+        this.anchorDate = nextRunDate;
         this.updatedAt = OffsetDateTime.now();
     }
 

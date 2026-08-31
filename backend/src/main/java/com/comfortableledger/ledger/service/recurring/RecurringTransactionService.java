@@ -14,6 +14,8 @@ import com.comfortableledger.ledger.dto.RecurringDtos.RecurringTransactionDto;
 import com.comfortableledger.ledger.dto.RecurringDtos.SaveRecurringTransactionRequest;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -153,11 +155,24 @@ public class RecurringTransactionService {
 
     private LocalDate nextRunDate(RecurringTransaction rule) {
         int interval = intervalValue(rule.getIntervalValue());
+        LocalDate current = rule.getNextRunDate();
         return switch (rule.getFrequency()) {
-            case DAILY -> rule.getNextRunDate().plusDays(interval);
-            case WEEKLY -> rule.getNextRunDate().plusWeeks(interval);
-            case MONTHLY -> rule.getNextRunDate().plusMonths(interval);
-            case YEARLY -> rule.getNextRunDate().plusYears(interval);
+            case DAILY -> current.plusDays(interval);
+            case WEEKLY -> current.plusWeeks(interval);
+            // 매월/매년 반복은 직전 실행일이 아니라 반복 패턴의 기준일(anchorDate)을 기준으로
+            // 다시 계산한다. 그렇지 않으면 31일 -> 2월 28일처럼 짧은 달을 지나며 클램프된
+            // 날짜가 그대로 굳어버려, 이후 큰 달에서도 계속 28일로 실행되는 등 원래 날짜를
+            // 영영 놓치게 된다.
+            case MONTHLY -> {
+                LocalDate anchor = rule.getAnchorDate();
+                long elapsedMonths = ChronoUnit.MONTHS.between(YearMonth.from(anchor), YearMonth.from(current));
+                yield anchor.plusMonths(elapsedMonths + interval);
+            }
+            case YEARLY -> {
+                LocalDate anchor = rule.getAnchorDate();
+                long elapsedYears = ChronoUnit.YEARS.between(YearMonth.from(anchor), YearMonth.from(current));
+                yield anchor.plusYears(elapsedYears + interval);
+            }
         };
     }
 
