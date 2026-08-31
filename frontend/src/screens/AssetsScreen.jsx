@@ -5,7 +5,7 @@ import { money, numberOnly } from '../utils/format';
 
 export const assetTypeLabels = {
   CASH: '현금',
-  BANK: '은행',
+  BANK: '계좌',
   CARD: '카드',
   OTHER: '기타',
   DEBT: '부채'
@@ -13,7 +13,7 @@ export const assetTypeLabels = {
 
 const assetTypeOptions = [
   ['CASH', '현금'],
-  ['BANK', '은행'],
+  ['BANK', '계좌'],
   ['CARD', '카드'],
   ['OTHER', '기타'],
   ['DEBT', '부채']
