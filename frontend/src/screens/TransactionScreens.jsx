@@ -3,11 +3,20 @@ import { AppHeader, BackButton, EmptyState, IconButton, LineField, MoneyInput } 
 import { iconForType, KeyValue, transferLabel } from './LedgerScreen';
 import { money, transactionTone } from '../utils/format';
 import { formatMoneyInput, formatNumber, parseWonAmount, toNumber } from '../utils/numberValues';
+import { nextRecurrenceDate } from '../utils/recurrence';
 import { normalizeWhitespace, trimToEmpty, uniqueNonBlank } from '../utils/stringValues';
 
 const API = '/api';
 const typeLabels = { INCOME: '수입', EXPENSE: '지출', TRANSFER: '이체' };
 const consumptionScopeLabels = { PERSONAL: '개인', SHARED: '공동' };
+const frequencyUnitLabels = { DAILY: '일', WEEKLY: '주', MONTHLY: '개월', YEARLY: '년' };
+const frequencyEveryLabels = { DAILY: '매일', WEEKLY: '매주', MONTHLY: '매월', YEARLY: '매년' };
+
+function frequencyPhrase(frequency, intervalValue) {
+  const interval = Number(intervalValue) || 1;
+  if (interval <= 1) return frequencyEveryLabels[frequency] || '주기적으로';
+  return `${interval}${frequencyUnitLabels[frequency] || ''}마다`;
+}
 const ocrFieldLabels = { date: '날짜', title: '내용/품명', amount: '금액' };
 const OCR_CANDIDATE_HISTORY_KEY = 'comfortable-ledger.ocrCandidateHistory.v1';
 
@@ -670,6 +679,9 @@ export function TransactionDetailScreen({ transaction, receipts, editTransaction
           <KeyValue label="날짜" value={transaction.transactionDate} />
           <KeyValue label="분류" value={transaction.categoryName || '미분류'} />
           <KeyValue label="자산" value={transaction.assetName || transferLabel(transaction) || '자산 미지정'} />
+          {transaction.type === 'TRANSFER' && transaction.savingsTransfer && (
+            <KeyValue label="적금 이체" value="예 (지출 통계에 별도 표기)" />
+          )}
           {transaction.spendingTag && <KeyValue label="소비 태그" value={transaction.spendingTag} />}
           {transaction.type === 'EXPENSE' && (
             <KeyValue label="소비 구분" value={consumptionScopeLabels[transaction.consumptionScope] || '개인'} />
@@ -729,6 +741,10 @@ export function EntryScreen({
 }) {
   const tone = form.type === 'INCOME' ? 'income' : form.type === 'TRANSFER' ? 'transfer' : 'expense';
   const isEditing = Boolean(editingTransaction || editingInstallmentGroup);
+  // 반복 등록 전용 입력 모드: 신규 거래를 처음부터 반복 거래로만 등록하는 경우로, 이때는
+  // 실제 거래 1건을 바로 만들지 않고 반복 규칙만 생성한다. 이미 등록된 거래를 수정하면서
+  // "반복 거래로 등록"을 체크한 경우에는 수정한 거래도 그대로 저장되므로 해당하지 않는다.
+  const recurringOnlyMode = form.isRecurring && !isEditing;
   const installmentReceiptOptions = Array.from(
     { length: Math.max(Number(form.installmentMonths || 0), 0) },
     (_, index) => index + 1
@@ -739,7 +755,7 @@ export function EntryScreen({
   );
   const amountDisplay = expression || (form.amount ? String(form.amount) : '');
   const amountPreview = amountFromExpression(amountDisplay);
-  const submitLabel = form.isRecurring ? '등록' : isEditing ? '저장' : '확인';
+  const submitLabel = recurringOnlyMode ? '등록' : isEditing ? '저장' : '확인';
 
   function setType(type) {
     updateForm('type', type);
@@ -754,6 +770,8 @@ export function EntryScreen({
     }
     if (type === 'TRANSFER') {
       updateForm('assetId', '');
+    } else {
+      updateForm('savingsTransfer', false);
     }
   }
 
@@ -827,10 +845,21 @@ export function EntryScreen({
                   {assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}</option>)}
                 </select>
               </LineField>
-              {!form.isRecurring && (
+              {!recurringOnlyMode && (
                 <LineField label="수수료">
                   <MoneyInput value={form.fee} onValueChange={(fee) => updateForm('fee', fee)} placeholder="0" />
                 </LineField>
+              )}
+              <label className="toggle-line">
+                <span>적금 이체</span>
+                <input
+                  type="checkbox"
+                  checked={form.savingsTransfer}
+                  onChange={(event) => updateForm('savingsTransfer', event.target.checked)}
+                />
+              </label>
+              {form.savingsTransfer && (
+                <small>지출 통계의 지출 항목과 함께, 적금으로 별도 표기됩니다.</small>
               )}
             </>
           ) : (
@@ -867,7 +896,7 @@ export function EntryScreen({
             </>
           )}
 
-          {!isEditing && (
+          {!editingInstallmentGroup && (
             <>
               <label className="toggle-line">
                 <span>반복 거래로 등록</span>
@@ -890,6 +919,16 @@ export function EntryScreen({
                   <LineField label="간격">
                     <input inputMode="numeric" min="1" value={form.recurringIntervalValue} onChange={(event) => updateForm('recurringIntervalValue', event.target.value)} />
                   </LineField>
+                  {isEditing ? (
+                    <small>
+                      이 거래는 그대로 저장되고, {nextRecurrenceDate(form.transactionDate, form.recurringFrequency, form.recurringIntervalValue)}부터
+                      {' '}{frequencyPhrase(form.recurringFrequency, form.recurringIntervalValue)} 반복 거래로 자동 등록됩니다.
+                    </small>
+                  ) : (
+                    <small>
+                      {form.transactionDate}부터 {frequencyPhrase(form.recurringFrequency, form.recurringIntervalValue)} 반복 등록됩니다.
+                    </small>
+                  )}
                 </>
               )}
             </>
@@ -898,7 +937,7 @@ export function EntryScreen({
           <LineField label="내용" side={<span className="memo-alert">!</span>}>
             <input value={form.title} onChange={(event) => updateForm('title', event.target.value)} placeholder="내용" />
           </LineField>
-          {form.type === 'EXPENSE' && !form.isRecurring && (
+          {form.type === 'EXPENSE' && !recurringOnlyMode && (
             <>
               <LineField label="태그">
                 <input value={form.spendingTag} onChange={(event) => updateForm('spendingTag', event.target.value)} placeholder="식비, 생활, 고정비" />
@@ -941,7 +980,7 @@ export function EntryScreen({
             </LineField>
           )}
 
-          {!form.isRecurring && (
+          {!recurringOnlyMode && (
             <label className="receipt-compact">
               <strong>{isEditing ? '영수증 추가' : '영수증 사진'}</strong>
               <input

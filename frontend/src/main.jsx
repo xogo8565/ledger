@@ -459,11 +459,13 @@ function App() {
       toAssetId: rule.toAssetId || '',
       title: rule.title || '',
       memo: rule.memo || '',
+      savingsTransfer: Boolean(rule.savingsTransfer),
       installmentMonths: rule.installmentMonths || 0,
       frequency: rule.frequency || 'MONTHLY',
       intervalValue: rule.intervalValue || 1,
       startDate: rule.startDate || today,
-      nextRunDate: rule.nextRunDate || rule.startDate || today
+      nextRunDate: rule.nextRunDate || rule.startDate || today,
+      endDate: rule.endDate || ''
     });
   }
 
@@ -909,6 +911,7 @@ function emptyTransactionForm() {
     spendingTag: '',
     consumptionScope: 'PERSONAL',
     consumerMemberId: '',
+    savingsTransfer: false,
     installmentMonths: 0,
     isRecurring: false,
     recurringFrequency: 'MONTHLY',
@@ -936,7 +939,11 @@ function transactionToForm(transaction) {
     spendingTag: transaction.spendingTag || '',
     consumptionScope: transaction.consumptionScope || 'PERSONAL',
     consumerMemberId: transaction.consumerMemberId ? String(transaction.consumerMemberId) : '',
-    installmentMonths: Number(transaction.installmentMonths || 0)
+    savingsTransfer: Boolean(transaction.savingsTransfer),
+    installmentMonths: Number(transaction.installmentMonths || 0),
+    isRecurring: false,
+    recurringFrequency: 'MONTHLY',
+    recurringIntervalValue: 1
   };
 }
 

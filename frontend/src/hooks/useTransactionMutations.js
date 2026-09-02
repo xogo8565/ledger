@@ -2,6 +2,7 @@ import { errorMessage } from '../api/http';
 import * as ledgerApi from '../api/ledgerApi';
 import * as scheduleApi from '../api/scheduleApi';
 import { toNumber } from '../utils/numberValues';
+import { nextRecurrenceDate } from '../utils/recurrence';
 
 export function useTransactionMutations({
   form,
@@ -79,11 +80,46 @@ export function useTransactionMutations({
     if (!created) return;
     if (!await attachReceipts(created)) return;
     if (!await createTransferFee()) return;
+    if (form.isRecurring && editingTransaction && !await registerRecurringFromExistingTransaction(amount)) return;
     const handled = afterSubmitSuccess ? await afterSubmitSuccess(created) : false;
     if (handled) return;
     resetEntry();
     closePanel();
     await reload();
+  }
+
+  // 이미 등록된 거래를 수정하면서 "반복 거래로 등록"을 체크한 경우. 수정한 거래 자체는
+  // 그대로 두고, 그 다음 회차부터 시작하는 반복 규칙을 새로 만든다(같은 날짜에 거래가
+  // 중복 생성되지 않도록 시작일을 한 주기 뒤로 미룬다).
+  async function registerRecurringFromExistingTransaction(amount) {
+    const nextRunDate = nextRecurrenceDate(form.transactionDate, form.recurringFrequency, form.recurringIntervalValue);
+    const recurringPayload = {
+      type: form.type,
+      amount,
+      categoryId: form.categoryId ? toNumber(form.categoryId) : null,
+      assetId: form.assetId ? toNumber(form.assetId) : null,
+      fromAssetId: form.fromAssetId ? toNumber(form.fromAssetId) : null,
+      toAssetId: form.toAssetId ? toNumber(form.toAssetId) : null,
+      title: form.title,
+      memo: form.memo,
+      savingsTransfer: Boolean(form.savingsTransfer),
+      installmentMonths: toNumber(form.installmentMonths),
+      frequency: form.recurringFrequency,
+      intervalValue: toNumber(form.recurringIntervalValue, 1) || 1,
+      startDate: nextRunDate,
+      endDate: null,
+      nextRunDate
+    };
+    const savedRule = await run(
+      () => scheduleApi.saveRecurringRule(null, recurringPayload),
+      '반복 거래 등록에 실패했습니다.'
+    );
+    if (!savedRule) return false;
+    await run(
+      () => scheduleApi.generateRecurringDue(),
+      '반복 거래를 자동으로 반영하지 못했습니다.'
+    );
+    return true;
   }
 
   async function submitRecurringEntry(amount) {
@@ -96,6 +132,7 @@ export function useTransactionMutations({
       toAssetId: form.toAssetId ? toNumber(form.toAssetId) : null,
       title: form.title,
       memo: form.memo,
+      savingsTransfer: Boolean(form.savingsTransfer),
       installmentMonths: toNumber(form.installmentMonths),
       frequency: form.recurringFrequency,
       intervalValue: toNumber(form.recurringIntervalValue, 1) || 1,

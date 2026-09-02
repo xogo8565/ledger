@@ -396,6 +396,16 @@ button {
   background: #eaf6df;
 }
 
+.savings-transfer-chip {
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #2470c4;
+  background: #e6f1ff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .transaction-row > b {
   max-width: 116px;
   text-align: right;
@@ -1433,6 +1443,40 @@ button {
 
 .tag-ranking-list {
   border-top: 10px solid var(--surface-soft);
+}
+
+.savings-transfer-section {
+  border-top: 10px solid var(--surface-soft);
+  background: var(--surface);
+}
+
+.savings-transfer-section header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 14px 18px 8px;
+}
+
+.savings-transfer-section header strong {
+  grid-row: 1;
+  font-size: 15px;
+}
+
+.savings-transfer-section header span {
+  grid-row: 2;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.savings-transfer-section header b {
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 16px;
+}
+
+.savings-transfer-badge {
+  background-color: #58a9ff;
 }
 
 .tag-ranking-row strong,
@@ -3051,9 +3095,47 @@ button {
   overflow-y: auto;
 }
 
-.recurring-actions {
+.recurring-form-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px 18px;
+}
+
+.recurring-form-actions button {
+  height: 48px;
+  border: 0;
+  border-radius: 8px;
+  color: white;
+  background: var(--accent);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.recurring-form-actions .secondary-action {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.recurring-form-actions button:disabled,
+.recurring-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.recurring-manager-note {
+  margin: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--subtle);
+  background: var(--surface-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.recurring-actions {
+  display: grid;
   gap: 10px;
   padding: 12px 18px;
   border-top: 1px solid var(--line);

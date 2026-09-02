@@ -231,6 +231,34 @@ function CategoryStats({ summary, categoryByName, openLedgerCategory, amountType
         categoryByName={categoryByName}
         openLedgerCategory={(item) => openLedgerCategory(item, isIncome ? 'INCOME' : 'EXPENSE')}
       />
+      {!isIncome && <SavingsTransferSection summary={summary} />}
+    </section>
+  );
+}
+
+// 적금/저축성 이체는 지출이 아니라 별도로 집계되지만, 지출 통계 화면에서 지출 항목과
+// 함께 볼 수 있도록 카테고리 랭킹 아래에 구분된 섹션으로 표시한다.
+function SavingsTransferSection({ summary }) {
+  const spends = summary.savingsTransferSpends || [];
+  if (!spends.length) return null;
+  const total = Number(summary.savingsTransfer || 0);
+
+  return (
+    <section className="savings-transfer-section">
+      <header>
+        <strong>적금 이체</strong>
+        <span>지출은 아니지만 함께 표시</span>
+        <b>{money(total)}</b>
+      </header>
+      <div className="ranking-list savings-transfer-list">
+        {spends.map((item) => (
+          <div className="ranking-row savings-transfer-row" key={item.categoryName}>
+            <span className="percent-badge savings-transfer-badge">적금</span>
+            <strong>{item.categoryName}</strong>
+            <b>{money(item.amount)}</b>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -295,6 +323,7 @@ function YearlyStats({ summary, categoryByName, breakdown, amountType = 'expense
             : breakdown === 'member'
               ? <MemberRanking members={summary.memberSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerMember={openLedgerMember} />
               : <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />}
+      {!isIncome && breakdown === 'category' && <SavingsTransferSection summary={summary} />}
     </section>
   );
 }
@@ -319,6 +348,7 @@ function PeriodStats({ summary, categoryByName, breakdown, amountType = 'expense
             : breakdown === 'member'
               ? <MemberRanking members={summary.memberSpends || []} expenseTotal={Number(summary.expense || 0)} openLedgerMember={openLedgerMember} />
               : <CategoryRanking spends={spends} total={total} categoryByName={categoryByName} openLedgerCategory={openLedgerCategory} />}
+      {!isIncome && breakdown === 'category' && <SavingsTransferSection summary={summary} />}
     </section>
   );
 }

@@ -48,6 +48,11 @@ public class RecurringTransaction {
 
     private String title;
     private String memo;
+
+    // 이체(TRANSFER) 규칙 중 적금/저축성 이체 여부. 생성된 거래에 그대로 반영되어 지출
+    // 통계에서 실제 지출과 구분해 별도로 표기하는 데 사용한다.
+    private boolean savingsTransfer;
+
     private int installmentMonths;
 
     @Enumerated(EnumType.STRING)
@@ -80,10 +85,10 @@ public class RecurringTransaction {
     public RecurringTransaction(Household household, TransactionType type, BigDecimal amount, Category category,
                                 Asset asset, Asset fromAsset, Asset toAsset, String title, String memo,
                                 int installmentMonths, RecurrenceFrequency frequency, int intervalValue,
-                                LocalDate startDate, LocalDate endDate) {
+                                LocalDate startDate, LocalDate endDate, boolean savingsTransfer) {
         this.household = household;
         update(type, amount, category, asset, fromAsset, toAsset, title, memo, installmentMonths,
-                frequency, intervalValue, startDate, endDate, startDate);
+                frequency, intervalValue, startDate, endDate, startDate, savingsTransfer);
         this.createdAt = OffsetDateTime.now();
     }
 
@@ -123,6 +128,10 @@ public class RecurringTransaction {
         return memo;
     }
 
+    public boolean isSavingsTransfer() {
+        return savingsTransfer;
+    }
+
     public int getInstallmentMonths() {
         return installmentMonths;
     }
@@ -160,7 +169,7 @@ public class RecurringTransaction {
     public void update(TransactionType type, BigDecimal amount, Category category, Asset asset, Asset fromAsset,
                        Asset toAsset, String title, String memo, int installmentMonths,
                        RecurrenceFrequency frequency, int intervalValue, LocalDate startDate,
-                       LocalDate endDate, LocalDate nextRunDate) {
+                       LocalDate endDate, LocalDate nextRunDate, boolean savingsTransfer) {
         this.type = type;
         this.amount = amount;
         this.category = category;
@@ -176,6 +185,7 @@ public class RecurringTransaction {
         this.endDate = endDate;
         this.nextRunDate = nextRunDate;
         this.anchorDate = nextRunDate;
+        this.savingsTransfer = type == TransactionType.TRANSFER && savingsTransfer;
         this.updatedAt = OffsetDateTime.now();
     }
 

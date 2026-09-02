@@ -66,7 +66,8 @@ public class RecurringTransactionService {
                 request.frequency(),
                 intervalValue(request.intervalValue()),
                 request.startDate(),
-                request.endDate()
+                request.endDate(),
+                Boolean.TRUE.equals(request.savingsTransfer())
         );
         LocalDate nextRunDate = request.nextRunDate() == null ? request.startDate() : request.nextRunDate();
         recurringTransaction.update(
@@ -83,7 +84,8 @@ public class RecurringTransactionService {
                 recurringTransaction.getIntervalValue(),
                 recurringTransaction.getStartDate(),
                 recurringTransaction.getEndDate(),
-                nextRunDate
+                nextRunDate,
+                recurringTransaction.isSavingsTransfer()
         );
         return RecurringTransactionDto.from(recurringTransactionRepository.save(recurringTransaction));
     }
@@ -106,7 +108,8 @@ public class RecurringTransactionService {
                 intervalValue(request.intervalValue()),
                 request.startDate(),
                 request.endDate(),
-                request.nextRunDate() == null ? request.startDate() : request.nextRunDate()
+                request.nextRunDate() == null ? request.startDate() : request.nextRunDate(),
+                Boolean.TRUE.equals(request.savingsTransfer())
         );
         return RecurringTransactionDto.from(recurringTransaction);
     }
@@ -144,6 +147,7 @@ public class RecurringTransactionService {
                         null,
                         null,
                         null,
+                        rule.isSavingsTransfer(),
                         rule.getInstallmentMonths()
                 ));
                 generatedCount++;

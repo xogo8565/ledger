@@ -31,6 +31,7 @@ public final class TransactionDtos {
             ConsumptionScope consumptionScope,
             Long consumerMemberId,
             String consumerMemberName,
+            boolean savingsTransfer,
             int installmentMonths,
             int installmentIndex,
             String installmentGroupId
@@ -54,6 +55,7 @@ public final class TransactionDtos {
                     record.getConsumptionScope(),
                     record.getConsumer() == null ? null : record.getConsumer().getId(),
                     record.getConsumer() == null ? null : record.getConsumer().getName(),
+                    record.isSavingsTransfer(),
                     record.getInstallmentMonths(),
                     record.getInstallmentIndex(),
                     record.getInstallmentGroupId()
@@ -84,6 +86,7 @@ public final class TransactionDtos {
             String spendingTag,
             ConsumptionScope consumptionScope,
             Long consumerMemberId,
+            Boolean savingsTransfer,
             Integer installmentMonths
     ) {
     }

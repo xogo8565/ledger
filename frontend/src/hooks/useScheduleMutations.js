@@ -39,6 +39,11 @@ export function useScheduleMutations({
     event.preventDefault();
     const amount = toNumber(recurringForm.amount);
     if (!amount || amount <= 0 || !recurringForm.startDate || !recurringForm.nextRunDate) return;
+    const nextRunDate = recurringForm.nextRunDate || recurringForm.startDate;
+    if (recurringForm.endDate && recurringForm.endDate < nextRunDate) {
+      window.alert('종료일은 다음 실행일 이후여야 합니다.');
+      return;
+    }
     const payload = {
       ...recurringForm,
       amount,
@@ -48,25 +53,29 @@ export function useScheduleMutations({
       toAssetId: recurringForm.toAssetId ? toNumber(recurringForm.toAssetId) : null,
       intervalValue: toNumber(recurringForm.intervalValue, 1),
       installmentMonths: toNumber(recurringForm.installmentMonths),
-      endDate: null,
-      nextRunDate: recurringForm.nextRunDate || recurringForm.startDate
+      endDate: recurringForm.endDate || null,
+      nextRunDate
     };
     const savedRule = await run(
       () => scheduleApi.saveRecurringRule(editingRecurringRule?.id, payload),
       '반복 거래 저장에 실패했습니다.'
     );
     if (!savedRule) return;
-    setRecurringRules((current) => {
-      const next = editingRecurringRule
-        ? current.map((rule) => rule.id === savedRule.id ? savedRule : rule)
-        : [...current.filter((rule) => rule.id !== savedRule.id), savedRule];
-      return next.sort((a, b) => a.nextRunDate.localeCompare(b.nextRunDate) || toNumber(a.id) - toNumber(b.id));
-    });
     setEditingRecurringRule(null);
     setRecurringForm(emptyRecurringForm());
+    // 등록/수정 직후 대기 중인 회차(오늘까지 밀린 회차 포함)를 바로 생성해, 익월 등 다음
+    // 회차가 반복 거래 목록과 가계부에 수동 조작 없이 곧바로 반영되도록 한다.
+    const generated = await run(
+      () => scheduleApi.generateRecurringDue(),
+      '반복 거래를 자동으로 반영하지 못했습니다.'
+    );
+    await loadRecurringRules();
+    if (generated) await reload();
   }
 
   async function deleteRecurringRule(rule) {
+    const label = rule.title || rule.categoryName || '반복 거래';
+    if (!window.confirm(`${label} 반복 거래를 삭제할까요? 이미 생성된 거래 내역은 그대로 유지됩니다.`)) return;
     const result = await run(
       () => scheduleApi.deleteRecurringRule(rule.id),
       '반복 거래 삭제에 실패했습니다.'

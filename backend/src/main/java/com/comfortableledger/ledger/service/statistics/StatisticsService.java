@@ -78,11 +78,11 @@ public class StatisticsService {
         BigDecimal budget = monthlyBudget == null ? BigDecimal.ZERO : monthlyBudget.getTotalAmount();
         Map<Long, BigDecimal> budgetByCategoryId = budgetByCategoryId(monthlyBudget);
         return new MonthlySummaryDto(
-                yearMonth.toString(), income, expense, transfer, assetTotal, liabilityTotal,
-                assetTotal.subtract(liabilityTotal), budget, budget.subtract(expense),
+                yearMonth.toString(), income, expense, transfer, sumSavingsTransfer(records), assetTotal,
+                liabilityTotal, assetTotal.subtract(liabilityTotal), budget, budget.subtract(expense),
                 usageRate(expense, budget), categorySpends(records, budgetByCategoryId, TransactionType.EXPENSE),
-                categorySpends(records, Map.of(), TransactionType.INCOME), tagSpends(records),
-                scopeSpends(records), memberSpends(records),
+                categorySpends(records, Map.of(), TransactionType.INCOME), savingsTransferSpends(records),
+                tagSpends(records), scopeSpends(records), memberSpends(records),
                 categoryBudgetUsages(household, budgetByCategoryId, records), weeklyTotals(yearMonth, records));
     }
 
@@ -103,9 +103,10 @@ public class StatisticsService {
                 }).toList();
         return new YearlySummaryDto(
                 targetYear, sum(records, TransactionType.INCOME), sum(records, TransactionType.EXPENSE),
-                sum(records, TransactionType.TRANSFER), monthlyTotals,
+                sum(records, TransactionType.TRANSFER), sumSavingsTransfer(records), monthlyTotals,
                 categorySpends(records, Map.of(), TransactionType.EXPENSE),
                 categorySpends(records, Map.of(), TransactionType.INCOME),
+                savingsTransferSpends(records),
                 tagSpends(records), scopeSpends(records), memberSpends(records));
     }
 
@@ -154,9 +155,10 @@ public class StatisticsService {
         return new PeriodSummaryDto(
                 startDate + " ~ " + endDate, startDate, endDate,
                 sum(records, TransactionType.INCOME), sum(records, TransactionType.EXPENSE),
-                sum(records, TransactionType.TRANSFER), categorySpends(records, Map.of(), TransactionType.EXPENSE),
-                categorySpends(records, Map.of(), TransactionType.INCOME), tagSpends(records),
-                scopeSpends(records), memberSpends(records));
+                sum(records, TransactionType.TRANSFER), sumSavingsTransfer(records),
+                categorySpends(records, Map.of(), TransactionType.EXPENSE),
+                categorySpends(records, Map.of(), TransactionType.INCOME), savingsTransferSpends(records),
+                tagSpends(records), scopeSpends(records), memberSpends(records));
     }
 
     static List<MonthlySummaryDto.WeeklyTotals> weeklyTotals(
@@ -200,6 +202,33 @@ public class StatisticsService {
                             entry.getKey().getId(), entry.getKey().getName(), amount,
                             budgetAmount, budgetAmount.subtract(amount));
                 }).toList();
+    }
+
+    // 적금/저축성 이체(savingsTransfer=true인 TRANSFER)는 지출이 아니지만, 지출 통계에서
+    // 실제 지출과 함께 보여주되 별도로 표기하기 위해 총액과 목적 자산별 내역을 따로 집계한다.
+    private static BigDecimal sumSavingsTransfer(List<TransactionRecord> records) {
+        return records.stream()
+                .filter(record -> record.getType() == TransactionType.TRANSFER)
+                .filter(TransactionRecord::isSavingsTransfer)
+                .map(TransactionRecord::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    static List<MonthlySummaryDto.CategorySpend> savingsTransferSpends(List<TransactionRecord> records) {
+        Map<Asset, BigDecimal> totals = records.stream()
+                .filter(record -> record.getType() == TransactionType.TRANSFER)
+                .filter(TransactionRecord::isSavingsTransfer)
+                .filter(record -> record.getToAsset() != null)
+                .collect(Collectors.groupingBy(
+                        TransactionRecord::getToAsset,
+                        Collectors.mapping(TransactionRecord::getAmount,
+                                Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))));
+        return totals.entrySet().stream()
+                .sorted(Map.Entry.<Asset, BigDecimal>comparingByValue(Comparator.reverseOrder()))
+                .map(entry -> new MonthlySummaryDto.CategorySpend(
+                        entry.getKey().getId(), entry.getKey().getName(), entry.getValue(),
+                        BigDecimal.ZERO, BigDecimal.ZERO))
+                .toList();
     }
 
     static List<MonthlySummaryDto.TagSpend> tagSpends(List<TransactionRecord> records) {

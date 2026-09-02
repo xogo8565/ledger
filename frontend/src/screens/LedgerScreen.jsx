@@ -360,6 +360,7 @@ function TransactionRow({ item, openInstallmentSchedule, openTransactionDetail, 
         {item.type === 'EXPENSE' && <span className={`consumption-scope-chip ${item.consumptionScope === 'SHARED' ? 'shared' : ''}`}>
           {item.consumptionScope === 'PERSONAL' && item.consumerMemberName ? `개인 · ${item.consumerMemberName}` : consumptionScopeLabels[item.consumptionScope] || '개인'}
         </span>}
+        {item.type === 'TRANSFER' && item.savingsTransfer && <span className="savings-transfer-chip">적금</span>}
       </div>
       <b className={transactionTone(item.type)}>{money(item.amount)}</b>
     </div>

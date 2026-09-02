@@ -78,6 +78,10 @@ public class TransactionRecord {
     @Enumerated(EnumType.STRING)
     private ConsumptionScope consumptionScope;
 
+    // 이체(TRANSFER) 거래 중 적금/저축성 이체 여부. EXPENSE/INCOME 거래에는 의미가 없으므로
+    // 항상 false로 정규화한다. 지출 통계에서 실제 지출과 구분해 별도로 표기하는 데 사용한다.
+    private boolean savingsTransfer;
+
     private int installmentMonths;
     private int installmentIndex;
     private String installmentGroupId;
@@ -91,7 +95,7 @@ public class TransactionRecord {
                              BigDecimal amount, Category category, Asset asset, Asset fromAsset, Asset toAsset,
                              String title, String memo, String spendingTag, int installmentMonths) {
         this(household, author, type, transactionDate, amount, category, asset, fromAsset, toAsset,
-                title, memo, spendingTag, null, null, installmentMonths);
+                title, memo, spendingTag, null, null, false, installmentMonths);
     }
 
     public TransactionRecord(Household household, Member author, TransactionType type, LocalDate transactionDate,
@@ -99,13 +103,13 @@ public class TransactionRecord {
                              String title, String memo, String spendingTag, ConsumptionScope consumptionScope,
                              int installmentMonths) {
         this(household, author, type, transactionDate, amount, category, asset, fromAsset, toAsset,
-                title, memo, spendingTag, consumptionScope, null, installmentMonths);
+                title, memo, spendingTag, consumptionScope, null, false, installmentMonths);
     }
 
     public TransactionRecord(Household household, Member author, TransactionType type, LocalDate transactionDate,
                              BigDecimal amount, Category category, Asset asset, Asset fromAsset, Asset toAsset,
                              String title, String memo, String spendingTag, ConsumptionScope consumptionScope,
-                             Member consumer, int installmentMonths) {
+                             Member consumer, boolean savingsTransfer, int installmentMonths) {
         this.household = household;
         this.author = author;
         this.type = type;
@@ -120,6 +124,7 @@ public class TransactionRecord {
         this.spendingTag = spendingTag;
         this.consumptionScope = normalizedConsumptionScope(type, consumptionScope);
         this.consumer = normalizedConsumer(type, this.consumptionScope, consumer);
+        this.savingsTransfer = normalizedSavingsTransfer(type, savingsTransfer);
         this.installmentMonths = installmentMonths;
         this.installmentIndex = installmentMonths > 1 ? 1 : 0;
         this.createdAt = OffsetDateTime.now();
@@ -182,6 +187,10 @@ public class TransactionRecord {
         return normalizedConsumer(type, getConsumptionScope(), consumer);
     }
 
+    public boolean isSavingsTransfer() {
+        return normalizedSavingsTransfer(type, savingsTransfer);
+    }
+
     public boolean assignConsumerIfUnassignedPersonalExpense(Member member) {
         if (type != TransactionType.EXPENSE
                 || getConsumptionScope() != ConsumptionScope.PERSONAL
@@ -214,18 +223,26 @@ public class TransactionRecord {
         this.installmentMonths = installmentMonths;
     }
 
-    public void update(TransactionType type, LocalDate transactionDate, BigDecimal amount, 
+    public void update(TransactionType type, LocalDate transactionDate, BigDecimal amount,
                        Category category, Asset asset, Asset fromAsset, Asset toAsset,
                        String title, String memo, String spendingTag, ConsumptionScope consumptionScope,
                        int installmentMonths) {
         update(type, transactionDate, amount, category, asset, fromAsset, toAsset, title, memo, spendingTag,
-                consumptionScope, null, installmentMonths);
+                consumptionScope, null, this.savingsTransfer, installmentMonths);
     }
 
     public void update(TransactionType type, LocalDate transactionDate, BigDecimal amount,
                        Category category, Asset asset, Asset fromAsset, Asset toAsset,
                        String title, String memo, String spendingTag, ConsumptionScope consumptionScope,
                        Member consumer, int installmentMonths) {
+        update(type, transactionDate, amount, category, asset, fromAsset, toAsset, title, memo, spendingTag,
+                consumptionScope, consumer, this.savingsTransfer, installmentMonths);
+    }
+
+    public void update(TransactionType type, LocalDate transactionDate, BigDecimal amount,
+                       Category category, Asset asset, Asset fromAsset, Asset toAsset,
+                       String title, String memo, String spendingTag, ConsumptionScope consumptionScope,
+                       Member consumer, boolean savingsTransfer, int installmentMonths) {
         this.type = type;
         this.transactionDate = transactionDate;
         this.amount = amount;
@@ -238,6 +255,7 @@ public class TransactionRecord {
         this.spendingTag = spendingTag;
         this.consumptionScope = normalizedConsumptionScope(type, consumptionScope);
         this.consumer = normalizedConsumer(type, this.consumptionScope, consumer);
+        this.savingsTransfer = normalizedSavingsTransfer(type, savingsTransfer);
         this.installmentMonths = installmentMonths;
         this.installmentIndex = installmentMonths > 1 && this.installmentIndex == 0 ? 1 : this.installmentIndex;
         this.updatedAt = OffsetDateTime.now();
@@ -248,6 +266,10 @@ public class TransactionRecord {
             return null;
         }
         return scope == null ? ConsumptionScope.PERSONAL : scope;
+    }
+
+    private boolean normalizedSavingsTransfer(TransactionType transactionType, boolean savingsTransferFlag) {
+        return transactionType == TransactionType.TRANSFER && savingsTransferFlag;
     }
 
     private Member normalizedConsumer(TransactionType transactionType, ConsumptionScope scope, Member member) {

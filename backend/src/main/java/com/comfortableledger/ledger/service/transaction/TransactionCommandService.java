@@ -132,6 +132,7 @@ public class TransactionCommandService {
                 request.spendingTag(),
                 request.consumptionScope(),
                 personalExpenseConsumer(record.getHousehold(), request),
+                savingsTransfer(request),
                 request.installmentMonths() == null ? 0 : request.installmentMonths()
         );
         applyAssetChange(record);
@@ -212,6 +213,7 @@ public class TransactionCommandService {
                 request.spendingTag(),
                 request.consumptionScope(),
                 personalExpenseConsumer(household, request),
+                savingsTransfer(request),
                 installmentMonths
         );
         if (installmentGroupId != null) {
@@ -275,6 +277,10 @@ public class TransactionCommandService {
         return memberRepository.findByHouseholdId(household.getId()).stream()
                 .min(Comparator.comparing(member -> member.getRole() == MemberRole.OWNER ? 0 : 1))
                 .orElseThrow();
+    }
+
+    private boolean savingsTransfer(CreateTransactionRequest request) {
+        return Boolean.TRUE.equals(request.savingsTransfer());
     }
 
     private Category category(Long id) {
