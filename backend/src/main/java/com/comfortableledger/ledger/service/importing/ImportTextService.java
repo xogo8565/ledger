@@ -36,7 +36,7 @@ public class ImportTextService {
     );
     private static final Pattern YEAR_DATE_PATTERN = Pattern.compile("(20\\d{2})[./-]\\s*(\\d{1,2})[./-]\\s*(\\d{1,2})");
     private static final Pattern MONTH_DATE_PATTERN = Pattern.compile("(\\d{1,2})[./월\\s]+(\\d{1,2})\\s*(?:일)?");
-    private static final Pattern DAILY_HEADER_PATTERN = Pattern.compile("^(?:\\[\\s*)?(?:(20\\d{2})(?:년|[./-])\\s*)?(\\d{1,2})(?:월|[./-])\\s*(\\d{1,2})(?:일)?(?:\\s*\\])?(?:\\s+\\S+요일)?\\s*$");
+    private static final Pattern DAILY_HEADER_PATTERN = Pattern.compile("^(?:\\[\\s*)?(?:(20\\d{2})(?:년|[./-])\\s*)?(\\d{1,2})(?:월|[./-])\\s*(\\d{1,2})(?:일)?(?:\\s*\\([가-힣]{1,3}\\))?(?:\\s*\\])?(?:\\s+\\S+요일)?\\s*$");
     private static final Pattern SUPPORTING_AMOUNT_PATTERN = Pattern.compile("(?:잔액|누적|한도|사용가능|총액)\\s*[: ]*([0-9,]+)\\s*원");
     private static final Pattern TIME_PATTERN = Pattern.compile("\\b\\d{1,2}[:시]\\d{2}\\b");
     private static final Pattern CARD_SUFFIX_PATTERN = Pattern.compile("\\b\\d{2,4}[-*]\\*{2,4}\\b|\\(\\d{3,4}\\)");

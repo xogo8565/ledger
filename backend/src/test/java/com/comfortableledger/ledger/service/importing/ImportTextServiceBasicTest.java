@@ -165,6 +165,23 @@ class ImportTextServiceBasicTest {
     }
 
     @Test
+    void parsesDateHeadersWithWeekdayInParentheses() {
+        TextImportPreview preview = service.preview("""
+                [2026-08-20(목)]
+                32,012원 / KCP - 쿠팡페이 주식회사 (카드: ZERO Edition2)
+
+                [2026-08-21(금)]
+                19,900원 / 갤럭시아머니트리 (KB국민카드-코웨이II)
+                8,900원 / Apple Services (카드 미확인)
+                """);
+
+        assertThat(preview.items()).hasSize(3);
+        assertThat(preview.items().get(0).transactionDate()).isEqualTo(LocalDate.of(2026, 8, 20));
+        assertThat(preview.items().get(1).transactionDate()).isEqualTo(LocalDate.of(2026, 8, 21));
+        assertThat(preview.items().get(2).transactionDate()).isEqualTo(LocalDate.of(2026, 8, 21));
+    }
+
+    @Test
     void recommendsMartMerchantsAsFoodAndConvenienceStoresAsConvenience() {
         Household household = new Household("테스트");
         ReflectionTestUtils.setField(household, "id", 1L);
