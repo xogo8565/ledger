@@ -86,7 +86,7 @@ class RecurringTransactionServiceTest {
         RecurringTransaction rule = new RecurringTransaction(
                 household, TransactionType.EXPENSE, new BigDecimal("50000"), null,
                 null, null, null, "월세", "", 0,
-                RecurrenceFrequency.MONTHLY, 1, startDate, null);
+                RecurrenceFrequency.MONTHLY, 1, startDate, null, false);
         ReflectionTestUtils.setField(rule, "id", 10L);
         return rule;
     }
