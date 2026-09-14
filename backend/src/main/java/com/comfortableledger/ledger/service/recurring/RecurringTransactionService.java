@@ -121,7 +121,10 @@ public class RecurringTransactionService {
 
     @Transactional
     public RecurringGenerationResult generateDueTransactions(LocalDate upToDate) {
-        LocalDate targetDate = upToDate == null ? LocalDate.now() : upToDate;
+        // upToDate가 없으면(수동 "오늘분 생성" 버튼 등) "오늘"이 아니라 "이번 달 말일"까지를
+        // 대상으로 잡는다. 그래야 9/14에 눌러도 9/1~9/30 사이에 밀려서 아직 생성되지 못한
+        // 회차가 전부 재생성된다. 스케줄러도 동일하게 이번 달 말일을 명시적으로 넘긴다.
+        LocalDate targetDate = upToDate == null ? YearMonth.now().atEndOfMonth() : upToDate;
         List<RecurringTransaction> rules = recurringTransactionRepository
                 .findByHouseholdIdAndActiveTrueAndNextRunDateLessThanEqualOrderByNextRunDateAscIdAsc(
                         defaultHousehold().getId(),
